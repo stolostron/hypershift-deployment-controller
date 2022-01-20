@@ -1,0 +1,16 @@
+domain: open-cluster-management.io
+layout:
+- go.kubebuilder.io/v3
+projectName: hypershift-deployment-controller
+repo: github.com/jnpacker/hypershift-deployment-control
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: open-cluster-management.io
+  group: cluster.open-cluster-management.io
+  kind: HypershiftDeployment
+  path: github.com/jnpacker/hypershift-deployment-controller/api/v1alpha1
+  version: v1alpha1
+version: "3"

@@ -1,0 +1,3 @@
+resources:
+- cluster.open-cluster-management.io_hypershiftdeployments.yaml
+

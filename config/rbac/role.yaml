@@ -1,0 +1,75 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: hypershfit-deployment-controller
+rules:
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - hypershiftdeployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - hypershiftdeployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - hypershiftdeployments/status
+  verbs:
+  - get
+  - patch
+  - update
+
+## External roles
+#####################
+
+# Secrets
+- apiGroups:
+  - ""
+  resources:
+  - secrets     #Cloud Provider
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# ConfigMaps
+- apiGroups:
+  - ""
+  resources:
+  - configmaps  #OIDC S3 information
+  verbs:
+  - get
+  - list
+  - watch
+
+# HostedCluster & NodePool
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - hostedclusters
+  - nodepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
