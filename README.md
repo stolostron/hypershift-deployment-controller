@@ -3,14 +3,14 @@
 
 ## Purpose of this Custom Resource Definition and Controller
 This is to be an interface for ACM (Advanced Cluster Management for Kubernetes) to work with Hypershift in the following use cases
-  | Use case   | ManagementCluster install | HostedCluster control plane | ACM Creates Infrastructure | User brings infrastructure |
-  | :---------:| :-----------------------: | :-------------------: |
-  | 1. ManagementCluster on ACM cluster | ACM | ACM | AWS | AWS & IBM |
-  | 2. ManagementCluster on ManagedCluster | ManagedCluster | ManagedCluster | AWS | AWS & IBM |
+  | Use case   | ManagementCluster install | HostedCluster control plane | ACM creates Infrastructure | User brings infrastructure |
+  | :---------:| :-----------------------: | :-------------------------: | :------------------------: | :------------------------: |
+  | (1) ManagementCluster on ACM cluster    | ACM                         | ACM                        | AWS & IBM |
+  | (2) ManagementCluster on ManagedCluster | ManagedCluster              | ACM                        | AWS & IBM |
 
   Note: Only 1 is supported at this time
 
-## Hypershift on the ACM cluster
+## Hypershift on the ACM cluster (CURRENTLY SUPPORTED)
 This allows you to create multiple Hypershift HostedClusters on the ACM cluster.
 
 ### Preparing the ACM cluster to be a ManagementCluster (Run once)
