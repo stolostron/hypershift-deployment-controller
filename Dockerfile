@@ -30,4 +30,6 @@ ENV USER_UID=1001
 # Add the binaries
 COPY --from=builder /go/src/github.com/open-cluster-management/hypershift-deployment-controller/bin/manager .
 
-USER ${USER_UID}ENTRYPOINT ["/manager"]
+USER ${USER_UID}
+
+ENTRYPOINT ["/manager"]
