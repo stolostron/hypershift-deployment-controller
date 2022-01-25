@@ -63,6 +63,9 @@ const (
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=create;get;list;patch;update;watch
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups=hypershift.openshift.io,resources=hostedclusters;nodepools,verbs=create;delete;get;list;patch;update;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
