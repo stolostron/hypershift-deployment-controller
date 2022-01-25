@@ -14,7 +14,7 @@ RUN go mod download
 COPY pkg/main.go pkg/main.go
 COPY api/ api/
 COPY pkg/controllers/ pkg/controllers/
-COPY vendor vendor
+#COPY vendor vendor                     # Developer Note: Needs to be retreived for every build
 COPY Makefile Makefile
 COPY hack hack
 

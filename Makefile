@@ -43,8 +43,8 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects. rm -f config/crd/*.yaml
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd
+manifests: controller-gen ## Generate ClusterRole and CustomResourceDefinition objects. rm -f config/crd/*.yaml
+	$(CONTROLLER_GEN) rbac:roleName=hypershfit-deployment-controller crd paths="./..." output:crd:artifacts:config=config/crd
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
