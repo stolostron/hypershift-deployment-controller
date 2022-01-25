@@ -2,3 +2,5 @@ resources:
 - ../crd
 - ../rbac
 - template-deployment.yaml
+
+namespace: open-cluster-management

@@ -31,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	clusteropenclustermanagementiov1alpha1 "github.com/jnpacker/hypershift-deployment-controller/api/v1alpha1"
-	"github.com/jnpacker/hypershift-deployment-controller/pkg/controllers"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
+	clusteropenclustermanagementiov1alpha1 "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/controllers"
 	//+kubebuilder:scaffold:imports
 )
 

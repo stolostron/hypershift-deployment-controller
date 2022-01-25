@@ -27,9 +27,9 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         resources:
-          limits:
-            cpu: "20m"
-            memory: "256Mi"
+          #limits:
+          #  cpu: "20m"
+          #  memory: "256Mi"
           requests:
-            cpu: "0.1m"                     # Runs < 2m most of the time
+            cpu: "2m"                     # Runs < 10m most of the time and idels at about 3m
             memory: "2Mi"                # Runs between 25-28Mi
