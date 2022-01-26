@@ -4,10 +4,10 @@ go 1.17
 
 require (
 	github.com/go-logr/logr v1.2.0
-	github.com/openshift/hypershift v0.0.0-20220112192020-b489e0bcbad2
-	k8s.io/api v0.23.0
-	k8s.io/apimachinery v0.23.0
-	k8s.io/client-go v0.23.0
+	github.com/openshift/hypershift v0.0.0-20220126200616-a42f4fd1c6e1
+	k8s.io/api v0.23.1
+	k8s.io/apimachinery v0.23.1
+	k8s.io/client-go v0.23.1
 	sigs.k8s.io/controller-runtime v0.11.0-beta.0.0.20211208212546-f236f0345ad2
 )
 
@@ -42,11 +42,10 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/openshift/api v0.0.0-20211215120111-7c47a5f63470 // indirect
+	github.com/openshift/api v0.0.0-20220124143425-d74727069f6f // indirect
 	github.com/openshift/cluster-api-provider-agent/api v0.0.0-20211222095357-6ae181af9267 // indirect
 	github.com/openshift/custom-resource-status v0.0.0-20200602122900-c002fd1547ca // indirect
 	github.com/pborman/uuid v1.2.0 // indirect
-	//github.com/openshift/hypershift/api v0.0.0-20210826030201-9e6982f7554e // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.51.1 // indirect
 	github.com/prometheus/client_golang v1.11.0 // indirect
@@ -74,7 +73,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/apiextensions-apiserver v0.23.0 // indirect
 	k8s.io/apiserver v0.23.0 // indirect
-	k8s.io/component-base v0.23.0 // indirect
+	k8s.io/component-base v0.23.1 // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b // indirect
@@ -84,17 +83,11 @@ require (
 	sigs.k8s.io/cluster-api v1.0.1 // indirect
 	sigs.k8s.io/cluster-api-provider-aws v1.1.0 // indirect
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.2.0-alpha.1 // indirect
-	sigs.k8s.io/cluster-api-provider-kubevirt v0.0.0-20211222231103-6aff381714e8 // indirect
+	sigs.k8s.io/cluster-api-provider-kubevirt v0.0.0-20220126210649-cb696210f178 // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace (
-	github.com/openshift/hypershift => github.com/jnpacker/hypershift v0.0.0-20220111145244-fec51b5a4924
-	//github.com/openshift/hypershift/api => github.com/openshift/hypershift v0.0.0-20220112192020-b489e0bcbad2
-	github.com/openshift/hypershift/api => github.com/jnpacker/hypershift v0.0.0-20220111145244-fec51b5a4924
-	github.com/openshift/hypershift/cmd/version => github.com/jnpacker/hypershift v0.0.0-20220111145244-fec51b5a4924
-	// From hypershift go.mod
-	kubevirt.io/containerized-data-importer-api => github.com/kubevirt/containerized-data-importer-api v1.41.1-0.20211201033752-05520fb9f18d
-)
+// From hypershift go.mod
+replace kubevirt.io/containerized-data-importer-api => github.com/kubevirt/containerized-data-importer-api v1.41.1-0.20211201033752-05520fb9f18d
