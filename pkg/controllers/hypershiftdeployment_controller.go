@@ -63,7 +63,7 @@ const (
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=create;get;list;patch;update;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=create;get;list;patch;update;watch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=hypershift.openshift.io,resources=hostedclusters;nodepools,verbs=create;delete;get;list;patch;update;watch
 
@@ -104,13 +104,12 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		log.Info("Using INFRA-ID: " + hyd.Spec.InfraID)
 
 		controllerutil.AddFinalizer(&hyd, destroyFinalizer)
-		//metav1.SetMetaDataLabel(&hyd.ObjectMeta, InfraLabelName, hyd.SpecInfraID)
 
 		if err := r.updateHypershiftDeploymentResource(&hyd); err != nil || hyd.Spec.InfraID == "" {
 			return ctrl.Result{}, fmt.Errorf("failed to update infra-id: %w", err)
 		}
 
-		//Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
+		// Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
 		setStatusCondition(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatformBeingConfigured)
 		r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatformIAMBeingConfigured)
 	}
@@ -247,6 +246,11 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				log.Info("HostedCluster resource updated: " + hc.Name)
 			}
 		}
+	}
+
+	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
+	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureOnly {
+		return ctrl.Result{}, nil
 	}
 
 	// Work on the NodePool resources
@@ -455,69 +459,71 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
-	// Delete nodepools first
-	for _, np := range hyd.Spec.NodePools {
-		var nodePool hyp.NodePool
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: np.Name}, &nodePool); !errors.IsNotFound(err) {
-			if nodePool.DeletionTimestamp == nil {
-				r.Log.Info("Deleting NodePool " + np.Name)
-				if err := r.Delete(ctx, &nodePool); err != nil {
-					log.Error(err, "Failed to delete NodePool resource")
+	if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
+		// Delete nodepools first
+		for _, np := range hyd.Spec.NodePools {
+			var nodePool hyp.NodePool
+			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: np.Name}, &nodePool); !errors.IsNotFound(err) {
+				if nodePool.DeletionTimestamp == nil {
+					r.Log.Info("Deleting NodePool " + np.Name)
+					if err := r.Delete(ctx, &nodePool); err != nil {
+						log.Error(err, "Failed to delete NodePool resource")
+						return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
+					}
+				}
+				return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
+			}
+		}
+
+		// Delete the HostedCluster
+		var hc hyp.HostedCluster
+		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !errors.IsNotFound(err) {
+			if hc.DeletionTimestamp == nil {
+				r.Log.Info("Deleting HostedCluster " + hyd.Name)
+				if err := r.Delete(ctx, &hc); err != nil {
+					log.Error(err, "Failed to delete HostedCluster resource")
 					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 				}
 			}
 			return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 		}
-	}
 
-	// Delete the HostedCluster
-	var hc hyp.HostedCluster
-	if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !errors.IsNotFound(err) {
-		if hc.DeletionTimestamp == nil {
-			r.Log.Info("Deleting HostedCluster " + hyd.Name)
-			if err := r.Delete(ctx, &hc); err != nil {
-				log.Error(err, "Failed to delete HostedCluster resource")
-				return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-			}
+		// Infrastructure is the last step
+		dOpts := aws.DestroyInfraOptions{
+			AWSCredentialsFile: "",
+			AWSKey:             string(providerSecret.Data["aws_access_key_id"]),
+			AWSSecretKey:       string(providerSecret.Data["aws_secret_access_key"]),
+			Region:             hyd.Spec.Infrastructure.Platform.AWS.Region,
+			BaseDomain:         string(providerSecret.Data["baseDomain"]),
+			InfraID:            hyd.Spec.InfraID,
+			Name:               hyd.GetName(),
 		}
-		return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-	}
 
-	// Infrastructure is the last step
-	dOpts := aws.DestroyInfraOptions{
-		AWSCredentialsFile: "",
-		AWSKey:             string(providerSecret.Data["aws_access_key_id"]),
-		AWSSecretKey:       string(providerSecret.Data["aws_secret_access_key"]),
-		Region:             hyd.Spec.Infrastructure.Platform.AWS.Region,
-		BaseDomain:         string(providerSecret.Data["baseDomain"]),
-		InfraID:            hyd.Spec.InfraID,
-		Name:               hyd.GetName(),
-	}
+		setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Destroying HypershiftDeployment with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroy)
+		r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatformIAMRemove)
 
-	setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Destroying HypershiftDeployment with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroy)
-	r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatformIAMRemove)
+		if err := dOpts.DestroyInfra(ctx); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to destroy HypershiftDeployment: %w", err)
+		}
 
-	if err := dOpts.DestroyInfra(ctx); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to destroy HypershiftDeployment: %w", err)
-	}
+		iamOpt := aws.DestroyIAMOptions{
+			Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
+			AWSKey:       dOpts.AWSKey,
+			AWSSecretKey: dOpts.AWSSecretKey,
+			InfraID:      dOpts.InfraID,
+		}
 
-	iamOpt := aws.DestroyIAMOptions{
-		Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
-		AWSKey:       dOpts.AWSKey,
-		AWSSecretKey: dOpts.AWSSecretKey,
-		InfraID:      dOpts.InfraID,
-	}
+		if err := iamOpt.DestroyIAM(ctx); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete IAM HypershiftDeployment: %w", err)
+		}
 
-	if err := iamOpt.DestroyIAM(ctx); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to delete IAM HypershiftDeployment: %w", err)
-	}
+		if err := destroyOIDCSecrets(r, hyd); err != nil {
+			log.Error(err, "Encountered an issue while deleting secrets")
+		}
 
-	if err := destroyOIDCSecrets(r, hyd); err != nil {
-		log.Error(err, "Encountered an issue while deleting secrets")
-	}
-
-	if err := r.Client.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, hyd); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update HypershiftDeployment values when removing finalizer: %w", err)
+		if err := r.Client.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, hyd); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update HypershiftDeployment values when removing finalizer: %w", err)
+		}
 	}
 
 	controllerutil.RemoveFinalizer(hyd, destroyFinalizer)

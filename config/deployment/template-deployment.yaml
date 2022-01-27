@@ -17,7 +17,7 @@ spec:
     spec:
       serviceAccountName: hyc
       containers:
-      - image: quay.io/jpacker/hypershift-deployment-controller:latest
+      - image: quay.io/stolostron/hypershift-deployment-controller:latest
         name: hypershift-deployment-controller
         command: ["./manager", "--leader-elect"]
         imagePullPolicy: Always
