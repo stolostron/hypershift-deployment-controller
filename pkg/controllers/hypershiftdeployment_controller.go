@@ -87,6 +87,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
+	r.Log.Info("Reconciling")
+
 	var providerSecret corev1.Secret
 	var err error
 
@@ -133,7 +135,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 		// Skip reconcile based on condition
 		if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
-			// Creating infrastructure used by the HypershiftDeployment, HostedClusters & NodePools
+			log.Info("Creating infrastructure on the provider that will be used by the HypershiftDeployment, HostedClusters & NodePools")
 			o := aws.CreateInfraOptions{
 				AWSKey:       string(providerSecret.Data["aws_access_key_id"]),
 				AWSSecretKey: string(providerSecret.Data["aws_secret_access_key"]),
@@ -215,6 +217,11 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}
 
+	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
+	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureOnly {
+		return ctrl.Result{}, nil
+	}
+
 	// Work on the HostedCluster resource
 	var hc hyp.HostedCluster
 	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc)
@@ -246,11 +253,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				log.Info("HostedCluster resource updated: " + hc.Name)
 			}
 		}
-	}
-
-	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
-	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureOnly {
-		return ctrl.Result{}, nil
 	}
 
 	// Work on the NodePool resources
@@ -459,6 +461,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
+	log.Info("Deleting " + string(len(hyd.Spec.NodePools)) + " NodePools")
 	if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
 		// Delete nodepools first
 		for _, np := range hyd.Spec.NodePools {
@@ -479,7 +482,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		var hc hyp.HostedCluster
 		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !errors.IsNotFound(err) {
 			if hc.DeletionTimestamp == nil {
-				r.Log.Info("Deleting HostedCluster " + hyd.Name)
+				log.Info("Deleting HostedCluster " + hyd.Name)
 				if err := r.Delete(ctx, &hc); err != nil {
 					log.Error(err, "Failed to delete HostedCluster resource")
 					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
@@ -502,10 +505,12 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Destroying HypershiftDeployment with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroy)
 		r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatformIAMRemove)
 
+		log.Info("Deleting Infrastructure on provider")
 		if err := dOpts.DestroyInfra(ctx); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to destroy HypershiftDeployment: %w", err)
 		}
 
+		log.Info("Deleting Infrastructure IAM on provider")
 		iamOpt := aws.DestroyIAMOptions{
 			Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
 			AWSKey:       dOpts.AWSKey,
@@ -517,6 +522,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 			return ctrl.Result{}, fmt.Errorf("failed to delete IAM HypershiftDeployment: %w", err)
 		}
 
+		log.Info("Deleting OIDC secrets")
 		if err := destroyOIDCSecrets(r, hyd); err != nil {
 			log.Error(err, "Encountered an issue while deleting secrets")
 		}
