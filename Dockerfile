@@ -1,7 +1,7 @@
 # Build the manager binary
 FROM registry.ci.openshift.org/open-cluster-management/builder:go1.17-linux as builder
 
-WORKDIR /go/src/github.com/open-cluster-management/hypershift-deployment-controller
+WORKDIR /go/src/github.com/stolostron/hypershift-deployment-controller
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -14,7 +14,7 @@ RUN go mod download
 COPY pkg/main.go pkg/main.go
 COPY api/ api/
 COPY pkg/controllers/ pkg/controllers/
-COPY vendor vendor
+#COPY vendor vendor                     # Developer Note: Needs to be retreived for every build
 COPY Makefile Makefile
 COPY hack hack
 
@@ -28,8 +28,8 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 ENV USER_UID=1001
 
 # Add the binaries
-COPY --from=builder /go/src/github.com/open-cluster-management/hypershift-deployment-controller/bin/manager .
-
+COPY --from=builder /go/src/github.com/stolostron/hypershift-deployment-controller/bin/manager .
+ 
 USER ${USER_UID}
 
 ENTRYPOINT ["/manager"]

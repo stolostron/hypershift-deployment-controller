@@ -30,14 +30,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
-	hypdeployment "github.com/jnpacker/hypershift-deployment-controller/api/v1alpha1"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/util"
+	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 )
@@ -62,6 +63,9 @@ const (
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=create;get;list;patch;update;watch
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups=hypershift.openshift.io,resources=hostedclusters;nodepools,verbs=create;delete;get;list;patch;update;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -86,7 +90,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	var providerSecret corev1.Secret
 	var err error
 
-	if hyd.Spec.Infrastructure.Configure {
+	configureInfra := hyd.Spec.Infrastructure.Configure
+	if configureInfra {
 		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Spec.Infrastructure.CloudProvider.Name}, &providerSecret)
 		if err != nil {
 			log.Error(err, "Could not retrieve the provider secret")
@@ -115,11 +120,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.destroyHypershift(&hyd, &providerSecret)
 	}
 
-	if !hyd.Spec.Infrastructure.Configure {
-		log.Info("Nothing to configure")
-		return ctrl.Result{}, nil
-	}
-
 	if hyd.Spec.Infrastructure.Platform == nil {
 		return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
 	}
@@ -127,7 +127,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	var infraOut *aws.CreateInfraOutput
 	var iamOut *aws.CreateIAMOutput
 
-	if hyd.Spec.Infrastructure.Platform.AWS != nil {
+	if configureInfra && hyd.Spec.Infrastructure.Platform.AWS != nil {
 		if hyd.Spec.Infrastructure.Platform.AWS.Region == "" {
 			return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform.AWS.Region")
 		}
@@ -220,8 +220,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	var hc hyp.HostedCluster
 	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc)
 
-	if meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
-		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
+	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
+	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
+		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
+		!configureInfra {
 		if errors.IsNotFound(err) {
 			hostedCluster := ScafoldHostedCluster(&hyd, hyd.Spec.HostedClusterSpec)
 			if err := r.Create(ctx, hostedCluster); err != nil {
@@ -248,8 +250,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// Work on the NodePool resources
-	if meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
-		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
+	// Apply NodePool(s) if Infrastructure is AsExpected or configureInfra: false (user brings their own)
+	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
+		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
+		!configureInfra {
 
 		// We loop through what exists, so that we can delete pools if appropriate
 		var nodePools hyp.NodePoolList
@@ -531,5 +535,6 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypdeployment.HypershiftDeployment{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }

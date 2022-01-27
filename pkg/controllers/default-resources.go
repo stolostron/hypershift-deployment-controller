@@ -17,9 +17,9 @@ limitations under the License.
 package controllers
 
 import (
-	hypdeployment "github.com/jnpacker/hypershift-deployment-controller/api/v1alpha1"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
+	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
