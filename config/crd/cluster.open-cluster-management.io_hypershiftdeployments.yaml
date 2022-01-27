@@ -22,19 +22,27 @@ spec:
   - additionalPrinterColumns:
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="PlatformInfrastructureConfigured")].reason
-      name: Reason
+      name: Status
       type: string
     - description: Configured
       jsonPath: .status.conditions[?(@.type=="PlatformIAMConfigured")].status
-      name: IAM Ready
+      name: Ready
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="PlatformIAMConfigured")].reason
-      name: Reason
+      name: Status
       type: string
     - description: Configured
       jsonPath: .status.conditions[?(@.type=="PlatformInfrastructureConfigured")].status
-      name: INFRA Ready
+      name: Ready
+      type: string
+    - description: Reason
+      jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].reason
+      name: Reference
+      type: string
+    - description: Found
+      jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].status
+      name: Found
       type: string
     name: v1alpha1
     schema:

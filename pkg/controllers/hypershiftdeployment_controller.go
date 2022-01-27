@@ -81,6 +81,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	log := r.Log
 	r.ctx = ctx
 
+	log.Info("Reconcile...")
+
 	var hyd hypdeployment.HypershiftDeployment
 	if err := r.Get(ctx, req.NamespacedName, &hyd); err != nil {
 		log.V(2).Info("Resource deleted")
@@ -92,11 +94,14 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 	configureInfra := hyd.Spec.Infrastructure.Configure
 	if configureInfra {
-		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Spec.Infrastructure.CloudProvider.Name}, &providerSecret)
+		secretName := hyd.Spec.Infrastructure.CloudProvider.Name
+		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: secretName}, &providerSecret)
 		if err != nil {
 			log.Error(err, "Could not retrieve the provider secret")
+			r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionFalse, "The secret "+secretName+" could not be retreived from namespace "+hyd.Namespace, hypdeployment.ProviderSecretRefMisConfigured)
 			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true}, nil
 		}
+		r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+secretName, string(hypdeployment.ProviderSecretFoundAsExpected))
 	}
 
 	if hyd.Spec.InfraID == "" {
@@ -426,7 +431,6 @@ func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(hyd *hyp
 	sc := meta.FindStatusCondition(hyd.Status.Conditions, string(conditionType))
 	if sc == nil || sc.ObservedGeneration != hyd.Generation || sc.Status != conditionStatus || sc.Reason != reason || sc.Message != message {
 		setStatusCondition(hyd, conditionType, conditionStatus, message, reason)
-		r.Log.Info("namespace: " + hyd.GetNamespace())
 		err = r.Client.Status().Update(r.ctx, hyd)
 		if err != nil {
 			if apierrors.IsConflict(err) {
