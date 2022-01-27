@@ -7,6 +7,25 @@ metadata:
   name: hypershfit-deployment-controller
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - cluster.open-cluster-management.io
   resources:
   - hypershiftdeployments
@@ -32,34 +51,6 @@ rules:
   - get
   - patch
   - update
-
-## External roles
-#####################
-
-# Secrets
-- apiGroups:
-  - ""
-  resources:
-  - secrets     #Cloud Provider
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-
-# ConfigMaps
-- apiGroups:
-  - ""
-  resources:
-  - configmaps  #OIDC S3 information
-  verbs:
-  - get
-  - list
-  - watch
-
-# HostedCluster & NodePool
 - apiGroups:
   - hypershift.openshift.io
   resources:
