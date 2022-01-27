@@ -52,7 +52,7 @@ type HypershiftDeploymentReconciler struct {
 }
 
 const (
-	destroyFinalizer       = "hypershift.openshift.io/finalizer"
+	destroyFinalizer       = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
 	HostedClusterFinalizer = "hypershift.openshift.io/used-by-hostedcluster"
 	oidcStorageProvider    = "oidc-storage-provider-s3-config"
 	oidcSPNamespace        = "kube-public"
@@ -63,7 +63,7 @@ const (
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=create;get;list;patch;update;watch;delete
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=create;get;list;patch;update;watch;deletecollection
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=hypershift.openshift.io,resources=hostedclusters;nodepools,verbs=create;delete;get;list;patch;update;watch
 
@@ -219,6 +219,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
 	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureOnly {
+		log.Info("Completed Infrastructure confiugration, skipping HostedCluster and NodePool(s)")
 		return ctrl.Result{}, nil
 	}
 
@@ -461,7 +462,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
-	log.Info("Deleting " + string(len(hyd.Spec.NodePools)) + " NodePools")
+	log.Info("Deleting NodePools")
 	if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
 		// Delete nodepools first
 		for _, np := range hyd.Spec.NodePools {
@@ -507,7 +508,8 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 		log.Info("Deleting Infrastructure on provider")
 		if err := dOpts.DestroyInfra(ctx); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to destroy HypershiftDeployment: %w", err)
+			log.Info("failed to destroy infrastructure on provider (retries in 30s")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 
 		log.Info("Deleting Infrastructure IAM on provider")
@@ -519,19 +521,18 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		}
 
 		if err := iamOpt.DestroyIAM(ctx); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to delete IAM HypershiftDeployment: %w", err)
+			log.Error(err, "failed to delete IAM on provider")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 
 		log.Info("Deleting OIDC secrets")
 		if err := destroyOIDCSecrets(r, hyd); err != nil {
-			log.Error(err, "Encountered an issue while deleting secrets")
-		}
-
-		if err := r.Client.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, hyd); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update HypershiftDeployment values when removing finalizer: %w", err)
+			log.Error(err, "Encountered an issue while deleting OIDC secrets")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 	}
 
+	log.Info("Removing finalizer")
 	controllerutil.RemoveFinalizer(hyd, destroyFinalizer)
 
 	if err := r.Client.Update(ctx, hyd); err != nil {
