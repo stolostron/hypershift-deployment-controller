@@ -37,11 +37,15 @@ const (
 	PlatformIAMConfiguredAsExpected = "PlatformIAMConfiguredAsExpected"
 	PlatformIAMRemove               = "PlatformIAMRemove"
 	PlatformIAMMisConfiguredReason  = "PlatformIAMMisconfigured"
+	ProviderSecretFoundAsExpected   = "ProviderSecretReferenceAsExpected"
+	ProviderSecretRefMisConfigured  = "ProviderSecretReferenceMisConfigured"
 
 	// PlatformConfigured indicates (if status is true) that the
-	// platform configuration specified for the platform provider has been deployed
-	PlatformConfigured    ConditionType = "PlatformInfrastructureConfigured"
-	PlatformIAMConfigured ConditionType = "PlatformIAMConfigured"
+	// platform configuration specified for the platform provider has been applied
+	PlatformConfigured ConditionType = "PlatformInfrastructureConfigured"
+	// PlatformIAMConfigured indicates (if status is true) that the IAM is configured
+	PlatformIAMConfigured    ConditionType = "PlatformIAMConfigured"
+	ProviderSecretConfigured ConditionType = "ProviderSecretConfigured"
 
 	PhaseInfrastructure = "Infrastructure"
 	PhaseHostedCluster  = "HostedCluster"
@@ -135,10 +139,12 @@ type HypershiftDeploymentStatus struct {
 // +kubebuilder:resource:path=hypershiftdeployments,shortName=hd;hds,scope=Namespaced
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].reason",description="Reason"
-// +kubebuilder:printcolumn:name="IAM Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
-// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
-// +kubebuilder:printcolumn:name="INFRA Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].status",description="Configured"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].status",description="Configured"
+// +kubebuilder:printcolumn:name="Reference",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="Found",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].status",description="Found"
 
 // HypershiftDeployment is the Schema for the hypershiftDeployments API
 type HypershiftDeployment struct {
