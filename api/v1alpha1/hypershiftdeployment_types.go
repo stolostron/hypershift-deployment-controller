@@ -26,6 +26,8 @@ type ConditionType string
 
 type CurrentPhase string
 
+type InfraOverride string
+
 const (
 	PlatformBeingConfigured         = "PlatformInfrastructureBeingConfigured"
 	PlatformConfiguredAsExpected    = "PlatformInfrastructureConfiguredAsExpected"
@@ -44,6 +46,9 @@ const (
 	PhaseInfrastructure = "Infrastructure"
 	PhaseHostedCluster  = "HostedCluster"
 	PhaseNodePools      = "NodePools"
+
+	InfraOverrideDestroy = "ORPHAN"
+	InfraConfigureOnly   = "INFRA-ONLY"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -85,6 +90,11 @@ type InfraSpec struct {
 	// +immutable
 	Configure bool `json:"configure"`
 
+	// InfrastructureOverride allows support for special cases
+	//   InfraOverrideDestroy = "ORPHAN"
+	//   InfraConfigureOnly = "INFRA-ONLY"
+	Override InfraOverride `json:"override,omitempty"`
+
 	// Region is the AWS region in which the cluster resides. This configures the
 	// OCP control plane cloud integrations, and is used by NodePool to resolve
 	// the correct boot AMI for a given release.
@@ -94,7 +104,6 @@ type InfraSpec struct {
 	Platform *Platforms `json:"platform,omitempty"`
 
 	// CloudProvider secret, contains the Cloud credenetial, Pull Secret and Base Domain
-	// +immutable
 	CloudProvider corev1.LocalObjectReference `json:"cloudProvider"`
 }
 

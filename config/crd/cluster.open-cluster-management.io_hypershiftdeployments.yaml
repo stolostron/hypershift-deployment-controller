@@ -927,6 +927,11 @@ spec:
                     description: Configure the infrastructure using the provided CloudProvider,
                       or user provided
                     type: boolean
+                  override:
+                    description: InfrastructureOverride allows support for special
+                      cases   InfraOverrideDestroy = "ORPHAN"   InfraConfigureOnly
+                      = "INFRA-ONLY"
+                    type: string
                   platform:
                     description: Region is the AWS region in which the cluster resides.
                       This configures the OCP control plane cloud integrations, and
