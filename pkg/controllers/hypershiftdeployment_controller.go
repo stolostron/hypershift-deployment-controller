@@ -139,7 +139,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 
 		// Skip reconcile based on condition
-		if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
+		// Does both INFRA and IAM, as IAM depends on zoneID's from INFRA
+		if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) ||
+			!meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
+
 			log.Info("Creating infrastructure on the provider that will be used by the HypershiftDeployment, HostedClusters & NodePools")
 			o := aws.CreateInfraOptions{
 				AWSKey:       string(providerSecret.Data["aws_access_key_id"]),
@@ -174,12 +177,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionTrue, "", hypdeployment.PlatformConfiguredAsExpected)
 			log.Info("Infrastructure configured")
 
-			// This allows more interleaving of reconciles
-			return ctrl.Result{}, nil
-		}
-
-		if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
-
 			if err := r.Get(ctx, req.NamespacedName, &hyd); err != nil {
 				return ctrl.Result{}, nil
 			}
@@ -195,6 +192,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 					AdditionalTags:                  []string{},
 					OIDCStorageProviderS3BucketName: oidcSPName,
 					OIDCStorageProviderS3Region:     oidcSPRegion,
+					PrivateZoneID:                   infraOut.PrivateZoneID,
+					PublicZoneID:                    infraOut.PublicZoneID,
+					LocalZoneID:                     infraOut.LocalZoneID,
 				}
 
 				iamOut, iamErr = iamOpt.CreateIAM(r.ctx, r.Client)
@@ -466,7 +466,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
-	log.Info("Deleting NodePools")
+	log.Info("Remove any NodePools")
 	if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
 		// Delete nodepools first
 		for _, np := range hyd.Spec.NodePools {
