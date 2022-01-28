@@ -110,7 +110,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	if hyd.Spec.InfraID == "" {
 		hyd.Spec.InfraID = fmt.Sprintf("%s-%s", hyd.GetName(), utilrand.String(5))
 		log.Info("Using INFRA-ID: " + hyd.Spec.InfraID)
+	}
 
+	if !controllerutil.ContainsFinalizer(&hyd, destroyFinalizer) {
 		controllerutil.AddFinalizer(&hyd, destroyFinalizer)
 
 		if err := r.updateHypershiftDeploymentResource(&hyd); err != nil || hyd.Spec.InfraID == "" {
