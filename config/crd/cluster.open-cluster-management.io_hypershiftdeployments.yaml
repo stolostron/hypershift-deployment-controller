@@ -22,7 +22,7 @@ spec:
   - additionalPrinterColumns:
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="PlatformInfrastructureConfigured")].reason
-      name: Status
+      name: INFRA
       type: string
     - description: Configured
       jsonPath: .status.conditions[?(@.type=="PlatformIAMConfigured")].status
@@ -30,7 +30,7 @@ spec:
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="PlatformIAMConfigured")].reason
-      name: Status
+      name: IAM
       type: string
     - description: Configured
       jsonPath: .status.conditions[?(@.type=="PlatformInfrastructureConfigured")].status
@@ -38,7 +38,7 @@ spec:
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].reason
-      name: Reference
+      name: PROVIDER REF
       type: string
     - description: Found
       jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].status
@@ -379,6 +379,17 @@ spec:
                       provider for the cluster and is used to configure platform specific
                       behavior.
                     properties:
+                      agent:
+                        description: Agent specifies configuration for agent-based
+                          installations.
+                        properties:
+                          agentNamespace:
+                            description: AgentNamespace is the namespace where to
+                              search for Agents for this cluster
+                            type: string
+                        required:
+                        - agentNamespace
+                        type: object
                       aws:
                         description: AWS specifies configuration for clusters running
                           on Amazon Web Services.
@@ -1121,6 +1132,73 @@ spec:
                             provider for the NodePool and is used to configure platform
                             specific behavior.
                           properties:
+                            agent:
+                              description: Agent specifies the configuration used
+                                when using Agent platform.
+                              properties:
+                                agentLabelSelector:
+                                  description: AgentLabelSelector contains labels
+                                    that must be set on an Agent in order to be selected
+                                    for a Machine.
+                                  properties:
+                                    matchExpressions:
+                                      description: matchExpressions is a list of label
+                                        selector requirements. The requirements are
+                                        ANDed.
+                                      items:
+                                        description: A label selector requirement
+                                          is a selector that contains values, a key,
+                                          and an operator that relates the key and
+                                          values.
+                                        properties:
+                                          key:
+                                            description: key is the label key that
+                                              the selector applies to.
+                                            type: string
+                                          operator:
+                                            description: operator represents a key's
+                                              relationship to a set of values. Valid
+                                              operators are In, NotIn, Exists and
+                                              DoesNotExist.
+                                            type: string
+                                          values:
+                                            description: values is an array of string
+                                              values. If the operator is In or NotIn,
+                                              the values array must be non-empty.
+                                              If the operator is Exists or DoesNotExist,
+                                              the values array must be empty. This
+                                              array is replaced during a strategic
+                                              merge patch.
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                    matchLabels:
+                                      additionalProperties:
+                                        type: string
+                                      description: matchLabels is a map of {key,value}
+                                        pairs. A single {key,value} in the matchLabels
+                                        map is equivalent to an element of matchExpressions,
+                                        whose key field is "key", the operator is
+                                        "In", and the values array contains only "value".
+                                        The requirements are ANDed.
+                                      type: object
+                                  type: object
+                                minCPUs:
+                                  description: MinCPUs specifies the minimum number
+                                    of CPU cores required.
+                                  format: int32
+                                  type: integer
+                                minMemoryMiB:
+                                  description: MinMemoryMiB specifies the minimum
+                                    amount of RAM required, in MiB.
+                                  format: int32
+                                  type: integer
+                              type: object
                             aws:
                               description: AWS specifies the configuration used when
                                 operating on AWS.
@@ -1131,11 +1209,13 @@ spec:
                                     based on the NodePool release payload image.
                                   type: string
                                 instanceProfile:
-                                  description: InstanceProfile is TODO
+                                  description: InstanceProfile is the AWS EC2 instance
+                                    profile, which is a container for an IAM role
+                                    that the EC2 instance uses.
                                   type: string
                                 instanceType:
                                   description: InstanceType is an ec2 instance type
-                                    for node instances (e.g. m4-large).
+                                    for node instances (e.g. m5.large).
                                   type: string
                                 resourceTags:
                                   description: "ResourceTags is an optional list of

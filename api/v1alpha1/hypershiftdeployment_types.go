@@ -29,27 +29,20 @@ type CurrentPhase string
 type InfraOverride string
 
 const (
-	PlatformBeingConfigured         = "PlatformInfrastructureBeingConfigured"
-	PlatformConfiguredAsExpected    = "PlatformInfrastructureConfiguredAsExpected"
-	PlatfromDestroy                 = "PlatformInfrastructureDestroy"
-	PlatformMisConfiguredReason     = "PlatformInfrastructureMisconfigured"
-	PlatformIAMBeingConfigured      = "PlatformIAMBeingConfigured"
-	PlatformIAMConfiguredAsExpected = "PlatformIAMConfiguredAsExpected"
-	PlatformIAMRemove               = "PlatformIAMRemove"
-	PlatformIAMMisConfiguredReason  = "PlatformIAMMisconfigured"
-	ProviderSecretFoundAsExpected   = "ProviderSecretReferenceAsExpected"
-	ProviderSecretRefMisConfigured  = "ProviderSecretReferenceMisConfigured"
+	ConfiguredAsExpectedReason = "ConfiguredAsExpected"
+	PlatfromDestroyReason      = "Destroying"
+	MisConfiguredReason        = "MisConfigured"
+	BeingConfiguredReason      = "BeingConfigured"
+	RemovingReason             = "Removing"
+	AsExpectedReason           = "AsExpected"
 
 	// PlatformConfigured indicates (if status is true) that the
 	// platform configuration specified for the platform provider has been applied
 	PlatformConfigured ConditionType = "PlatformInfrastructureConfigured"
 	// PlatformIAMConfigured indicates (if status is true) that the IAM is configured
-	PlatformIAMConfigured    ConditionType = "PlatformIAMConfigured"
+	PlatformIAMConfigured ConditionType = "PlatformIAMConfigured"
+	// ProviderSecretConfigured indicates the state of the secret reference
 	ProviderSecretConfigured ConditionType = "ProviderSecretConfigured"
-
-	PhaseInfrastructure = "Infrastructure"
-	PhaseHostedCluster  = "HostedCluster"
-	PhaseNodePools      = "NodePools"
 
 	InfraOverrideDestroy = "ORPHAN"
 	InfraConfigureOnly   = "INFRA-ONLY"
@@ -139,11 +132,11 @@ type HypershiftDeploymentStatus struct {
 // +kubebuilder:resource:path=hypershiftdeployments,shortName=hd;hds,scope=Namespaced
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="INFRA",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="IAM",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].status",description="Configured"
-// +kubebuilder:printcolumn:name="Reference",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="PROVIDER REF",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Found",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].status",description="Found"
 
 // HypershiftDeployment is the Schema for the hypershiftDeployments API

@@ -47,6 +47,15 @@ This allows you to create multiple Hypershift HostedClusters on the ACM cluster.
 4. Create a `HypershiftDeployment` resource (hd), and watch the logs.  The `hd` resource will create the infrastructure in AWS if: `Spec.Infrastructure.Configure: True`. Once all the AWS resources are created, it will create a `HostedCluster` resource and `NodePool`.  You will also notice that the `hd.Spec.HostedClusterSpec` and `hd.Spec.NodePools[]` keys are filled in with the values that were used to create the kube resources.
 5. You can add additional NodePools, by editing the NodePools array, and adding addional specs. The easiest way to do this is to copy the existing spec, and just change the name.
 
+### Checking status
+```bash
+oc get hd  # displays the status of Infrastructure deployment if configure: true
+
+# NAME     INFRA                  READY   IAM                    READY   PROVIDER REF          FOUND
+# sample   ConfiguredAsExpected   True    ConfiguredAsExpected   True    ReferenceAsExpected   True
+```
+If there is problem, looking at the `HypershiftDeployment.Status.Conditions[].message` and you will see a specific error message.  When destroying the infrastructure, you will see similar details on the progres of clean up.
+
 ## Deleting HypershiftDeployment
 1. Make sure the controller is running
 2. Delete the HypershiftDeployment resource
