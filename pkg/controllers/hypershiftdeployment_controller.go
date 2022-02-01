@@ -103,7 +103,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionFalse, "The secret "+secretName+" could not be retreived from namespace "+hyd.Namespace, hypdeployment.MisConfiguredReason)
 			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true}, nil
 		}
-		r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+secretName, string(hypdeployment.AsExpectedReason))
+		if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+secretName, string(hypdeployment.AsExpectedReason)); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if hyd.Spec.InfraID == "" {
@@ -174,7 +176,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				return ctrl.Result{}, err
 			}
 
-			r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
+			if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason); err != nil {
+				return ctrl.Result{}, err
+			}
 			log.Info("Infrastructure configured")
 
 			if err := r.Get(ctx, req.NamespacedName, &hyd); err != nil {
@@ -471,7 +475,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		// Delete nodepools first
 		for _, np := range hyd.Spec.NodePools {
 			var nodePool hyp.NodePool
-			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: np.Name}, &nodePool); !errors.IsNotFound(err) {
+			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: np.Name}, &nodePool); err == nil {
 				if nodePool.DeletionTimestamp == nil {
 					r.Log.Info("Deleting NodePool " + np.Name)
 					if err := r.Delete(ctx, &nodePool); err != nil {
@@ -479,6 +483,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 						return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 					}
 				}
+				log.Info("Waiting for NodePool " + np.Name + " to be deleted")
 				return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 			} else {
 				log.Info("NodePool " + np.Name + " already deleted...")
@@ -490,11 +495,10 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !errors.IsNotFound(err) {
 			if hc.DeletionTimestamp == nil {
 				log.Info("Deleting HostedCluster " + hyd.Name)
-				if err := r.Delete(ctx, &hc); err != nil {
-					log.Error(err, "Failed to delete HostedCluster resource")
-					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-				}
+				// The delete action can take a while and we don't want to block the reconciler
+				go r.spawnDelete(ctx, hc)
 			}
+			log.Info("Waiting for HostedCluster " + hyd.Name + " to be deleted")
 			return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 		} else {
 			log.Info("HostedCluster " + hyd.Name + " already deleted...")
@@ -556,6 +560,15 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypdeployment.HypershiftDeployment{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
+}
+
+func (r *HypershiftDeploymentReconciler) spawnDelete(ctx context.Context, hc hyp.HostedCluster) {
+	if err := r.Delete(ctx, &hc); err != nil {
+		r.Log.Error(err, "Failed to delete "+hc.Kind+" resource")
+	} else {
+		r.Log.Info("Resource " + hc.Kind + " deleted")
+	}
+
 }
