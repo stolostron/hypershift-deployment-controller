@@ -23,7 +23,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -240,10 +239,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			hostedCluster := ScafoldHostedCluster(&hyd, hyd.Spec.HostedClusterSpec)
 			if err := r.Create(ctx, hostedCluster); err != nil {
-				if errors.IsAlreadyExists(err) {
+				if apierrors.IsAlreadyExists(err) {
 					log.Error(err, "Failed to create HostedCluster resource")
 					return ctrl.Result{}, err
 				}
@@ -492,7 +491,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 		// Delete the HostedCluster
 		var hc hyp.HostedCluster
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !errors.IsNotFound(err) {
+		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
 			if hc.DeletionTimestamp == nil {
 				log.Info("Deleting HostedCluster " + hyd.Name)
 				// The delete action can take a while and we don't want to block the reconciler
