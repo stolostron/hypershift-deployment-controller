@@ -627,7 +627,7 @@ func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) erro
 				}
 
 				req := reconcile.Request{
-					types.NamespacedName{Namespace: res[0], Name: res[1]},
+					NamespacedName: types.NamespacedName{Namespace: res[0], Name: res[1]},
 				}
 
 				return []reconcile.Request{req}
