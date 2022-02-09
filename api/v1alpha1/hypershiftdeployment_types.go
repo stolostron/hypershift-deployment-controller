@@ -105,6 +105,7 @@ type InfraSpec struct {
 	// InfrastructureOverride allows support for special cases
 	//   InfraOverrideDestroy = "ORPHAN"
 	//   InfraConfigureOnly = "INFRA-ONLY"
+	//   InfraConfigureWithManifest = "manifestwork"
 	Override InfraOverride `json:"override,omitempty"`
 
 	// Region is the AWS region in which the cluster resides. This configures the
