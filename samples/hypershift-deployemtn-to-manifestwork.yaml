@@ -1,0 +1,17 @@
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: ${hostClusterName}
+  namespace: ${hostClusterNamespace}
+  annotations:
+    manifestwork-target-namespace: local-cluster
+spec:
+  infrastructure:
+    cloudProvider:
+      name: aws
+    configure: True
+    override: manifestwork
+    platform:
+      aws:
+        region: us-east-1
