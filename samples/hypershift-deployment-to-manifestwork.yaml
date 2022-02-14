@@ -7,11 +7,12 @@ metadata:
   annotations:
     manifestwork-target-namespace: local-cluster
 spec:
+  targetNamespace: local-cluster
+  override: manifestwork
   infrastructure:
     cloudProvider:
       name: aws
     configure: True
-    override: manifestwork
     platform:
       aws:
         region: us-east-1

@@ -235,12 +235,12 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
-	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureOnly {
+	if hyd.Spec.Override == hypdeployment.InfraConfigureOnly {
 		log.Info("Completed Infrastructure confiugration, skipping HostedCluster and NodePool(s)")
 		return ctrl.Result{}, nil
 	}
 
-	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureWithManifest {
+	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 		return r.createMainfestwork(ctx, req, hyd.DeepCopy())
 	}
 
@@ -476,7 +476,6 @@ func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(
 
 	if checkFunc() {
 		setStatusCondition(hyd, conditionType, conditionStatus, message, reason)
-		// err = r.Client.Status().Update(r.ctx, hyd)
 
 		// use Patch with merge to minimize the update conflicts
 		err = r.Client.Status().Patch(r.ctx, hyd, client.MergeFrom(inHyd))
@@ -508,7 +507,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
-	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureWithManifest {
+	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 		log.Info("Remove created Manifestwork and wait for hostedclsuter and noodpool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
 		if err != nil {
@@ -519,7 +518,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		if !res.IsZero() {
 			return res, nil
 		}
-	} else if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
+	} else if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
 		// Delete nodepools first
 		log.Info("Remove any NodePools")
 		for _, np := range hyd.Spec.NodePools {
@@ -554,7 +553,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		}
 	}
 
-	if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
+	if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
 		// Infrastructure is the last step
 		dOpts := aws.DestroyInfraOptions{
 			AWSCredentialsFile: "",

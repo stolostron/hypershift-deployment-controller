@@ -204,7 +204,6 @@ func scafoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePoo
 }
 
 func ScafoldNodePool(namespace string, infraId string, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
-
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      np.Name,

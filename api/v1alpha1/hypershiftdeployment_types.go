@@ -60,7 +60,7 @@ const (
 
 	InfraOverrideDestroy       = "ORPHAN"
 	InfraConfigureOnly         = "INFRA-ONLY"
-	InfraConfigureWithManifest = "manifestwork"
+	InfraConfigureWithManifest = "MANIFESTWORK"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -78,6 +78,16 @@ type HypershiftDeploymentSpec struct {
 	// +immutable
 	// +optional
 	InfraID string `json:"infra-id,omitempty"`
+
+	// InfrastructureOverride allows support for special cases
+	//   InfraOverrideDestroy = "ORPHAN"
+	//   InfraConfigureOnly = "INFRA-ONLY"
+	//   InfraConfigureWithManifest = "MANIFESTWORK"
+	Override InfraOverride `json:"override,omitempty"`
+
+	//TargetNamespace allows the children resource(like, manifestwork) to be
+	//generated in other than the hypershiftDpeloyment's namespace.
+	TargetNamespace string `json:"targetNamespace"`
 
 	// HostedCluster that will be applied to the ManagementCluster by ACM, if omitted, it will be generated
 	// +optional
@@ -101,12 +111,6 @@ type InfraSpec struct {
 	// Configure the infrastructure using the provided CloudProvider, or user provided
 	// +immutable
 	Configure bool `json:"configure"`
-
-	// InfrastructureOverride allows support for special cases
-	//   InfraOverrideDestroy = "ORPHAN"
-	//   InfraConfigureOnly = "INFRA-ONLY"
-	//   InfraConfigureWithManifest = "manifestwork"
-	Override InfraOverride `json:"override,omitempty"`
 
 	// Region is the AWS region in which the cluster resides. This configures the
 	// OCP control plane cloud integrations, and is used by NodePool to resolve

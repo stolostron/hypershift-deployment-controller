@@ -946,11 +946,6 @@ spec:
                     description: Configure the infrastructure using the provided CloudProvider,
                       or user provided
                     type: boolean
-                  override:
-                    description: InfrastructureOverride allows support for special
-                      cases   InfraOverrideDestroy = "ORPHAN"   InfraConfigureOnly
-                      = "INFRA-ONLY"
-                    type: string
                   platform:
                     description: Region is the AWS region in which the cluster resides.
                       This configures the OCP control plane cloud integrations, and
@@ -7049,8 +7044,18 @@ spec:
                   - spec
                   type: object
                 type: array
+              override:
+                description: InfrastructureOverride allows support for special cases   InfraOverrideDestroy
+                  = "ORPHAN"   InfraConfigureOnly = "INFRA-ONLY"   InfraConfigureWithManifest
+                  = "MANIFESTWORK"
+                type: string
+              targetNamespace:
+                description: TargetNamespace allows the children resource(like, manifestwork)
+                  to be generated in other than the hypershiftDpeloyment's namespace.
+                type: string
             required:
             - infrastructure
+            - targetNamespace
             type: object
           status:
             description: HypershiftDeploymentStatus defines the observed state of

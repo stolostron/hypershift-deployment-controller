@@ -39,7 +39,7 @@ const (
 )
 
 func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) *workv1.ManifestWork {
-	return &workv1.ManifestWork{
+	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hyd.GetName(),
@@ -53,6 +53,12 @@ func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) *workv1.Manife
 		},
 		Spec: workv1.ManifestWorkSpec{},
 	}
+
+	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
+		w.Spec.DeleteOption = &workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}
+	}
+
+	return w
 }
 
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
@@ -206,13 +212,13 @@ func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Cont
 	}, nil
 }
 
+//TODO @ianzhang366 integrate with the clusterSet logic
 func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
-	anno := hyd.GetAnnotations()
-	if len(anno) == 0 || len(anno[ManifestTargetNamespace]) == 0 {
+	if len(hyd.Spec.TargetNamespace) == 0 {
 		return hyd.GetNamespace()
 	}
 
-	return anno[ManifestTargetNamespace]
+	return hyd.Spec.TargetNamespace
 }
 
 func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
