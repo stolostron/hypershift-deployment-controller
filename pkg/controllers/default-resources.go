@@ -28,14 +28,14 @@ import (
 
 const ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.9.15-x86_64"
 
-func ScafoldHostedCluster(hyd *hypdeployment.HypershiftDeployment, hcs *hyp.HostedClusterSpec) *hyp.HostedCluster {
+func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
 
 	return &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
 			Namespace: hyd.Namespace,
 		},
-		Spec: *hcs,
+		Spec: *hyd.Spec.HostedClusterSpec,
 	}
 }
 
@@ -50,7 +50,7 @@ func spsMap(service hyp.ServiceType, psType hyp.PublishingStrategyType) hyp.Serv
 	}
 }
 
-func ScafoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
+func ScaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 
 	volSize := resource.MustParse("4Gi")
 	//releaseImage, _ := version.LookupDefaultOCPVersion()
@@ -131,7 +131,7 @@ func scafoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudPr
 	}
 }
 
-func ScafoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
+func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 
 	nodeCount := int32(2)
 
@@ -203,7 +203,7 @@ func scafoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePoo
 	}
 }
 
-func ScafoldNodePool(namespace string, infraId string, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
+func ScaffoldNodePool(namespace string, infraId string, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
 
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
