@@ -7048,6 +7048,10 @@ spec:
                 description: InfrastructureOverride allows support for special cases   InfraOverrideDestroy
                   = "ORPHAN"   InfraConfigureOnly = "INFRA-ONLY"   InfraConfigureWithManifest
                   = "MANIFESTWORK"
+                enum:
+                - ORPHAN
+                - INFRA-ONLY
+                - MANIFESTWORK
                 type: string
               targetNamespace:
                 description: TargetNamespace allows the children resource(like, manifestwork)

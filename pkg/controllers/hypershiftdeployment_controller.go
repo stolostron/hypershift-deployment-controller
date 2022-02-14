@@ -97,7 +97,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	r.Log.Info("Reconciling")
+	log.Info("Reconciling")
 
 	var providerSecret corev1.Secret
 	var err error
@@ -241,6 +241,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+		log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
 		return r.createMainfestwork(ctx, req, hyd.DeepCopy())
 	}
 
@@ -507,9 +508,16 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
+	inHyd := hyd.DeepCopy()
+
 	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 		log.Info("Remove created Manifestwork and wait for hostedclsuter and noodpool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
+
+		if stErr := r.Client.Status().Patch(ctx, hyd, client.MergeFrom(inHyd)); stErr != nil {
+			r.Log.Error(stErr, "Failed to patch HypershiftDeployment.Status while deleting manifestwork")
+		}
+
 		if err != nil {
 			return res, fmt.Errorf("failed to delete manifestwork %v", err)
 		}

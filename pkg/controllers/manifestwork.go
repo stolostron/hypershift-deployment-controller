@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -68,28 +69,33 @@ func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.Namespace
 	}
 }
 
+func syncManifestworkStatusToHypershiftDeployment(
+	hyd *hypdeployment.HypershiftDeployment,
+	work *workv1.ManifestWork) {
+	workConds := work.Status.Conditions
+
+	for _, cond := range workConds {
+		setStatusCondition(
+			hyd,
+			hypdeployment.ConditionType(cond.Type),
+			cond.Status,
+			cond.Message,
+			cond.Reason,
+		)
+	}
+}
+
 func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
 	m := ScafoldManifestwork(hyd)
-
 	// if the manifestwork is created, then move the status to hypershiftDeployment
 	// TODO: @ianzhang366 might want to do some upate/patch when the manifestwork is created.
 	if err := r.Get(ctx, getManifestWorkKey(hyd), m); err == nil {
-		workConds := m.Status.Conditions
+		inHyd := hyd.DeepCopy()
+		syncManifestworkStatusToHypershiftDeployment(hyd, m)
 
-		for _, cond := range workConds {
-			if err := r.updateStatusConditionsOnChange(
-				hyd,
-				hypdeployment.ConditionType(cond.Type),
-				metav1.ConditionTrue,
-				cond.Message,
-				cond.Reason,
-			); err != nil {
-				r.Log.Info(fmt.Sprintf("update status condition failed for %s%s, err: %v", getTargetNamespace(hyd), hyd.GetName(), err))
-				return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-			}
-		}
+		return ctrl.Result{},
+			r.Client.Status().Patch(r.ctx, hyd, client.MergeFrom(inHyd))
 
-		return ctrl.Result{}, nil
 	}
 
 	appendSecrets, err := r.appendReferenceSecrets(ctx, hyd)
@@ -110,10 +116,6 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	m.Spec.Workload.Manifests = payload
 
-	// 	if err := controllerutil.SetOwnerReference(hyd, m, r.Scheme); err != nil {
-	// 		return ctrl.Result{}, fmt.Errorf("failed to set manifestwork's owner as %s, err: %w", req, err)
-	// 	}
-
 	if err := r.Create(r.ctx, m); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			//TODO: ianzhang366, might want to patch the manifestwork over here.
@@ -129,35 +131,28 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-
 	m := ScafoldManifestwork(hyd)
 
-	if err := r.Delete(ctx, m); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
+	if err := r.Get(ctx, types.NamespacedName{Name: m.GetName(), Namespace: m.GetNamespace()}, m); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
+	}
+
+	if m.GetDeletionTimestamp().IsZero() {
+		if err := r.Delete(ctx, m); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
+			}
 		}
 	}
 
-	for _, np := range hyd.Spec.NodePools {
-		var nodePool hyp.NodePool
-		if err := r.Get(ctx, types.NamespacedName{Namespace: getTargetNamespace(hyd), Name: np.Name}, &nodePool); err == nil {
-			r.Log.Info(fmt.Sprintf("Waiting for NodePool %s/%s to be deleted", getTargetNamespace(hyd), np.Name))
-			return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-		} else {
-			r.Log.Info(fmt.Sprintf("NodePool %s/%s already deleted...", getTargetNamespace(hyd), hyd.Name))
-		}
-	}
+	syncManifestworkStatusToHypershiftDeployment(hyd, m)
+	setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment's manifestwork and related resources", hypdeployment.RemovingReason)
 
-	// Delete the HostedCluster
-	var hc hyp.HostedCluster
-	if err := r.Get(ctx, types.NamespacedName{Namespace: getTargetNamespace(hyd), Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
-		r.Log.Info(fmt.Sprintf("Waiting for HostedCluster %s/%s to be deleted", getTargetNamespace(hyd), hyd.Name))
-		return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-	} else {
-		r.Log.Info(fmt.Sprintf("HostedCluster %s/%s already deleted...", getTargetNamespace(hyd), hyd.Name))
-	}
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, nil
 }
 
 func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (loadManifest, error) {

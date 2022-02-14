@@ -83,6 +83,7 @@ type HypershiftDeploymentSpec struct {
 	//   InfraOverrideDestroy = "ORPHAN"
 	//   InfraConfigureOnly = "INFRA-ONLY"
 	//   InfraConfigureWithManifest = "MANIFESTWORK"
+	// +kubebuilder:validation:Enum=ORPHAN;INFRA-ONLY;MANIFESTWORK
 	Override InfraOverride `json:"override,omitempty"`
 
 	//TargetNamespace allows the children resource(like, manifestwork) to be
