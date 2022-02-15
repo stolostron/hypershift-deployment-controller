@@ -119,7 +119,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	if hyd.Spec.InfraID == "" {
 		hyd.Spec.InfraID = fmt.Sprintf("%s-%s", hyd.GetName(), utilrand.String(5))
 		log.Info("Using INFRA-ID: " + hyd.Spec.InfraID)
+	}
 
+	if !controllerutil.ContainsFinalizer(&hyd, destroyFinalizer) {
 		controllerutil.AddFinalizer(&hyd, destroyFinalizer)
 
 		if err := r.updateHypershiftDeploymentResource(&hyd); err != nil || hyd.Spec.InfraID == "" {
@@ -136,7 +138,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.destroyHypershift(&hyd, &providerSecret)
 	}
 
-	if hyd.Spec.Infrastructure.Platform == nil {
+	if configureInfra && hyd.Spec.Infrastructure.Platform == nil {
 		return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
 	}
 
@@ -254,7 +256,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 		if apierrors.IsNotFound(err) {
-			hostedCluster := ScaffoldHostedCluster(&hyd, hyd.Spec.HostedClusterSpec)
+			hostedCluster := ScaffoldHostedCluster(&hyd)
+
 			if err := r.Create(ctx, hostedCluster); err != nil {
 				if apierrors.IsAlreadyExists(err) {
 					log.Error(err, "Failed to create HostedCluster resource")
@@ -309,6 +312,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			}
 			if noMatch {
 				nodePool := ScaffoldNodePool(&hyd, np)
+
 				if err := r.Create(ctx, nodePool); err != nil {
 					log.Error(err, "Failed to create NodePool resource")
 					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
@@ -445,7 +449,7 @@ func setStatusCondition(hyd *hypdeployment.HypershiftDeployment, conditionType h
 }
 
 func (r *HypershiftDeploymentReconciler) updateMissingInfrastructureParameterCondition(hyd *hypdeployment.HypershiftDeployment, message string) error {
-	setStatusCondition(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Infrastructure missing information", hypdeployment.MisConfiguredReason)
+	setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Infrastructure missing information", hypdeployment.MisConfiguredReason)
 	return r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, message, hypdeployment.MisConfiguredReason)
 }
 

@@ -36,14 +36,14 @@ func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
 	return hyd.Spec.TargetNamespace
 }
 
-func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment, hcs *hyp.HostedClusterSpec) *hyp.HostedCluster {
+func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
 
 	return &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
 			Namespace: getTargetNamespace(hyd),
 		},
-		Spec: *hcs,
+		Spec: *hyd.Spec.HostedClusterSpec,
 	}
 }
 
@@ -211,6 +211,7 @@ func scaffoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePo
 }
 
 func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
+
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      np.Name,

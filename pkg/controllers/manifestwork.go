@@ -217,7 +217,7 @@ func getTargetManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
 }
 
 func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
-	hc := ScaffoldHostedCluster(hyd, hyd.Spec.HostedClusterSpec)
+	hc := ScaffoldHostedCluster(hyd)
 
 	hc.TypeMeta = metav1.TypeMeta{
 		Kind:       "HostedCluster",
