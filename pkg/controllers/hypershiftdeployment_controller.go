@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -31,7 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/go-logr/logr"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
@@ -40,6 +44,7 @@ import (
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	workv1 "open-cluster-management.io/api/work/v1"
 )
 
 // HypershiftDeploymentReconciler reconciles a HypershiftDeployment object
@@ -49,6 +54,9 @@ type HypershiftDeploymentReconciler struct {
 	ctx    context.Context
 	Log    logr.Logger
 }
+
+//loadManifest will get hostedclsuter's crs and put them to the manifest array
+type loadManifest func(*hypdeployment.HypershiftDeployment, *[]workv1.Manifest)
 
 const (
 	destroyFinalizer       = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
@@ -80,7 +88,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	log := r.Log
 	r.ctx = ctx
 
-	log.Info("Reconcile...")
+	log.Info(fmt.Sprintf("Reconcile: %s", req))
+	defer log.Info(fmt.Sprintf("Reconcile: %s Done", req))
 
 	var hyd hypdeployment.HypershiftDeployment
 	if err := r.Get(ctx, req.NamespacedName, &hyd); err != nil {
@@ -88,7 +97,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	r.Log.Info("Reconciling")
+	log.Info("Reconciling")
 
 	var providerSecret corev1.Secret
 	var err error
@@ -226,9 +235,14 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
-	if hyd.Spec.Infrastructure.Override == hypdeployment.InfraConfigureOnly {
+	if hyd.Spec.Override == hypdeployment.InfraConfigureOnly {
 		log.Info("Completed Infrastructure confiugration, skipping HostedCluster and NodePool(s)")
 		return ctrl.Result{}, nil
+	}
+
+	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+		log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
+		return r.createMainfestwork(ctx, req, hyd.DeepCopy())
 	}
 
 	// Work on the HostedCluster resource
@@ -435,13 +449,37 @@ func (r *HypershiftDeploymentReconciler) updateMissingInfrastructureParameterCon
 	return r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, message, hypdeployment.MisConfiguredReason)
 }
 
-func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(hyd *hypdeployment.HypershiftDeployment, conditionType hypdeployment.ConditionType, conditionStatus metav1.ConditionStatus, message string, reason string) error {
+func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(
+	hyd *hypdeployment.HypershiftDeployment,
+	conditionType hypdeployment.ConditionType,
+	conditionStatus metav1.ConditionStatus,
+	message string,
+	reason string) error {
+
+	inHyd := hyd.DeepCopy()
 
 	var err error = nil
 	sc := meta.FindStatusCondition(hyd.Status.Conditions, string(conditionType))
-	if sc == nil || sc.ObservedGeneration != hyd.Generation || sc.Status != conditionStatus || sc.Reason != reason || sc.Message != message {
+
+	var checkFunc func() bool
+
+	switch conditionType {
+	case hypdeployment.WorkProgressing, hypdeployment.WorkApplied, hypdeployment.WorkAvailable, hypdeployment.WorkDegraded:
+		checkFunc = func() bool { // the manifestwork's obeservedGeneration could be different than the hypershiftDeployment's generation
+			return sc == nil || sc.Status != conditionStatus || sc.Reason != reason || sc.Message != message
+		}
+
+	default:
+		checkFunc = func() bool {
+			return sc == nil || sc.ObservedGeneration != hyd.Generation || sc.Status != conditionStatus || sc.Reason != reason || sc.Message != message
+		}
+	}
+
+	if checkFunc() {
 		setStatusCondition(hyd, conditionType, conditionStatus, message, reason)
-		err = r.Client.Status().Update(r.ctx, hyd)
+
+		// use Patch with merge to minimize the update conflicts
+		err = r.Client.Status().Patch(r.ctx, hyd, client.MergeFrom(inHyd))
 		if err != nil {
 			if apierrors.IsConflict(err) {
 				r.Log.Error(err, "Conflict encountered when updating HypershiftDeployment.Status")
@@ -450,6 +488,7 @@ func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(hyd *hyp
 			}
 		}
 	}
+
 	return err
 }
 
@@ -469,9 +508,27 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	log := r.Log
 	ctx := r.ctx
 
-	log.Info("Remove any NodePools")
-	if hyd.Spec.Infrastructure.Override != hypdeployment.InfraOverrideDestroy {
+	inHyd := hyd.DeepCopy()
+
+	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+		log.Info("Remove created Manifestwork and wait for hostedclsuter and noodpool to be cleaned up.")
+		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
+
+		if stErr := r.Client.Status().Patch(ctx, hyd, client.MergeFrom(inHyd)); stErr != nil {
+			r.Log.Error(stErr, "Failed to patch HypershiftDeployment.Status while deleting manifestwork")
+		}
+
+		if err != nil {
+			return res, fmt.Errorf("failed to delete manifestwork %v", err)
+		}
+
+		// wait for the nodepools and hostedcluster in target namespace is deleted(via the work agent)
+		if !res.IsZero() {
+			return res, nil
+		}
+	} else if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
 		// Delete nodepools first
+		log.Info("Remove any NodePools")
 		for _, np := range hyd.Spec.NodePools {
 			var nodePool hyp.NodePool
 			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: np.Name}, &nodePool); err == nil {
@@ -502,7 +559,9 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		} else {
 			log.Info("HostedCluster " + hyd.Name + " already deleted...")
 		}
+	}
 
+	if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
 		// Infrastructure is the last step
 		dOpts := aws.DestroyInfraOptions{
 			AWSCredentialsFile: "",
@@ -559,6 +618,27 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypdeployment.HypershiftDeployment{}).
+		Watches(&source.Kind{Type: &workv1.ManifestWork{}},
+			handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+				an := obj.GetAnnotations()
+
+				if len(an) == 0 || len(an[CreatedByHypershiftDeployment]) == 0 {
+					return []reconcile.Request{}
+				}
+
+				res := strings.Split(an[CreatedByHypershiftDeployment], NamespaceNameSeperator)
+
+				if len(res) != 2 {
+					r.Log.Error(fmt.Errorf("failed to get manifestwork's hypershiftDeployment"), "")
+					return []reconcile.Request{}
+				}
+
+				req := reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: res[0], Name: res[1]},
+				}
+
+				return []reconcile.Request{req}
+			})).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }
@@ -569,5 +649,4 @@ func (r *HypershiftDeploymentReconciler) spawnDelete(ctx context.Context, hc hyp
 	} else {
 		r.Log.Info("Resource " + hc.Kind + " deleted")
 	}
-
 }

@@ -3,11 +3,12 @@ module github.com/stolostron/hypershift-deployment-controller
 go 1.17
 
 require (
-	github.com/go-logr/logr v1.2.0
+	github.com/go-logr/logr v1.2.1
 	github.com/openshift/hypershift v0.0.0-20220127204252-1b87fec6e100
 	k8s.io/api v0.23.1
 	k8s.io/apimachinery v0.23.1
 	k8s.io/client-go v0.23.1
+	open-cluster-management.io/api v0.6.0
 	sigs.k8s.io/controller-runtime v0.11.0-beta.0.0.20211208212546-f236f0345ad2
 )
 
