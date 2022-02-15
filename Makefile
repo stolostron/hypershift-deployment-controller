@@ -100,7 +100,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/deployment && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/deployment && $(KUSTOMIZE) edit set image quay.io/stolostron/hypershift-deployment-controller:latest=${IMG}
 	$(KUSTOMIZE) build config/deployment | kubectl apply -f -
 
 .PHONY: undeploy
