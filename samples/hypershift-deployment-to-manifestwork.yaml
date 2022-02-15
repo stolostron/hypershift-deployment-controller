@@ -5,6 +5,7 @@ metadata:
   name: ${hostClusterName}
   namespace: ${hostClusterNamespace}
 spec:
+  targetManagedCluster: local-cluster
   targetNamespace: local-cluster
   override: MANIFESTWORK
   infrastructure:

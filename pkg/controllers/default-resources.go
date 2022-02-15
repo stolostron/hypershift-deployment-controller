@@ -28,12 +28,20 @@ import (
 
 const ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.9.15-x86_64"
 
-func ScafoldHostedCluster(hyd *hypdeployment.HypershiftDeployment, hcs *hyp.HostedClusterSpec) *hyp.HostedCluster {
+func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
+	if len(hyd.Spec.TargetNamespace) == 0 {
+		return hyd.GetNamespace()
+	}
+
+	return hyd.Spec.TargetNamespace
+}
+
+func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment, hcs *hyp.HostedClusterSpec) *hyp.HostedCluster {
 
 	return &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
-			Namespace: hyd.Namespace,
+			Namespace: getTargetNamespace(hyd),
 		},
 		Spec: *hcs,
 	}
@@ -50,8 +58,7 @@ func spsMap(service hyp.ServiceType, psType hyp.PublishingStrategyType) hyp.Serv
 	}
 }
 
-func ScafoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
-
+func ScaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 	volSize := resource.MustParse("4Gi")
 	//releaseImage, _ := version.LookupDefaultOCPVersion()
 
@@ -105,15 +112,15 @@ func ScafoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut 
 			}
 	}
 
-	hyd.Spec.HostedClusterSpec.DNS = *scafoldDnsSpec(infraOut)
+	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut)
 	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
 	hyd.Spec.HostedClusterSpec.Networking.MachineCIDR = infraOut.ComputeCIDR
 	hyd.Spec.HostedClusterSpec.Platform.AWS.Region = hyd.Spec.Infrastructure.Platform.AWS.Region
-	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scafoldCloudProviderConfig(infraOut)
+	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scaffoldCloudProviderConfig(infraOut)
 
 }
 
-func scafoldDnsSpec(infraOut *aws.CreateInfraOutput) *hyp.DNSSpec {
+func scaffoldDnsSpec(infraOut *aws.CreateInfraOutput) *hyp.DNSSpec {
 	return &hyp.DNSSpec{
 		BaseDomain:    infraOut.BaseDomain,
 		PrivateZoneID: infraOut.PrivateZoneID,
@@ -121,7 +128,7 @@ func scafoldDnsSpec(infraOut *aws.CreateInfraOutput) *hyp.DNSSpec {
 	}
 }
 
-func scafoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudProviderConfig {
+func scaffoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudProviderConfig {
 	return &hyp.AWSCloudProviderConfig{
 		Subnet: &hyp.AWSResourceReference{
 			ID: &infraOut.PrivateSubnetID,
@@ -131,7 +138,7 @@ func scafoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudPr
 	}
 }
 
-func ScafoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
+func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 
 	nodeCount := int32(2)
 
@@ -171,7 +178,7 @@ func ScafoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.
 			np.Spec.ClusterName = hyd.Name
 		}
 		if np.Spec.Platform.AWS == nil {
-			np.Spec.Platform.AWS = scafoldAWSNodePoolPlatform(infraOut)
+			np.Spec.Platform.AWS = scaffoldAWSNodePoolPlatform(infraOut)
 		}
 		if np.Spec.Platform.AWS.InstanceProfile == "" {
 			np.Spec.Platform.AWS.InstanceProfile = hyd.Spec.InfraID + "-worker"
@@ -191,7 +198,7 @@ func ScafoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.
 	}
 }
 
-func scafoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePoolPlatform {
+func scaffoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePoolPlatform {
 	volSize := int64(35)
 
 	return &hyp.AWSNodePoolPlatform{
@@ -203,13 +210,13 @@ func scafoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePoo
 	}
 }
 
-func ScafoldNodePool(namespace string, infraId string, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
+func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      np.Name,
-			Namespace: namespace,
+			Namespace: getTargetNamespace(hyd),
 			Labels: map[string]string{
-				AutoInfraLabelName: infraId,
+				AutoInfraLabelName: hyd.Spec.InfraID,
 			},
 		},
 		Spec: np.Spec,

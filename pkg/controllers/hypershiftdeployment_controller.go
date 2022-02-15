@@ -176,8 +176,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			}
 
 			// This creates the required HostedClusterSpec and NodePoolSpec(s), from scratch or if supplied
-			ScafoldHostedClusterSpec(&hyd, infraOut)
-			ScafoldNodePoolSpec(&hyd, infraOut)
+			ScaffoldHostedClusterSpec(&hyd, infraOut)
+			ScaffoldNodePoolSpec(&hyd, infraOut)
 
 			if err := r.updateHypershiftDeploymentResource(&hyd); err != nil {
 				r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
@@ -254,7 +254,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 		if apierrors.IsNotFound(err) {
-			hostedCluster := ScafoldHostedCluster(&hyd, hyd.Spec.HostedClusterSpec)
+			hostedCluster := ScaffoldHostedCluster(&hyd, hyd.Spec.HostedClusterSpec)
 			if err := r.Create(ctx, hostedCluster); err != nil {
 				if apierrors.IsAlreadyExists(err) {
 					log.Error(err, "Failed to create HostedCluster resource")
@@ -308,7 +308,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				}
 			}
 			if noMatch {
-				nodePool := ScafoldNodePool(hyd.Namespace, hyd.Spec.InfraID, np)
+				nodePool := ScaffoldNodePool(&hyd, np)
 				if err := r.Create(ctx, nodePool); err != nil {
 					log.Error(err, "Failed to create NodePool resource")
 					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
