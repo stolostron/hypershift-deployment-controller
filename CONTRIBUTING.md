@@ -66,6 +66,7 @@ make build
 ## Build docker
 Make sure you have docker.
 ```shell
+export REPO=my.repository/repo_name/   # The trailing slash is required
 make docker-build
 ```
 
@@ -76,4 +77,4 @@ export REPO=my.repository/repo_name/   # The trailing slash is required
 make docker-push
 ```
 
-Now, you can follow the [getting started guide](./README.md#getting-started) to work with the open-cluster-management cluster-curator-controller repository.
+Now, you can follow the [getting started guide](./README.md) to work with the open-cluster-management hypershift-deployment-controller repository.

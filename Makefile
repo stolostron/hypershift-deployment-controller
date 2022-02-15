@@ -1,5 +1,5 @@
 # Repo hosting the image with path
-REPO ?= ""
+REPO ?= "quay.io/stolostron/"
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(REPO)hypershift-deployment-controller:latest
@@ -100,7 +100,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/deployment && $(KUSTOMIZE) edit set image quay.io/stolostron/hypershift-deployment-controller:latest=${IMG}
 	$(KUSTOMIZE) build config/deployment | kubectl apply -f -
 
 .PHONY: undeploy
