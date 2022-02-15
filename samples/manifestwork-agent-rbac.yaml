@@ -1,0 +1,30 @@
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: 'open-cluster-management:klusterlet-work:agent:hypershift'
+rules:
+  - verbs:
+      - get
+      - create
+      - update
+      - patch
+      - delete
+    apiGroups:
+      - hypershift.openshift.io
+    resources:
+      - hostedclusters
+      - nodepools
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: 'open-cluster-management:klusterlet-work:agent-addition:hypershift'
+subjects:
+  - kind: ServiceAccount
+    name: klusterlet-work-sa
+    namespace: open-cluster-management-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: 'open-cluster-management:klusterlet-work:agent:hypershift'

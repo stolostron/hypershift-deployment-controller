@@ -44,8 +44,23 @@ const (
 	// ProviderSecretConfigured indicates the state of the secret reference
 	ProviderSecretConfigured ConditionType = "ProviderSecretConfigured"
 
-	InfraOverrideDestroy = "ORPHAN"
-	InfraConfigureOnly   = "INFRA-ONLY"
+	// this mirror open-cluster-management.io/api/work/v1/types.go#L266-L279
+	// WorkProgressing represents that the work is in the progress to be
+	// applied on the managed cluster.
+	WorkProgressing ConditionType = "Progressing"
+	// WorkApplied represents that the workload defined in work is
+	// succesfully applied on the managed cluster.
+	WorkApplied ConditionType = "Applied"
+	// WorkAvailable represents that all resources of the work exists on
+	// the managed cluster.
+	WorkAvailable ConditionType = "Available"
+	// WorkDegraded represents that the current state of work does not match
+	// the desired state for a certain period.
+	WorkDegraded ConditionType = "Degraded"
+
+	InfraOverrideDestroy       = "ORPHAN"
+	InfraConfigureOnly         = "INFRA-ONLY"
+	InfraConfigureWithManifest = "MANIFESTWORK"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -63,6 +78,17 @@ type HypershiftDeploymentSpec struct {
 	// +immutable
 	// +optional
 	InfraID string `json:"infra-id,omitempty"`
+
+	// InfrastructureOverride allows support for special cases
+	//   InfraOverrideDestroy = "ORPHAN"
+	//   InfraConfigureOnly = "INFRA-ONLY"
+	//   InfraConfigureWithManifest = "MANIFESTWORK"
+	// +kubebuilder:validation:Enum=ORPHAN;INFRA-ONLY;MANIFESTWORK
+	Override InfraOverride `json:"override,omitempty"`
+
+	//TargetNamespace allows the children resource(like, manifestwork) to be
+	//generated in other than the hypershiftDpeloyment's namespace.
+	TargetNamespace string `json:"targetNamespace"`
 
 	// HostedCluster that will be applied to the ManagementCluster by ACM, if omitted, it will be generated
 	// +optional
@@ -86,11 +112,6 @@ type InfraSpec struct {
 	// Configure the infrastructure using the provided CloudProvider, or user provided
 	// +immutable
 	Configure bool `json:"configure"`
-
-	// InfrastructureOverride allows support for special cases
-	//   InfraOverrideDestroy = "ORPHAN"
-	//   InfraConfigureOnly = "INFRA-ONLY"
-	Override InfraOverride `json:"override,omitempty"`
 
 	// Region is the AWS region in which the cluster resides. This configures the
 	// OCP control plane cloud integrations, and is used by NodePool to resolve
