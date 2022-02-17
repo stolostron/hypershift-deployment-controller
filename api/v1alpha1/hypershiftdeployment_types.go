@@ -87,13 +87,14 @@ type HypershiftDeploymentSpec struct {
 	Override InfraOverride `json:"override,omitempty"`
 
 	//TargetNamespace specify the where the children resouces(hostedcluster, nodepool)
-	//to sit in other than the hypershiftDeployment's namespace
+	//to sit in
+	//if not provided, the default is "clusters"
 	// +optional
 	TargetNamespace string `json:"targetNamespace"`
 
 	//TargetManagedCluster specify which managedcluster's namespace the manifestwork would be deployed.
-	//If not specified, it uses the hypershiftDeployment.
-	//The managedcluster would be the management cluster of the hostedcluster and nodepool generated
+	//If not specified, it uses the current namespace.
+	//The TargetManagedCluster would be the management cluster of the hostedcluster and nodepool generated
 	//by the hypershiftDeployment
 	// +optional
 	TargetManagedCluster string `json:"targetManagedCluster"`

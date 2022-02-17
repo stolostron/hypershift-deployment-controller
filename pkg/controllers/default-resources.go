@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
+
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
@@ -24,16 +26,24 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
+
+var resLog = ctrl.Log.WithName("resource-render")
 
 const ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.9.15-x86_64"
 
 func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
+	t := hyd.GetNamespace()
+	defer func() { resLog.Info(fmt.Sprintf("targetNamespace is: %s", t)) }()
+
 	if len(hyd.Spec.TargetNamespace) == 0 {
-		return hyd.GetNamespace()
+		return t
 	}
 
-	return hyd.Spec.TargetNamespace
+	t = hyd.Spec.TargetNamespace
+
+	return t
 }
 
 func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
