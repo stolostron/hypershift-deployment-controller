@@ -106,7 +106,7 @@ func TestScaffoldNodePool(t *testing.T) {
 	ScaffoldNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldNodePool("default", infraOut.InfraID, testHD.Spec.NodePools[0]))
+	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0]))
 
 	assert.Nil(t, err, "err is nil when NodePools is created successfully")
 	t.Log("ScaffoldNodePool was successful")

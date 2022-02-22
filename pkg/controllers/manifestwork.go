@@ -35,7 +35,7 @@ import (
 
 const (
 	ManifestTargetNamespace       = "manifestwork-target-namespace"
-	CreatedByHypershiftDeployment = "created-by-hypershiftdeployment"
+	CreatedByHypershiftDeployment = "hypershift-deployment.open-cluster-management.io/created-by"
 	NamespaceNameSeperator        = "/"
 )
 
@@ -44,7 +44,7 @@ func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) *workv1.Manife
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hyd.GetName(),
-			Namespace: getTargetNamespace(hyd),
+			Namespace: getTargetManagedCluster(hyd),
 			Annotations: map[string]string{
 				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
 					hyd.GetNamespace(),
@@ -65,7 +65,7 @@ func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) *workv1.Manife
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      hyd.GetName(),
-		Namespace: getTargetNamespace(hyd),
+		Namespace: getTargetManagedCluster(hyd),
 	}
 }
 
@@ -125,7 +125,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		return ctrl.Result{}, fmt.Errorf("failed to create manifestwork based on hypershiftDeployment: %s, err: %w", req, err)
 	}
 
-	r.Log.Info(fmt.Sprintf("created manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, getTargetNamespace(hyd)))
+	r.Log.Info(fmt.Sprintf("created manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, getTargetManagedCluster(hyd)))
 
 	return ctrl.Result{}, nil
 }
@@ -180,7 +180,7 @@ func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Cont
 		return nil, fmt.Errorf("failed to get the cpo creds, err: %w", err)
 	}
 
-	tempSecret := func(in *corev1.Secret) *corev1.Secret {
+	overrideSecret := func(in *corev1.Secret) *corev1.Secret {
 		out := &corev1.Secret{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Secret",
@@ -200,7 +200,7 @@ func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Cont
 
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
 		for _, s := range refSecrets {
-			o := tempSecret(s)
+			o := overrideSecret(s)
 			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: o}})
 		}
 
@@ -208,25 +208,20 @@ func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Cont
 }
 
 //TODO @ianzhang366 integrate with the clusterSet logic
-func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
-	if len(hyd.Spec.TargetNamespace) == 0 {
+func getTargetManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
+	if len(hyd.Spec.TargetManagedCluster) == 0 {
 		return hyd.GetNamespace()
 	}
 
-	return hyd.Spec.TargetNamespace
+	return hyd.Spec.TargetManagedCluster
 }
 
 func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
-	hc := &hyp.HostedCluster{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "HostedCluster",
-			APIVersion: hyp.GroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      hyd.GetName(),
-			Namespace: getTargetNamespace(hyd), //TODO: ianzhang366, move it to user's namespace from hd.spec
-		},
-		Spec: *hyd.Spec.HostedClusterSpec,
+	hc := ScaffoldHostedCluster(hyd)
+
+	hc.TypeMeta = metav1.TypeMeta{
+		Kind:       "HostedCluster",
+		APIVersion: hyp.GroupVersion.String(),
 	}
 
 	*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
@@ -234,16 +229,11 @@ func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]wor
 
 func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
 	for _, hdNp := range hyd.Spec.NodePools {
-		np := &hyp.NodePool{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "NodePool",
-				APIVersion: hyp.GroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      hdNp.Name,
-				Namespace: getTargetNamespace(hyd),
-			},
-			Spec: hdNp.Spec,
+		np := ScaffoldNodePool(hyd, hdNp)
+
+		np.TypeMeta = metav1.TypeMeta{
+			Kind:       "NodePool",
+			APIVersion: hyp.GroupVersion.String(),
 		}
 
 		*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})

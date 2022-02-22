@@ -258,6 +258,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		!configureInfra {
 		if apierrors.IsNotFound(err) {
 			hostedCluster := ScaffoldHostedCluster(&hyd)
+
 			if err := r.Create(ctx, hostedCluster); err != nil {
 				if apierrors.IsAlreadyExists(err) {
 					log.Error(err, "Failed to create HostedCluster resource")
@@ -311,7 +312,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				}
 			}
 			if noMatch {
-				nodePool := ScaffoldNodePool(hyd.Namespace, hyd.Spec.InfraID, np)
+				nodePool := ScaffoldNodePool(&hyd, np)
+
 				if err := r.Create(ctx, nodePool); err != nil {
 					log.Error(err, "Failed to create NodePool resource")
 					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
@@ -514,7 +516,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	inHyd := hyd.DeepCopy()
 
 	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
-		log.Info("Remove created Manifestwork and wait for hostedclsuter and noodpool to be cleaned up.")
+		log.Info("Removing Manifestwork and wait for hostedclsuter and noodpool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
 
 		if stErr := r.Client.Status().Patch(ctx, hyd, client.MergeFrom(inHyd)); stErr != nil {

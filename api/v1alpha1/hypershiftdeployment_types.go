@@ -80,15 +80,24 @@ type HypershiftDeploymentSpec struct {
 	InfraID string `json:"infra-id,omitempty"`
 
 	// InfrastructureOverride allows support for special cases
-	//   InfraOverrideDestroy = "ORPHAN"
+	//   OverrideDestroy = "ORPHAN"
 	//   InfraConfigureOnly = "INFRA-ONLY"
-	//   InfraConfigureWithManifest = "MANIFESTWORK"
+	//   ConfigureWithManifest = "MANIFESTWORK"
 	// +kubebuilder:validation:Enum=ORPHAN;INFRA-ONLY;MANIFESTWORK
 	Override InfraOverride `json:"override,omitempty"`
 
-	//TargetNamespace allows the children resource(like, manifestwork) to be
-	//generated in other than the hypershiftDpeloyment's namespace.
+	//TargetNamespace specify the where the children resouces(hostedcluster, nodepool)
+	//to sit in
+	//if not provided, the default is "clusters"
+	// +optional
 	TargetNamespace string `json:"targetNamespace"`
+
+	//TargetManagedCluster specify which managedcluster's namespace the manifestwork would be deployed.
+	//If not specified, it uses the current namespace.
+	//The TargetManagedCluster would be the management cluster of the hostedcluster and nodepool generated
+	//by the hypershiftDeployment
+	// +optional
+	TargetManagedCluster string `json:"targetManagedCluster"`
 
 	// HostedCluster that will be applied to the ManagementCluster by ACM, if omitted, it will be generated
 	// +optional
