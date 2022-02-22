@@ -87,11 +87,11 @@ require (
 	kubevirt.io/api v0.0.0-20211117075245-c94ce62baf5a // indirect
 	kubevirt.io/containerized-data-importer-api v1.41.0 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk v0.2.1 // indirect
-	sigs.k8s.io/cluster-api v1.1.2 // indirect
-	sigs.k8s.io/cluster-api-provider-aws v1.3.0 // indirect
+	sigs.k8s.io/cluster-api v1.0.4 // indirect
+	sigs.k8s.io/cluster-api-provider-aws v1.1.0 // indirect
 	sigs.k8s.io/cluster-api-provider-azure v1.1.2 // indirect
-	sigs.k8s.io/cluster-api-provider-ibmcloud v0.2.0-alpha.5 // indirect
-	sigs.k8s.io/cluster-api-provider-kubevirt v0.0.0-20220217002143-af261492fc33 // indirect
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.2.0-alpha.1 // indirect
+	sigs.k8s.io/cluster-api-provider-kubevirt v0.0.0-00010101000000-000000000000 // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
@@ -100,5 +100,6 @@ require (
 // From hypershift go.mod
 replace (
 	kubevirt.io/containerized-data-importer-api => github.com/kubevirt/containerized-data-importer-api v1.41.1-0.20211201033752-05520fb9f18d
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.1.2
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.0.2
+	sigs.k8s.io/cluster-api-provider-kubevirt => github.com/openshift/cluster-api-provider-kubevirt v0.0.0-20211223062810-ef64d5ff1cde
 )
