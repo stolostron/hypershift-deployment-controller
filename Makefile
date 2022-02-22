@@ -65,11 +65,11 @@ test: manifests generate fmt vet envtest ## Run tests.
 ##@ Build
 .PHONY: vendor
 vendor:
-	go mod vendor
 	go mod tidy -compat=1.17
+	go mod vendor
 
 .PHONY: build
-build: vendor generate fmt vet ## Build manager binary.
+build: generate fmt vet ## Build manager binary.
 	GOFLAGS="" go build -o bin/manager pkg/main.go
 
 .PHONY: run
