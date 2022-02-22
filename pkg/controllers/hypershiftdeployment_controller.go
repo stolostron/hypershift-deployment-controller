@@ -98,8 +98,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Reconciling")
-
 	var providerSecret corev1.Secret
 	var err error
 
@@ -117,6 +115,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}
 
+	oHyd := *hyd.DeepCopy()
+
 	if hyd.Spec.InfraID == "" {
 		hyd.Spec.InfraID = fmt.Sprintf("%s-%s", hyd.GetName(), utilrand.String(5))
 		log.Info("Using INFRA-ID: " + hyd.Spec.InfraID)
@@ -125,9 +125,11 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	if !controllerutil.ContainsFinalizer(&hyd, destroyFinalizer) {
 		controllerutil.AddFinalizer(&hyd, destroyFinalizer)
 
-		if err := r.updateHypershiftDeploymentResource(&hyd); err != nil || hyd.Spec.InfraID == "" {
-			return ctrl.Result{}, fmt.Errorf("failed to update infra-id: %w", err)
+		if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil || hyd.Spec.InfraID == "" {
+			return ctrl.Result{}, fmt.Errorf("failed to update infra-id: \"%s\" and error: %w", hyd.Spec.InfraID, err)
 		}
+
+		oHyd = *hyd.DeepCopy()
 
 		// Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
 		setStatusCondition(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
@@ -182,7 +184,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			ScaffoldHostedClusterSpec(&hyd, infraOut)
 			ScaffoldNodePoolSpec(&hyd, infraOut)
 
-			if err := r.updateHypershiftDeploymentResource(&hyd); err != nil {
+			if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil {
 				r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
 				return ctrl.Result{}, err
 			}
@@ -195,6 +197,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			if err := r.Get(ctx, req.NamespacedName, &hyd); err != nil {
 				return ctrl.Result{}, nil
 			}
+
+			oHyd = *hyd.DeepCopy()
 
 			oidcSPName, oidcSPRegion, iamErr := oidcDiscoveryURL(r, hyd.Spec.InfraID)
 			if iamErr == nil {
@@ -218,12 +222,11 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 						if iamErr = r.createPullSecret(&hyd, providerSecret); iamErr == nil {
 							hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
 							hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
-							if err := r.updateHypershiftDeploymentResource(&hyd); err != nil {
+							if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil {
 								return ctrl.Result{}, r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
 							}
 							r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 							log.Info("IAM and Secrets configured")
-
 						}
 					}
 				}
@@ -232,8 +235,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.ConfiguredAsExpectedReason)
 				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
 			}
-			// This allows more interleaving of reconciles
-			return ctrl.Result{}, nil
 		}
 	}
 
@@ -497,11 +498,11 @@ func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(
 	return err
 }
 
-func (r *HypershiftDeploymentReconciler) updateHypershiftDeploymentResource(hyd *hypdeployment.HypershiftDeployment) error {
-	err := r.Client.Update(r.ctx, hyd)
+func (r *HypershiftDeploymentReconciler) patchHypershiftDeploymentResource(hyd *hypdeployment.HypershiftDeployment, inHyd *hypdeployment.HypershiftDeployment) error {
+	err := r.Client.Patch(r.ctx, hyd, client.MergeFrom(inHyd))
 	if err != nil {
 		if apierrors.IsConflict(err) {
-			r.Log.Error(err, "Conflict encountered when updating HypershiftDeployment")
+			r.Log.Error(err, "Conflict encountered when patching HypershiftDeployment")
 		} else {
 			r.Log.Error(err, "Failed to update HypershiftDeployment resource")
 		}
@@ -544,7 +545,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 						return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 					}
 				}
-				log.Info("Waiting for NodePool " + np.Name + " to be deleted")
+				log.Info("Waiting for NodePool " + np.Name + " to be deleted, retry in 10s")
 				return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 			} else {
 				log.Info("NodePool " + np.Name + " already deleted...")
@@ -559,7 +560,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 				// The delete action can take a while and we don't want to block the reconciler
 				go r.spawnDelete(ctx, hc)
 			}
-			log.Info("Waiting for HostedCluster " + hyd.Name + " to be deleted")
+			log.Info("Waiting for HostedCluster " + hyd.Name + " to be deleted, retry in 10s")
 			return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
 		} else {
 			log.Info("HostedCluster " + hyd.Name + " already deleted...")
@@ -583,7 +584,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 		log.Info("Deleting Infrastructure on provider")
 		if err := dOpts.DestroyInfra(ctx); err != nil {
-			log.Info("failed to destroy infrastructure on provider (retries in 30s")
+			log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 

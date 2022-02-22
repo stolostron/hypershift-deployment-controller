@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"fmt"
-	"strings"
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
@@ -142,10 +141,10 @@ func scaffoldDnsSpec(infraOut *aws.CreateInfraOutput) *hyp.DNSSpec {
 func scaffoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudProviderConfig {
 	return &hyp.AWSCloudProviderConfig{
 		Subnet: &hyp.AWSResourceReference{
-			ID: getSubnetID(infraOut.Zones),
+			ID: &infraOut.Zones[0].SubnetID,
 		},
 		VPC:  infraOut.VPCID,
-		Zone: infraOut.Zone,
+		Zone: infraOut.Zones[0].Name,
 	}
 }
 
@@ -196,7 +195,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 		}
 		if np.Spec.Platform.AWS.Subnet == nil {
 			np.Spec.Platform.AWS.Subnet = &hyp.AWSResourceReference{
-				ID: getSubnetID(infraOut.Zones),
+				ID: &infraOut.Zones[0].SubnetID,
 			}
 		}
 		if np.Spec.Platform.AWS.SecurityGroups == nil {
@@ -233,13 +232,4 @@ func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment
 		},
 		Spec: np.Spec,
 	}
-}
-
-func getSubnetID(zones []*aws.CreateInfraOutputZone) *string {
-	for _, subnet := range zones {
-		if strings.Contains(subnet.Name, "-private-") {
-			return &subnet.SubnetID
-		}
-	}
-	return new(string)
 }
