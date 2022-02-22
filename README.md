@@ -40,7 +40,7 @@ This allows you to create multiple Hypershift HostedClusters on the ACM cluster.
   ```shell
   oc apply -k config/deployment
   ```
-  This will create the service account, roles, role-bindings and deployment that runs the controller. It currently uses the image `quay.io/jpacker/hypershift-deployment-controller`
+  This will create the service account, roles, role-bindings and deployment that runs the controller. It currently uses the image `quay.io/stolostron/hypershift-deployment-controller`
 #### Creating the Hypershift HostedCluster
 3. In another shell, create the namespace `clusters` and set that as the default for you context
 4. Make sure you have a copy of the AWS Provider Connection in this namespace. You can use the ACM console to create it in the `clusters` namespace.
