@@ -593,6 +593,44 @@ spec:
                         - nodePoolManagementCreds
                         - region
                         type: object
+                      azure:
+                        description: Azure defines azure specific settings
+                        properties:
+                          credentials:
+                            description: LocalObjectReference contains enough information
+                              to let you locate the referenced object inside the same
+                              namespace.
+                            properties:
+                              name:
+                                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  TODO: Add other useful fields. apiVersion, kind,
+                                  uid?'
+                                type: string
+                            type: object
+                          location:
+                            type: string
+                          machineIdentityID:
+                            type: string
+                          resourceGroup:
+                            type: string
+                          securityGroupName:
+                            type: string
+                          subscriptionID:
+                            type: string
+                          vnetID:
+                            type: string
+                          vnetName:
+                            type: string
+                        required:
+                        - credentials
+                        - location
+                        - machineIdentityID
+                        - resourceGroup
+                        - securityGroupName
+                        - subscriptionID
+                        - vnetID
+                        - vnetName
+                        type: object
                       ibmcloud:
                         description: IBMCloud defines IBMCloud specific settings for
                           components
@@ -611,6 +649,7 @@ spec:
                         - IBMCloud
                         - Agent
                         - KubeVirt
+                        - Azure
                         type: string
                     required:
                     - type
@@ -1122,6 +1161,16 @@ spec:
                             pool should maintain. If unset, the default value is 0.
                           format: int32
                           type: integer
+                        nodeDrainTimeout:
+                          description: 'NodeDrainTimeout is the total amount of time
+                            that the controller will spend on draining a node. The
+                            default value is 0, meaning that the node can be drained
+                            without any time limitations. NOTE: NodeDrainTimeout is
+                            different from `kubectl drain --timeout` TODO (alberto):
+                            Today changing this field will trigger a recreate rolling
+                            update, which kind of defeats the purpose of the change.
+                            In future we plan to propagate this field in-place. https://github.com/kubernetes-sigs/cluster-api/issues/5880'
+                          type: string
                         platform:
                           description: Platform specifies the underlying infrastructure
                             provider for the NodePool and is used to configure platform
@@ -1354,6 +1403,16 @@ spec:
                                   type: object
                               required:
                               - instanceType
+                              type: object
+                            azure:
+                              properties:
+                                imageID:
+                                  type: string
+                                vmsize:
+                                  type: string
+                              required:
+                              - imageID
+                              - vmsize
                               type: object
                             ibmcloud:
                               description: IBMCloud defines IBMCloud specific settings
@@ -7015,6 +7074,7 @@ spec:
                               - IBMCloud
                               - Agent
                               - KubeVirt
+                              - Azure
                               type: string
                           required:
                           - type
