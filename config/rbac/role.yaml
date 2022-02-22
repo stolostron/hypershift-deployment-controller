@@ -70,10 +70,6 @@ rules:
   resources:
   - manifestworks
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
