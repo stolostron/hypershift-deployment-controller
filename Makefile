@@ -69,7 +69,7 @@ vendor:
 	go mod vendor
 
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
+build: fmt vet ## Build manager binary.
 	GOFLAGS="" go build -o bin/manager pkg/main.go
 
 .PHONY: run
