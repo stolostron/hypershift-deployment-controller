@@ -39,11 +39,17 @@ const (
 	NamespaceNameSeperator        = "/"
 )
 
-func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) *workv1.ManifestWork {
+func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
+	if len(hyd.Spec.InfraID) == 0 {
+		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
+	}
+
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      hyd.GetName(),
+			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
+			// generated manifestworks are unqinue.
+			Name:      fmt.Sprintf("%s-%s", hyd.GetName(), hyd.Spec.InfraID),
 			Namespace: getTargetManagedCluster(hyd),
 			Annotations: map[string]string{
 				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
@@ -59,7 +65,7 @@ func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) *workv1.Manife
 		w.Spec.DeleteOption = &workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}
 	}
 
-	return w
+	return w, nil
 }
 
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
@@ -86,7 +92,11 @@ func syncManifestworkStatusToHypershiftDeployment(
 }
 
 func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-	m := ScafoldManifestwork(hyd)
+	m, err := ScaffoldManifestwork(hyd)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// if the manifestwork is created, then move the status to hypershiftDeployment
 	// TODO: @ianzhang366 might want to do some upate/patch when the manifestwork is created.
 	if err := r.Get(ctx, getManifestWorkKey(hyd), m); err == nil {
@@ -131,7 +141,10 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-	m := ScafoldManifestwork(hyd)
+	m, err := ScaffoldManifestwork(hyd)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: m.GetName(), Namespace: m.GetNamespace()}, m); err != nil {
 		if apierrors.IsNotFound(err) {

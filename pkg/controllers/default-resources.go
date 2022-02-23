@@ -47,7 +47,6 @@ func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
 }
 
 func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
-
 	return &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
