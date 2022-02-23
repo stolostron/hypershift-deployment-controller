@@ -39,7 +39,7 @@ const (
 	NamespaceNameSeperator        = "/"
 )
 
-func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
+func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
 	if len(hyd.Spec.InfraID) == 0 {
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
@@ -92,7 +92,7 @@ func syncManifestworkStatusToHypershiftDeployment(
 }
 
 func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-	m, err := ScafoldManifestwork(hyd)
+	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -141,7 +141,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-	m, err := ScafoldManifestwork(hyd)
+	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
