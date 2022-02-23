@@ -2,7 +2,11 @@ resources:
 - ../crd
 - ../rbac
 - template-deployment.yaml
+- https://raw.githubusercontent.com/open-cluster-management-io/api/main/work/v1/0000_00_work.open-cluster-management.io_manifestworks.crd.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: open-cluster-management
-
+images:
+- name: quay.io/stolostron/hypershift-deployment-controller:latest
+  newName: quay.io/stolostron/hypershift-deployment-controller
+  newTag: latest
