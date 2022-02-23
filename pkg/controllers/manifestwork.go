@@ -47,8 +47,8 @@ func ScafoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Manif
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			// make sure when deploying 2 same hostedcluster name in different namespace, the
-			// generated manifestwork is unqinue.
+			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
+			// generated manifestworks are unqinue.
 			Name:      fmt.Sprintf("%s-%s", hyd.GetName(), hyd.Spec.InfraID),
 			Namespace: getTargetManagedCluster(hyd),
 			Annotations: map[string]string{
