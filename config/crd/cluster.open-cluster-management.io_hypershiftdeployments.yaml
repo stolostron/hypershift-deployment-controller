@@ -65,6 +65,24 @@ spec:
           spec:
             description: HypershiftDeploymentSpec defines the desired state of HypershiftDeployment
             properties:
+              credentials:
+                description: Credentials are ARN's that are used for standing up the
+                  resources in the cluster.
+                properties:
+                  aws:
+                    properties:
+                      controlPlaneOperatorARN:
+                        type: string
+                      kubeCloudControllerARN:
+                        type: string
+                      nodePoolManagementARN:
+                        type: string
+                    required:
+                    - controlPlaneOperatorARN
+                    - kubeCloudControllerARN
+                    - nodePoolManagementARN
+                    type: object
+                type: object
               hostedClusterSpec:
                 description: HostedCluster that will be applied to the ManagementCluster
                   by ACM, if omitted, it will be generated
@@ -311,10 +329,9 @@ spec:
                       type: object
                     type: array
                   infraID:
-                    description: "InfraID is a globally unique identifier for the
-                      cluster. This identifier will be used to associate various cloud
-                      resources with the HostedCluster and its associated NodePools.
-                      \n TODO(dan): consider moving this to .platform.aws.infraID"
+                    description: InfraID is a globally unique identifier for the cluster.
+                      This identifier will be used to associate various cloud resources
+                      with the HostedCluster and its associated NodePools.
                     type: string
                   infrastructureAvailabilityPolicy:
                     description: InfrastructureAvailabilityPolicy specifies the availability
@@ -615,6 +632,8 @@ spec:
                             type: string
                           securityGroupName:
                             type: string
+                          subnetName:
+                            type: string
                           subscriptionID:
                             type: string
                           vnetID:
@@ -627,6 +646,7 @@ spec:
                         - machineIdentityID
                         - resourceGroup
                         - securityGroupName
+                        - subnetName
                         - subscriptionID
                         - vnetID
                         - vnetName
@@ -954,7 +974,6 @@ spec:
                         type: string
                     type: object
                 required:
-                - infraID
                 - issuerURL
                 - networking
                 - platform

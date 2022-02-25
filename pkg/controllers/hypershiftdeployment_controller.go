@@ -218,13 +218,21 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 				iamOut, iamErr = iamOpt.CreateIAM(r.ctx, r.Client)
 				if iamErr == nil {
-					if iamErr = createOIDCSecrets(r, &hyd, iamOut); iamErr == nil {
-						if iamErr = r.createPullSecret(&hyd, providerSecret); iamErr == nil {
-							hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
-							hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
-							if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil {
-								return ctrl.Result{}, r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
-							}
+					if iamErr = r.createPullSecret(&hyd, providerSecret); iamErr == nil {
+						hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
+						hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
+						hyd.Spec.Credentials = &hypdeployment.CredentialARNs{
+							AWS: &hypdeployment.AWSCredentials{
+								ControlPlaneOperatorARN: iamOut.ControlPlaneOperatorRoleARN,
+								KubeCloudControllerARN:  iamOut.KubeCloudControllerRoleARN,
+								NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
+							}}
+						if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil {
+							return ctrl.Result{}, r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+						}
+					}
+					if iamErr == nil {
+						if iamErr = createOIDCSecrets(r, &hyd); iamErr == nil {
 							r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 							log.Info("IAM and Secrets configured")
 						}
@@ -236,6 +244,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
 			}
 		}
+	}
+
+	if hyd.Spec.HostedClusterSpec.Platform.Type == "AWS" && (hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Credentials.AWS", hypdeployment.MisConfiguredReason)
 	}
 
 	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
@@ -257,7 +269,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
+
 		if apierrors.IsNotFound(err) {
+
 			hostedCluster := ScaffoldHostedCluster(&hyd)
 
 			if err := r.Create(ctx, hostedCluster); err != nil {
@@ -381,7 +395,8 @@ func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.Hyp
 	return nil
 }
 
-func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment, iamInfo *aws.CreateIAMOutput) error {
+func ScaffoldSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
+	var secrets []*corev1.Secret
 
 	buildAWSCreds := func(name, arn string) *corev1.Secret {
 		return &corev1.Secret{
@@ -390,7 +405,7 @@ func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.Hyp
 				APIVersion: corev1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: hyd.Namespace,
+				Namespace: getTargetNamespace(hyd),
 				Name:      name,
 				Labels: map[string]string{
 					AutoInfraLabelName: hyd.Spec.InfraID,
@@ -404,27 +419,22 @@ func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.Hyp
 			},
 		}
 	}
+	return append(
+		secrets,
+		buildAWSCreds(hyd.Name+"-cpo-creds", hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
+		buildAWSCreds(hyd.Name+"-cloud-ctrl-creds", hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
+		buildAWSCreds(hyd.Name+"-node-mgmt-creds", hyd.Spec.Credentials.AWS.NodePoolManagementARN),
+	)
+}
 
-	secretResource := buildAWSCreds(hyd.Name+"-cpo-creds", iamInfo.ControlPlaneOperatorRoleARN)
-	if err := r.Create(r.ctx, secretResource); apierrors.IsAlreadyExists(err) {
-		if err := r.Update(r.ctx, secretResource); err != nil {
-			return err
+func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
+
+	for _, secret := range ScaffoldSecrets(hyd) {
+		if err := r.Create(r.ctx, secret); apierrors.IsAlreadyExists(err) {
+			if err := r.Update(r.ctx, secret); err != nil {
+				return err
+			}
 		}
-	}
-
-	secretResource = buildAWSCreds(hyd.Name+"-cloud-ctrl-creds", iamInfo.KubeCloudControllerRoleARN)
-	if err := r.Create(r.ctx, secretResource); apierrors.IsAlreadyExists(err) {
-		if err := r.Update(r.ctx, secretResource); err != nil {
-			return err
-		}
-	}
-
-	secretResource = buildAWSCreds(hyd.Name+"-node-mgmt-creds", iamInfo.NodePoolManagementRoleARN)
-	if err := r.Create(r.ctx, secretResource); apierrors.IsAlreadyExists(err) {
-		if err := r.Update(r.ctx, secretResource); err != nil {
-			return err
-		}
-
 	}
 	return nil
 }
