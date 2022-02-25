@@ -118,6 +118,7 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	infraOut := getInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1")
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
+	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
 	ScaffoldHostedClusterSpec(testHD, infraOut)
 	ScaffoldNodePoolSpec(testHD, infraOut)
 
