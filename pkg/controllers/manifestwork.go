@@ -169,28 +169,11 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 }
 
 func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (loadManifest, error) {
-	cpoCreds := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.Platform.AWS.ControlPlaneOperatorCreds.Name,
-		Namespace: hyd.GetNamespace()}, cpoCreds); err != nil {
-		return nil, fmt.Errorf("failed to get the cpo creds, err: %w", err)
-	}
-
-	kccCreds := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.Platform.AWS.KubeCloudControllerCreds.Name,
-		Namespace: hyd.GetNamespace()}, kccCreds); err != nil {
-		return nil, fmt.Errorf("failed to get the cpo creds, err: %w", err)
-	}
-
-	nmcCreds := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.Platform.AWS.NodePoolManagementCreds.Name,
-		Namespace: hyd.GetNamespace()}, nmcCreds); err != nil {
-		return nil, fmt.Errorf("failed to get the cpo creds, err: %w", err)
-	}
 
 	pullCreds := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
 		Namespace: hyd.GetNamespace()}, pullCreds); err != nil {
-		return nil, fmt.Errorf("failed to get the cpo creds, err: %w", err)
+		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
 	}
 
 	overrideSecret := func(in *corev1.Secret) *corev1.Secret {
@@ -209,7 +192,7 @@ func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Cont
 		return out
 	}
 
-	refSecrets := []*corev1.Secret{cpoCreds, kccCreds, nmcCreds, pullCreds}
+	refSecrets := append(ScaffoldSecrets(hyd), pullCreds)
 
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
 		for _, s := range refSecrets {

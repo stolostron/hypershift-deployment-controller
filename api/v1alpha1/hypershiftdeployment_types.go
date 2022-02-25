@@ -107,6 +107,19 @@ type HypershiftDeploymentSpec struct {
 	// if omitted, a default NodePool will be generated
 	// +optional
 	NodePools []*HypershiftNodePools `json:"nodePools,omitempty"`
+
+	// Credentials are ARN's that are used for standing up the resources in the cluster.
+	Credentials *CredentialARNs `json:"credentials,omitempty"`
+}
+
+type CredentialARNs struct {
+	AWS *AWSCredentials `json:"aws,omitempty"`
+}
+
+type AWSCredentials struct {
+	ControlPlaneOperatorARN string `json:"controlPlaneOperatorARN"`
+	KubeCloudControllerARN  string `json:"kubeCloudControllerARN"`
+	NodePoolManagementARN   string `json:"nodePoolManagementARN"`
 }
 
 type HypershiftNodePools struct {

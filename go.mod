@@ -5,12 +5,12 @@ go 1.17
 require (
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
-	github.com/openshift/hypershift v0.0.0-20220218003034-93ea4702f952
+	github.com/openshift/hypershift v0.0.0-20220225010248-0371f8892dba
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1
-	k8s.io/api v0.23.1
-	k8s.io/apimachinery v0.23.1
-	k8s.io/client-go v0.23.1
+	k8s.io/api v0.23.3
+	k8s.io/apimachinery v0.23.3
+	k8s.io/client-go v0.23.3
 	open-cluster-management.io/api v0.6.0
 	sigs.k8s.io/controller-runtime v0.11.1
 )
@@ -79,11 +79,11 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/apiextensions-apiserver v0.23.0 // indirect
-	k8s.io/apiserver v0.23.0 // indirect
-	k8s.io/component-base v0.23.1 // indirect
+	k8s.io/apiserver v0.23.3 // indirect
+	k8s.io/component-base v0.23.3 // indirect
 	k8s.io/klog/v2 v2.40.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
-	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b // indirect
+	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
 	kubevirt.io/api v0.0.0-20211117075245-c94ce62baf5a // indirect
 	kubevirt.io/containerized-data-importer-api v1.41.0 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk v0.2.1 // indirect
@@ -93,7 +93,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.2.0-alpha.1 // indirect
 	sigs.k8s.io/cluster-api-provider-kubevirt v0.0.0-00010101000000-000000000000 // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
