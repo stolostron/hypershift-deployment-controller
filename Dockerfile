@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.ci.openshift.org/open-cluster-management/builder:go1.17-linux as builder
+FROM registry.ci.openshift.org/stolostron/builder:go1.17-linux as builder
 
 WORKDIR /go/src/github.com/stolostron/hypershift-deployment-controller
 # Copy the Go Modules manifests
@@ -30,3 +30,4 @@ ENV USER_UID=1001
 # Add the binaries
 COPY --from=builder /go/src/github.com/stolostron/hypershift-deployment-controller/bin/manager .
 
+USER ${USER_UID}
