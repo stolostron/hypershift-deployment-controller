@@ -31,6 +31,8 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -126,16 +128,20 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	m.Spec.Workload.Manifests = payload
 
-	if err := r.Create(r.ctx, m); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			//TODO: ianzhang366, might want to patch the manifestwork over here.
-			return ctrl.Result{}, r.Update(r.ctx, m)
+	// a placeholder for later use
+	noOp := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
+		return func() error {
+			return nil
 		}
-
-		return ctrl.Result{}, fmt.Errorf("failed to create manifestwork based on hypershiftDeployment: %s, err: %w", req, err)
 	}
 
-	r.Log.Info(fmt.Sprintf("created manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, getTargetManagedCluster(hyd)))
+	if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, m, noOp(m, payload)); err != nil {
+		r.Log.Error(err, fmt.Sprintf("failed to CreateOrUpdate the existing manifestwork %s", getManifestWorkKey(hyd)))
+		return ctrl.Result{}, err
+
+	}
+
+	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, getTargetManagedCluster(hyd)))
 
 	return ctrl.Result{}, nil
 }
