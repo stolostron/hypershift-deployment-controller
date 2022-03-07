@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
 	"github.com/openshift/hypershift/cmd/util"
+	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -36,6 +37,16 @@ import (
 var resLog = ctrl.Log.WithName("resource-render")
 
 const ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.9.15-x86_64"
+
+func getReleaseImagePullSpec() string {
+
+	defaultVersion, err := version.LookupDefaultOCPVersion()
+	if err != nil {
+		return "invalid-image.com"
+	}
+	return defaultVersion.PullSpec
+
+}
 
 func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
 	t := hyd.GetNamespace()
@@ -105,7 +116,6 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 
 func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 	volSize := resource.MustParse("4Gi")
-	//releaseImage, _ := version.LookupDefaultOCPVersion()
 
 	if hyd.Spec.HostedClusterSpec == nil {
 		hyd.Spec.HostedClusterSpec =
@@ -135,7 +145,7 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				// Defaults for all platforms
 				PullSecret: corev1.LocalObjectReference{Name: hyd.Name + "-pull-secret"},
 				Release: hyp.Release{
-					Image: ReleaseImage, //.DownloadURL,
+					Image: getReleaseImagePullSpec(), //.DownloadURL,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{
 					spsMap(hyp.APIServer, hyp.LoadBalancer),
@@ -230,7 +240,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 						Type: hyp.NonePlatform,
 					},
 					Release: hyp.Release{
-						Image: ReleaseImage, //.DownloadURL,,
+						Image: getReleaseImagePullSpec(), //.DownloadURL,,
 					},
 				},
 			},
