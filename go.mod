@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
-	github.com/openshift/hypershift v0.0.0-20220304153418-9c96fb48a87b
+	github.com/openshift/hypershift v0.0.0-20220307151657-88d22ffa1326
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1
 	k8s.io/api v0.23.3
@@ -106,7 +106,6 @@ require (
 
 // From hypershift go.mod
 replace (
-	github.com/openshift/hypershift => github.com/jnpacker/hypershift v0.0.0-20220306045713-412dcc395ff5
 	kubevirt.io/containerized-data-importer-api => github.com/kubevirt/containerized-data-importer-api v1.41.1-0.20211201033752-05520fb9f18d
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.0.2
 	sigs.k8s.io/cluster-api-provider-kubevirt => github.com/openshift/cluster-api-provider-kubevirt v0.0.0-20211223062810-ef64d5ff1cde
