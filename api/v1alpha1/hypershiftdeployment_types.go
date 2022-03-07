@@ -204,6 +204,16 @@ type HypershiftDeploymentStatus struct {
 
 	//Show which phase of curation is currently being processed
 	Phase CurrentPhase `json:"phase,omitempty"`
+
+	// KubeConfig is a reference to the secret containing the default kubeconfig
+	// for the hosted cluster.
+	// +optional
+	KubeConfig *corev1.LocalObjectReference `json:"kubeconfig,omitempty"`
+
+	// KubeadminPassword is a reference to the secret that contains the initial
+	// kubeadmin user password for the hosted cluster.
+	// +optional
+	KubeadminPassword *corev1.LocalObjectReference `json:"kubeadminPassword,omitempty"`
 }
 
 // +kubebuilder:object:root=true
