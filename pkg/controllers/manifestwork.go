@@ -22,7 +22,6 @@ import (
 	"time"
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
-	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,8 +30,10 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
 const (
@@ -59,7 +60,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
 			// generated manifestworks are unqinue.
 			Name:      generateManifestName(hyd),
-			Namespace: getTargetManagedCluster(hyd),
+			Namespace: helper.GetTargetManagedCluster(hyd),
 			Annotations: map[string]string{
 				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
 					hyd.GetNamespace(),
@@ -80,7 +81,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      hyd.GetName(),
-		Namespace: getTargetManagedCluster(hyd),
+		Namespace: helper.GetTargetManagedCluster(hyd),
 	}
 }
 
@@ -148,7 +149,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	}
 
-	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, getTargetManagedCluster(hyd)))
+	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, helper.GetTargetManagedCluster(hyd)))
 
 	return ctrl.Result{}, nil
 }
@@ -203,21 +204,12 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 		}
 
 		for _, s := range refSecrets {
-			o := duplicateSecretWithOverride(s, overrideNamespace(getTargetNamespace(hyd)))
+			o := duplicateSecretWithOverride(s, overrideNamespace(helper.GetTargetNamespace(hyd)))
 			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: o}})
 		}
 
 		return nil
 	}
-}
-
-//TODO @ianzhang366 integrate with the clusterSet logic
-func getTargetManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
-	if len(hyd.Spec.TargetManagedCluster) == 0 {
-		return hyd.GetNamespace()
-	}
-
-	return hyd.Spec.TargetManagedCluster
 }
 
 func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {

@@ -13,6 +13,7 @@ import (
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
 	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -281,7 +282,7 @@ func TestManifestWorkFlow(t *testing.T) {
 
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
-		Namespace: getTargetManagedCluster(testHD)}
+		Namespace: helper.GetTargetManagedCluster(testHD)}
 
 	manifestWork := &workv1.ManifestWork{}
 
@@ -303,25 +304,25 @@ func TestManifestWorkFlow(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: getTargetNamespace(testHD)}}: false,
+				Name: "test1-node-mgmt-creds", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-cpo-creds", Namespace: getTargetNamespace(testHD)}}: false,
+				Name: "test1-cpo-creds", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: getTargetNamespace(testHD)}}: false,
+				Name: "test1-node-mgmt-creds", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-pull-secret", Namespace: getTargetNamespace(testHD)}}: false,
+				Name: "test1-pull-secret", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 	}
 
 	wl := manifestWork.Spec.Workload.Manifests
@@ -447,7 +448,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
-		Namespace: getTargetManagedCluster(testHD)}
+		Namespace: helper.GetTargetManagedCluster(testHD)}
 
 	manifestWork := &workv1.ManifestWork{}
 
@@ -459,19 +460,19 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgSecretName, Namespace: getTargetNamespace(testHD)}}: false,
+				Name: cfgSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgItemSecretName, Namespace: getTargetNamespace(testHD)}}: false,
+				Name: cfgItemSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "ConfigMap"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgConfigName, Namespace: getTargetNamespace(testHD)}}: false,
+				Name: cfgConfigName, Namespace: helper.GetTargetNamespace(testHD)}}: false,
 	}
 
 	wl := manifestWork.Spec.Workload.Manifests

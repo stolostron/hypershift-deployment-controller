@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -162,7 +163,7 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 
 		for _, se := range secretRefs {
 			k := genKey(se, hyd)
-			t, err := r.generateSecret(ctx, k, overrideNamespace(getTargetNamespace(hyd)))
+			t, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetTargetNamespace(hyd)))
 			if err != nil {
 				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
 				allErr = append(allErr, err)
@@ -174,7 +175,7 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 
 		for _, cm := range configMapRefs {
 			k := genKey(cm, hyd)
-			t, err := r.generateConfigMap(ctx, k, overrideNamespace(getTargetNamespace(hyd)))
+			t, err := r.generateConfigMap(ctx, k, overrideNamespace(helper.GetTargetNamespace(hyd)))
 			if err != nil {
 				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
 				allErr = append(allErr, err)

@@ -26,6 +26,8 @@ import (
 	"github.com/openshift/hypershift/cmd/util"
 	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,26 +50,13 @@ func getReleaseImagePullSpec() string {
 
 }
 
-func getTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
-	t := hyd.GetNamespace()
-	defer func() { resLog.Info(fmt.Sprintf("targetNamespace is: %s", t)) }()
-
-	if len(hyd.Spec.TargetNamespace) == 0 {
-		return t
-	}
-
-	t = hyd.Spec.TargetNamespace
-
-	return t
-}
-
 func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
 	return &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
-			Namespace: getTargetNamespace(hyd),
+			Namespace: helper.GetTargetNamespace(hyd),
 			Annotations: map[string]string{
-				"hypershift.open-cluster-management.io/hypershiftdeployemnt": fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
+				constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
 			},
 		},
 		Spec: *hyd.Spec.HostedClusterSpec,
@@ -275,7 +264,7 @@ func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      np.Name,
-			Namespace: getTargetNamespace(hyd),
+			Namespace: helper.GetTargetNamespace(hyd),
 			Labels: map[string]string{
 				AutoInfraLabelName: hyd.Spec.InfraID,
 			},
@@ -294,7 +283,7 @@ func ScaffoldSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
 				APIVersion: corev1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: getTargetNamespace(hyd),
+				Namespace: helper.GetTargetNamespace(hyd),
 				Name:      name,
 				Labels: map[string]string{
 					AutoInfraLabelName: hyd.Spec.InfraID,
@@ -324,7 +313,7 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hyd.Name + CCredsSuffix,
-			Namespace: getTargetNamespace(hyd),
+			Namespace: helper.GetTargetNamespace(hyd),
 			Labels: map[string]string{
 				util.AutoInfraLabelName: hyd.Spec.InfraID,
 			},

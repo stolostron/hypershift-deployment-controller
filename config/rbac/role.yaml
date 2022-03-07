@@ -27,6 +27,16 @@ rules:
   - update
   - watch
 - apiGroups:
+  - addon.open-cluster-management.io
+  resources:
+  - managedclusteraddons
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
   - cluster.open-cluster-management.io
   resources:
   - hypershiftdeployments
@@ -53,6 +63,24 @@ rules:
   - patch
   - update
 - apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - managedclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - managedclustersets/join
+  verbs:
+  - create
+- apiGroups:
   - hypershift.openshift.io
   resources:
   - hostedclusters
@@ -65,6 +93,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - register.open-cluster-management.io
+  resources:
+  - managedclusters/accept
+  verbs:
+  - update
 - apiGroups:
   - work.open-cluster-management.io
   resources:
