@@ -74,7 +74,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 		ScaffoldAWSNodePoolSpec(hyd, infraOut)
 
 		if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
-			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
 			return ctrl.Result{}, err
 		}
 
@@ -122,14 +122,14 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 				}
 				if iamErr == nil {
 					if iamErr = createOIDCSecrets(r, hyd); iamErr == nil {
-						r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
+						_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 						log.Info("IAM and Secrets configured")
 					}
 				}
 			}
 		}
 		if iamErr != nil {
-			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.ConfiguredAsExpectedReason)
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.ConfiguredAsExpectedReason)
 			return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
 		}
 	}
@@ -154,7 +154,7 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		Name:               hyd.GetName(),
 	}
 
-	r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing AWS infrastructure with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroyReason)
+	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing AWS infrastructure with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroyReason)
 
 	log.Info("Deleting Infrastructure on provider")
 	if err := dOpts.DestroyInfra(ctx); err != nil {
@@ -169,7 +169,7 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		AWSSecretKey: dOpts.AWSSecretKey,
 		InfraID:      dOpts.InfraID,
 	}
-	r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing AWS IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.RemovingReason)
+	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing AWS IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.RemovingReason)
 
 	if err := iamOpt.DestroyIAM(ctx); err != nil {
 		log.Error(err, "failed to delete IAM on provider")
