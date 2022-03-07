@@ -71,7 +71,7 @@ func TestScaffoldHostedClusterSpec(t *testing.T) {
 	// The Reconcile code exits with a condition if platform or AWS are nil
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	assert.Nil(t, testHD.Spec.HostedClusterSpec, "HostedClusterSpec is nil")
-	ScaffoldHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
 	assert.Equal(t, infraOut.ComputeCIDR, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "InfraID should be "+infraOut.InfraID)
 }
 
@@ -79,7 +79,7 @@ func TestScaffoldHostedCluster(t *testing.T) {
 	testHD := getHypershiftDeployment("default", "test1")
 
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
-	ScaffoldHostedClusterSpec(testHD, getInfrastructureOut())
+	ScaffoldAWSHostedClusterSpec(testHD, getInfrastructureOut())
 
 	client := initClient()
 	err := client.Create(context.Background(), ScaffoldHostedCluster(testHD))
@@ -93,7 +93,7 @@ func TestScaffoldNodePoolSpec(t *testing.T) {
 	testHD := getHypershiftDeployment("default", "test1")
 
 	assert.Equal(t, 0, len(testHD.Spec.NodePools), "Should be zero node pools")
-	ScaffoldNodePoolSpec(testHD, getInfrastructureOut())
+	ScaffoldAWSNodePoolSpec(testHD, getInfrastructureOut())
 	assert.Equal(t, 1, len(testHD.Spec.NodePools), "Should be 1 node pools")
 }
 
@@ -102,7 +102,7 @@ func TestScaffoldNodePool(t *testing.T) {
 	testHD := getHypershiftDeployment("default", "test1")
 
 	infraOut := getInfrastructureOut()
-	ScaffoldNodePoolSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
 	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0]))
@@ -119,8 +119,8 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	testHD := getHypershiftDeployment("default", "test1")
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
-	ScaffoldHostedClusterSpec(testHD, infraOut)
-	ScaffoldNodePoolSpec(testHD, infraOut)
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	client.Create(context.Background(), testHD)
 
