@@ -51,6 +51,9 @@ func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedC
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
 			Namespace: getTargetNamespace(hyd),
+			Annotations: map[string]string{
+				"hypershift.open-cluster-management.io/hypershiftdeployemnt": fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
+			},
 		},
 		Spec: *hyd.Spec.HostedClusterSpec,
 	}
