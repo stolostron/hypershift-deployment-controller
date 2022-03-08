@@ -158,8 +158,8 @@ func TestManifestWorkFlow(t *testing.T) {
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
 	testHD.Spec.InfraID = infraOut.InfraID
-	ScaffoldHostedClusterSpec(testHD, infraOut)
-	ScaffoldNodePoolSpec(testHD, infraOut)
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
@@ -267,8 +267,8 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
 	testHD.Spec.InfraID = infraOut.InfraID
-	ScaffoldHostedClusterSpec(testHD, infraOut)
-	ScaffoldNodePoolSpec(testHD, infraOut)
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	cfgSecretName := "hostedcluster-config-secret-1"
 	cfgConfigName := "hostedcluster-config-configmap-1"
@@ -395,8 +395,6 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 		}
 
 		requiredResource[k] = true
-
-		t.Log(u)
 	}
 
 	for k, v := range requiredResource {
