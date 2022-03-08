@@ -1,0 +1,14 @@
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: azure-sample
+spec:
+  infrastructure:
+    cloudProvider:
+      name: my-cloud-provider-secret
+    configure: True
+    platform:
+      azure:
+        location: centralus
+
+

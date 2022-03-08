@@ -39,7 +39,6 @@ import (
 
 	"github.com/go-logr/logr"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
-	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/util"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -141,113 +140,20 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.destroyHypershift(&hyd, &providerSecret)
 	}
 
-	if configureInfra && hyd.Spec.Infrastructure.Platform == nil {
-		return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
-	}
-
-	var infraOut *aws.CreateInfraOutput
-	var iamOut *aws.CreateIAMOutput
-
-	if configureInfra && hyd.Spec.Infrastructure.Platform.AWS != nil {
-		if hyd.Spec.Infrastructure.Platform.AWS.Region == "" {
-			return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform.AWS.Region")
+	if configureInfra {
+		if hyd.Spec.Infrastructure.Platform == nil {
+			return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
 		}
-
-		// Skip reconcile based on condition
-		// Does both INFRA and IAM, as IAM depends on zoneID's from INFRA
-		if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) ||
-			!meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
-
-			log.Info("Creating infrastructure on the provider that will be used by the HypershiftDeployment, HostedClusters & NodePools")
-			o := aws.CreateInfraOptions{
-				AWSKey:       string(providerSecret.Data["aws_access_key_id"]),
-				AWSSecretKey: string(providerSecret.Data["aws_secret_access_key"]),
-				Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
-				InfraID:      hyd.Spec.InfraID,
-				Name:         hyd.GetName(),
-				BaseDomain:   string(providerSecret.Data["baseDomain"]),
-			}
-
-			infraOut, err = o.CreateInfra(r.ctx)
-			if err != nil {
-				log.Error(err, "Could not create infrastructure")
-
-				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true},
-					r.updateStatusConditionsOnChange(
-						&hyd, hypdeployment.PlatformConfigured,
-						metav1.ConditionFalse,
-						err.Error(),
-						hypdeployment.MisConfiguredReason)
-			}
-
-			// This creates the required HostedClusterSpec and NodePoolSpec(s), from scratch or if supplied
-			ScaffoldHostedClusterSpec(&hyd, infraOut)
-			ScaffoldNodePoolSpec(&hyd, infraOut)
-
-			if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil {
-				r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
-				return ctrl.Result{}, err
-			}
-
-			if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason); err != nil {
-				return ctrl.Result{}, err
-			}
-			log.Info("Infrastructure configured")
-
-			if err := r.Get(ctx, req.NamespacedName, &hyd); err != nil {
-				return ctrl.Result{}, nil
-			}
-
-			oHyd = *hyd.DeepCopy()
-
-			oidcSPName, oidcSPRegion, iamErr := oidcDiscoveryURL(r, hyd.Spec.InfraID)
-			if iamErr == nil {
-				iamOpt := aws.CreateIAMOptions{
-					Region:                          hyd.Spec.Infrastructure.Platform.AWS.Region,
-					AWSKey:                          string(providerSecret.Data["aws_access_key_id"]),
-					AWSSecretKey:                    string(providerSecret.Data["aws_secret_access_key"]),
-					InfraID:                         hyd.Spec.InfraID,
-					IssuerURL:                       "", //This is generated on the fly by CreateIAMOutput
-					AdditionalTags:                  []string{},
-					OIDCStorageProviderS3BucketName: oidcSPName,
-					OIDCStorageProviderS3Region:     oidcSPRegion,
-					PrivateZoneID:                   infraOut.PrivateZoneID,
-					PublicZoneID:                    infraOut.PublicZoneID,
-					LocalZoneID:                     infraOut.LocalZoneID,
-				}
-
-				iamOut, iamErr = iamOpt.CreateIAM(r.ctx, r.Client)
-				if iamErr == nil {
-					if iamErr = r.createPullSecret(&hyd, providerSecret); iamErr == nil {
-						hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
-						hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
-						hyd.Spec.Credentials = &hypdeployment.CredentialARNs{
-							AWS: &hypdeployment.AWSCredentials{
-								ControlPlaneOperatorARN: iamOut.ControlPlaneOperatorRoleARN,
-								KubeCloudControllerARN:  iamOut.KubeCloudControllerRoleARN,
-								NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
-							}}
-						if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil {
-							return ctrl.Result{}, r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
-						}
-					}
-					if iamErr == nil {
-						if iamErr = createOIDCSecrets(r, &hyd); iamErr == nil {
-							r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
-							log.Info("IAM and Secrets configured")
-						}
-					}
-				}
-			}
-			if iamErr != nil {
-				r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.ConfiguredAsExpectedReason)
-				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
+		if hyd.Spec.Infrastructure.Platform.AWS != nil {
+			if requeue, err := r.createAWSInfra(&hyd, &providerSecret); err != nil {
+				return requeue, err
 			}
 		}
-	}
-
-	if hyd.Spec.HostedClusterSpec.Platform.Type == "AWS" && (hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Credentials.AWS", hypdeployment.MisConfiguredReason)
+		if hyd.Spec.Infrastructure.Platform.Azure != nil {
+			if requeue, err := r.createAzureInfra(&hyd, &providerSecret); err != nil {
+				return requeue, err
+			}
+		}
 	}
 
 	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)
@@ -395,38 +301,6 @@ func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.Hyp
 	return nil
 }
 
-func ScaffoldSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
-	var secrets []*corev1.Secret
-
-	buildAWSCreds := func(name, arn string) *corev1.Secret {
-		return &corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: getTargetNamespace(hyd),
-				Name:      name,
-				Labels: map[string]string{
-					AutoInfraLabelName: hyd.Spec.InfraID,
-				},
-			},
-			Data: map[string][]byte{
-				"credentials": []byte(fmt.Sprintf(`[default]
-	role_arn = %s
-	web_identity_token_file = /var/run/secrets/openshift/serviceaccount/token
-	`, arn)),
-			},
-		}
-	}
-	return append(
-		secrets,
-		buildAWSCreds(hyd.Name+"-cpo-creds", hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
-		buildAWSCreds(hyd.Name+"-cloud-ctrl-creds", hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
-		buildAWSCreds(hyd.Name+"-node-mgmt-creds", hyd.Spec.Credentials.AWS.NodePoolManagementARN),
-	)
-}
-
 func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
 
 	for _, secret := range ScaffoldSecrets(hyd) {
@@ -439,7 +313,7 @@ func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.Hyp
 	return nil
 }
 
-func destroyOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
+func destroySecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
 	//clean up CLI generated secrets
 	return r.DeleteAllOf(r.ctx, &corev1.Secret{}, client.InNamespace(hyd.GetNamespace()), client.MatchingLabels{util.AutoInfraLabelName: hyd.Spec.InfraID})
 
@@ -579,42 +453,15 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 	if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
 		// Infrastructure is the last step
-		dOpts := aws.DestroyInfraOptions{
-			AWSCredentialsFile: "",
-			AWSKey:             string(providerSecret.Data["aws_access_key_id"]),
-			AWSSecretKey:       string(providerSecret.Data["aws_secret_access_key"]),
-			Region:             hyd.Spec.Infrastructure.Platform.AWS.Region,
-			BaseDomain:         string(providerSecret.Data["baseDomain"]),
-			InfraID:            hyd.Spec.InfraID,
-			Name:               hyd.GetName(),
+		if hyd.Spec.Infrastructure.Platform.AWS != nil {
+			if result, err := r.destroyAWSInfrastructure(hyd, providerSecret); err != nil {
+				return result, nil // destroyAWSInfrastructure uses requeue times, switch to nil
+			}
 		}
-
-		setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Destroying HypershiftDeployment with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroyReason)
-		r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.RemovingReason)
-
-		log.Info("Deleting Infrastructure on provider")
-		if err := dOpts.DestroyInfra(ctx); err != nil {
-			log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-		}
-
-		log.Info("Deleting Infrastructure IAM on provider")
-		iamOpt := aws.DestroyIAMOptions{
-			Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
-			AWSKey:       dOpts.AWSKey,
-			AWSSecretKey: dOpts.AWSSecretKey,
-			InfraID:      dOpts.InfraID,
-		}
-
-		if err := iamOpt.DestroyIAM(ctx); err != nil {
-			log.Error(err, "failed to delete IAM on provider")
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-		}
-
-		log.Info("Deleting OIDC secrets")
-		if err := destroyOIDCSecrets(r, hyd); err != nil {
-			log.Error(err, "Encountered an issue while deleting OIDC secrets")
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		if hyd.Spec.Infrastructure.Platform.Azure != nil {
+			if result, err := r.destroyAzureInfrastructure(hyd, providerSecret); err != nil {
+				return result, nil // destroyAzureInfrastructure uses requeue times, switch to nil
+			}
 		}
 	}
 

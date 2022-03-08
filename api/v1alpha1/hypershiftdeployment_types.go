@@ -148,7 +148,18 @@ type InfraSpec struct {
 }
 
 type Platforms struct {
-	AWS *AWSPlatform `json:"aws,omitempty"`
+	Azure *AzurePlatform `json:"azure,omitempty"`
+	AWS   *AWSPlatform   `json:"aws,omitempty"`
+}
+
+type AzurePlatform struct {
+
+	// Region is the Azure region(location) in which the cluster resides. This configures the
+	// OCP control plane cloud integrations, and is used by NodePool to resolve
+	// the correct boot image for a given release.
+	//
+	// +immutable
+	Location string `json:"location"`
 }
 
 type AWSPlatform struct {
@@ -175,10 +186,11 @@ type HypershiftDeploymentStatus struct {
 // +kubebuilder:resource:path=hypershiftdeployments,shortName=hd;hds,scope=Namespaced
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="TYPE",type="string",JSONPath=".spec.hostedClusterSpec.platform.type",description="Infrastructure type"
 // +kubebuilder:printcolumn:name="INFRA",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].reason",description="Reason"
-// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
-// +kubebuilder:printcolumn:name="IAM",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].status",description="Configured"
+// +kubebuilder:printcolumn:name="IAM",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
 // +kubebuilder:printcolumn:name="PROVIDER REF",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Found",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].status",description="Found"
 
