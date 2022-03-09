@@ -45,7 +45,7 @@ const (
 type loadManifest func(*hypdeployment.HypershiftDeployment, *[]workv1.Manifest) error
 
 func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
-	return fmt.Sprintf("%s-%s", hyd.GetName(), hyd.Spec.InfraID)
+	return hyd.Spec.InfraID
 }
 
 func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
