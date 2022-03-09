@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/zapr"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
+	"github.com/openshift/hypershift/cmd/infra/azure"
 	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -41,7 +42,7 @@ func getHypershiftDeployment(namespace string, name string) *hyd.HypershiftDeplo
 	}
 }
 
-func getInfrastructureOut() *aws.CreateInfraOutput {
+func getAWSInfrastructureOut() *aws.CreateInfraOutput {
 	return &aws.CreateInfraOutput{
 		Region:          "us-east-1",
 		Zone:            "us-east-1a",
@@ -55,6 +56,23 @@ func getInfrastructureOut() *aws.CreateInfraOutput {
 		PublicZoneID:    "12345",
 		PrivateZoneID:   "67890",
 		LocalZoneID:     "abcde",
+	}
+}
+
+func getAzureInfrastructureOut() *azure.CreateInfraOutput {
+	return &azure.CreateInfraOutput{
+		BaseDomain:        "my-domain.com",
+		PublicZoneID:      "12345",
+		PrivateZoneID:     "67890",
+		Location:          "abcde",
+		ResourceGroupName: "default",
+		VNetID:            "12345abcde",
+		VnetName:          "vnet-name",
+		SubnetName:        "subnet-name",
+		BootImageID:       "image-12345",
+		InfraID:           "test2-abcde",
+		MachineIdentityID: "12345",
+		SecurityGroupName: "sg-name",
 	}
 }
 
@@ -88,23 +106,58 @@ var getNN = types.NamespacedName{
 	Name:      "test1",
 }
 
-func TestScaffoldHostedClusterSpec(t *testing.T) {
+func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
 
+	t.Log("Test AWS scaffolding")
 	testHD := getHypershiftDeployment("default", "test1")
 
-	infraOut := getInfrastructureOut()
 	// The Reconcile code exits with a condition if platform or AWS are nil
-	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
+	oAWS := getAWSInfrastructureOut()
+	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{Region: oAWS.Region}}
 	assert.Nil(t, testHD.Spec.HostedClusterSpec, "HostedClusterSpec is nil")
-	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
-	assert.Equal(t, infraOut.ComputeCIDR, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "InfraID should be "+infraOut.InfraID)
+
+	ScaffoldAWSHostedClusterSpec(testHD, oAWS)
+	//assert.Equal(t, oAWS.InfraID, testHD.Spec.HostedClusterSpec.InfraID, "InfraID should be "+oAWS.InfraID)
+	assert.Equal(t, oAWS.Region, testHD.Spec.HostedClusterSpec.Platform.AWS.Region, "Region should be "+oAWS.Region)
+	assert.Equal(t, oAWS.VPCID, testHD.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig.VPC, "VPCID should be "+oAWS.VPCID)
+	//Skipped Zones
+	assert.Equal(t, oAWS.ComputeCIDR, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "ComputeCIDR should be "+oAWS.ComputeCIDR)
+	assert.Equal(t, oAWS.BaseDomain, testHD.Spec.HostedClusterSpec.DNS.BaseDomain, "BaseDomain should be "+oAWS.BaseDomain)
+	assert.Equal(t, oAWS.PrivateZoneID, testHD.Spec.HostedClusterSpec.DNS.PrivateZoneID, "PrivateZoneID should be "+oAWS.PrivateZoneID)
+	assert.Equal(t, oAWS.PublicZoneID, testHD.Spec.HostedClusterSpec.DNS.PublicZoneID, "PublicZoneID should be "+oAWS.PublicZoneID)
+	// Skiped LocalZoneID
 }
 
-func TestScaffoldHostedCluster(t *testing.T) {
+func TestScaffoldAzureHostedClusterSpec(t *testing.T) {
+
+	t.Log("Test Azure scaffolding")
+	testHD := getHypershiftDeployment("default", "test1")
+
+	// The Reconcile code exits with a condition if platform or AWS are nil
+	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{Azure: &hyd.AzurePlatform{}}
+	assert.Nil(t, testHD.Spec.HostedClusterSpec, "HostedClusterSpec is nil")
+
+	oAzure := getAzureInfrastructureOut()
+	ScaffoldAzureHostedClusterSpec(testHD, oAzure)
+	//assert.Equal(t, oAzure.InfraID, testHD.Spec.HostedClusterSpec.InfraID, "InfraID should be "+oAzure.InfraID)
+	assert.Equal(t, oAzure.BaseDomain, testHD.Spec.HostedClusterSpec.DNS.BaseDomain, "BaseDomain should be "+oAzure.BaseDomain)
+	assert.Equal(t, oAzure.PublicZoneID, testHD.Spec.HostedClusterSpec.DNS.PublicZoneID, "PublicZoneID should be "+oAzure.PublicZoneID)
+	assert.Equal(t, oAzure.PrivateZoneID, testHD.Spec.HostedClusterSpec.DNS.PrivateZoneID, "PrivateZoneID should be "+oAzure.PrivateZoneID)
+	assert.Equal(t, oAzure.Location, testHD.Spec.HostedClusterSpec.Platform.Azure.Location, "Location should be "+oAzure.Location)
+	assert.Equal(t, oAzure.ResourceGroupName, testHD.Spec.HostedClusterSpec.Platform.Azure.ResourceGroupName, "ResourceGroupName should be "+oAzure.ResourceGroupName)
+	assert.Equal(t, oAzure.VNetID, testHD.Spec.HostedClusterSpec.Platform.Azure.VnetID, "VNetID should be "+oAzure.VNetID)
+	assert.Equal(t, oAzure.VnetName, testHD.Spec.HostedClusterSpec.Platform.Azure.VnetName, "VnetName should be "+oAzure.VnetName)
+	assert.Equal(t, oAzure.SubnetName, testHD.Spec.HostedClusterSpec.Platform.Azure.SubnetName, "SubnetName should be "+oAzure.SubnetName)
+	assert.Equal(t, oAzure.MachineIdentityID, testHD.Spec.HostedClusterSpec.Platform.Azure.MachineIdentityID, "MachineIdentityID should be "+oAzure.MachineIdentityID)
+	assert.Equal(t, oAzure.SecurityGroupName, testHD.Spec.HostedClusterSpec.Platform.Azure.SecurityGroupName, "SecurityGroupName should be "+oAzure.SecurityGroupName)
+	assert.Equal(t, oAzure.SubnetName, testHD.Spec.HostedClusterSpec.Platform.Azure.SubnetName, "SubnetName should be "+oAzure.SubnetName)
+}
+
+func TestScaffoldAWSHostedCluster(t *testing.T) {
 	testHD := getHypershiftDeployment("default", "test1")
 
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
-	ScaffoldAWSHostedClusterSpec(testHD, getInfrastructureOut())
+	ScaffoldAWSHostedClusterSpec(testHD, getAWSInfrastructureOut())
 
 	client := initClient()
 	err := client.Create(context.Background(), ScaffoldHostedCluster(testHD))
@@ -113,21 +166,61 @@ func TestScaffoldHostedCluster(t *testing.T) {
 	t.Log("ScaffoldHostedCluster was successful")
 }
 
-func TestScaffoldNodePoolSpec(t *testing.T) {
+func TestScaffoldAzureHostedCluster(t *testing.T) {
+	testHD := getHypershiftDeployment("default", "test1")
+
+	ScaffoldAzureHostedClusterSpec(testHD, getAzureInfrastructureOut())
+
+	client := initClient()
+	err := client.Create(context.Background(), ScaffoldHostedCluster(testHD))
+
+	assert.Nil(t, err, "err is nil when HostedCluster Custom Resource is well formed")
+	t.Log("ScaffoldHostedCluster was successful")
+}
+
+func TestScaffoldAWSNodePoolSpec(t *testing.T) {
 
 	testHD := getHypershiftDeployment("default", "test1")
 
 	assert.Equal(t, 0, len(testHD.Spec.NodePools), "Should be zero node pools")
-	ScaffoldAWSNodePoolSpec(testHD, getInfrastructureOut())
+	oAWS := getAWSInfrastructureOut()
+	ScaffoldAWSNodePoolSpec(testHD, oAWS)
 	assert.Equal(t, 1, len(testHD.Spec.NodePools), "Should be 1 node pools")
+	assert.Equal(t, oAWS.SecurityGroupID, *testHD.Spec.NodePools[0].Spec.Platform.AWS.SecurityGroups[0].ID, "SecurityGroupID is equal")
+	assert.Equal(t, oAWS.Zones[0].SubnetID, *testHD.Spec.NodePools[0].Spec.Platform.AWS.Subnet.ID, "SubnetID is equal")
 }
 
-func TestScaffoldNodePool(t *testing.T) {
+func TestScaffoldAzureNodePoolSpec(t *testing.T) {
 
 	testHD := getHypershiftDeployment("default", "test1")
 
-	infraOut := getInfrastructureOut()
+	assert.Equal(t, 0, len(testHD.Spec.NodePools), "Should be zero node pools")
+	oAzure := getAzureInfrastructureOut()
+	ScaffoldAzureNodePoolSpec(testHD, oAzure)
+	assert.Equal(t, 1, len(testHD.Spec.NodePools), "Should be 1 node pools")
+	assert.Equal(t, oAzure.BootImageID, testHD.Spec.NodePools[0].Spec.Platform.Azure.ImageID, "ImageID is equal")
+}
+
+func TestScaffoldAWSNodePool(t *testing.T) {
+
+	testHD := getHypershiftDeployment("default", "test1")
+
+	infraOut := getAWSInfrastructureOut()
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
+
+	client := initClient()
+	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0]))
+
+	assert.Nil(t, err, "err is nil when NodePools is created successfully")
+	t.Log("ScaffoldNodePool was successful")
+}
+
+func TestScaffoldAzureNodePool(t *testing.T) {
+
+	testHD := getHypershiftDeployment("default", "test1")
+
+	infraOut := getAzureInfrastructureOut()
+	ScaffoldAzureNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
 	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0]))
@@ -151,7 +244,7 @@ func TestManifestWorkFlow(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
 
-	infraOut := getInfrastructureOut()
+	infraOut := getAWSInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1")
 	testHD.Spec.Override = hyd.InfraConfigureWithManifest
 
@@ -260,7 +353,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
 
-	infraOut := getInfrastructureOut()
+	infraOut := getAWSInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1")
 	testHD.Spec.Override = hyd.InfraConfigureWithManifest
 
@@ -406,7 +499,7 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 
 	client := initClient()
 
-	infraOut := getInfrastructureOut()
+	infraOut := getAWSInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1")
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
