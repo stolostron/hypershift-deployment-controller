@@ -54,9 +54,6 @@ type HypershiftDeploymentReconciler struct {
 	Log    logr.Logger
 }
 
-//loadManifest will get hostedclsuter's crs and put them to the manifest array
-type loadManifest func(*hypdeployment.HypershiftDeployment, *[]workv1.Manifest)
-
 const (
 	destroyFinalizer       = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
 	HostedClusterFinalizer = "hypershift.openshift.io/used-by-hostedcluster"
