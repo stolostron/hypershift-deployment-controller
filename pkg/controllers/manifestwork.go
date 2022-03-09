@@ -23,6 +23,7 @@ import (
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -99,7 +100,7 @@ func syncManifestworkStatusToHypershiftDeployment(
 	}
 }
 
-func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
+func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -120,7 +121,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 	manifestFuncs := []loadManifest{
 		appendHostedCluster,
 		appendNodePool,
-		r.appendHostedClusterReferenceSecrets(ctx),
+		r.appendHostedClusterReferenceSecrets(ctx, providerSecret),
 		r.ensureConfiguration(ctx),
 	}
 
@@ -180,7 +181,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	return ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, nil
 }
 
-func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context) loadManifest {
+func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 		pullCreds, err := r.generateSecret(ctx,
 			types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
@@ -190,7 +191,16 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			return fmt.Errorf("failed to duplicateSecret, err %w", err)
 		}
 
-		refSecrets := append(ScaffoldSecrets(hyd), pullCreds)
+		refSecrets := []*corev1.Secret{pullCreds}
+		if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {
+			refSecrets = append(refSecrets, ScaffoldSecrets(hyd)...)
+		} else if hyd.Spec.HostedClusterSpec.Platform.Azure != nil {
+			creds, err := getAzureCloudProviderCreds(providerSecret)
+			if err != nil {
+				return nil
+			}
+			refSecrets = append(refSecrets, ScaffoldAzureCloudCredential(hyd, creds))
+		}
 
 		for _, s := range refSecrets {
 			o := duplicateSecretWithOverride(s, overrideNamespace(getTargetNamespace(hyd)))

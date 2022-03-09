@@ -185,8 +185,9 @@ func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut
 		np.Spec.Platform.Type = hyp.AzurePlatform
 		if np.Spec.Platform.Azure == nil {
 			np.Spec.Platform.Azure = &hyp.AzureNodePoolPlatform{
-				VMSize:  "Standard_D4s_v4",
-				ImageID: infraOut.BootImageID,
+				VMSize:     "Standard_D4s_v4",
+				ImageID:    infraOut.BootImageID,
+				DiskSizeGB: int32(120),
 			}
 		}
 	}
