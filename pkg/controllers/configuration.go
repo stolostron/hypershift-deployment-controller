@@ -1,0 +1,199 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controllers
+
+import (
+	"context"
+	"fmt"
+
+	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	workv1 "open-cluster-management.io/api/work/v1"
+)
+
+type override func(obj metav1.Object)
+
+func overrideNamespace(targetNamespace string) override {
+	return func(o metav1.Object) {
+		if len(targetNamespace) == 0 {
+			return
+		}
+		o.SetNamespace(targetNamespace)
+	}
+}
+
+func duplicateSecretWithOverride(in *corev1.Secret, ops ...override) *corev1.Secret {
+	out := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+	}
+
+	out.SetName(in.GetName())
+	out.SetLabels(in.GetLabels())
+	out.Data = in.Data
+
+	for _, o := range ops {
+		o(out)
+	}
+
+	return out
+}
+
+func (r *HypershiftDeploymentReconciler) generateSecret(ctx context.Context, key types.NamespacedName, ops ...override) (*corev1.Secret, error) {
+	origin := &corev1.Secret{}
+	if err := r.Get(ctx, key, origin); err != nil {
+		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
+	}
+
+	return duplicateSecretWithOverride(origin, ops...), nil
+}
+
+func duplicateConfigMapWithOverride(in *corev1.ConfigMap, ops ...override) *corev1.ConfigMap {
+	out := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+	}
+
+	out.SetName(in.GetName())
+	out.SetLabels(in.GetLabels())
+
+	for _, o := range ops {
+		o(out)
+	}
+
+	return out
+}
+
+func (r *HypershiftDeploymentReconciler) generateConfigMap(ctx context.Context, key types.NamespacedName, ops ...override) (*corev1.ConfigMap, error) {
+	origin := &corev1.ConfigMap{}
+	if err := r.Get(ctx, key, origin); err != nil {
+		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
+	}
+
+	return duplicateConfigMapWithOverride(origin, ops...), nil
+}
+
+// make sure all configuration resources listed at https://github.com/stolostron/backlog/issues/20243
+// are loaded to manifestwork
+func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context) loadManifest {
+	var allErr []error
+	return func(hyd *hypdeployment.HypershiftDeployment,
+		payload *[]workv1.Manifest) error {
+		//source:
+		// hyd.Spec.HostedClusterSpec.Configuration.SecretRefs
+		// hyd.Spec.HostedClusterSpec.SecretEncryption.KMS.AWS.Auth
+		// hyd.Spec.HostedClusterSpec.SecretEncryption.AESCBC.ActiveKey
+		// hyd.Spec.HostedClusterSpec.SecretEncryption.AESCBC.BackupKey
+		secretRefs := []corev1.LocalObjectReference{}
+
+		//source:
+		// hyd.Spec.HostedClusterSpec.Configuration.ConfigMapRefs
+		// hyd.Spec.NodePoolSpec.Config
+		configMapRefs := []corev1.LocalObjectReference{}
+
+		////source:
+		// hyd.Spec.HostedClusterSpec.Configuration.Items
+		items := []runtime.RawExtension{}
+
+		hcSpec := hyd.Spec.HostedClusterSpec
+
+		if hcSpec != nil {
+			hcSpecCfg := hcSpec.Configuration
+			if hcSpecCfg != nil {
+				if len(hcSpecCfg.SecretRefs) != 0 {
+					secretRefs = append(secretRefs, hcSpecCfg.SecretRefs...)
+				}
+
+				if len(hcSpecCfg.ConfigMapRefs) != 0 {
+					configMapRefs = append(configMapRefs, hcSpecCfg.ConfigMapRefs...)
+				}
+
+				if len(hcSpecCfg.Items) != 0 {
+					items = append(items, hcSpecCfg.Items...)
+				}
+
+			}
+
+			if hcSpec.SecretEncryption != nil {
+				encr := hcSpec.SecretEncryption
+				if encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
+					secretRefs = append(secretRefs, encr.KMS.AWS.Auth.Credentials)
+
+				}
+
+				if len(encr.AESCBC.ActiveKey.Name) != 0 {
+					secretRefs = append(secretRefs, encr.AESCBC.ActiveKey)
+				}
+
+				if encr.AESCBC.BackupKey != nil {
+					secretRefs = append(secretRefs, *(encr.AESCBC.BackupKey))
+				}
+			}
+
+		}
+
+		for _, np := range hyd.Spec.NodePools {
+			if len(np.Spec.Config) != 0 {
+				configMapRefs = append(configMapRefs, np.Spec.Config...)
+			}
+		}
+
+		for _, se := range secretRefs {
+			k := genKey(se, hyd)
+			t, err := r.generateSecret(ctx, k, overrideNamespace(getTargetNamespace(hyd)))
+			if err != nil {
+				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
+				allErr = append(allErr, err)
+				continue
+			}
+
+			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: t}})
+		}
+
+		for _, cm := range configMapRefs {
+			k := genKey(cm, hyd)
+			t, err := r.generateConfigMap(ctx, k, overrideNamespace(getTargetNamespace(hyd)))
+			if err != nil {
+				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
+				allErr = append(allErr, err)
+				continue
+			}
+
+			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: t}})
+		}
+
+		for _, it := range items {
+			// assuming the input templates are valid k8s inputs. meaning all the objects have unique
+			// keys
+			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: it.Object, Raw: it.Raw}})
+		}
+
+		return utilerrors.NewAggregate(allErr)
+	}
+}
+
+func genKey(r corev1.LocalObjectReference, hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
+	return types.NamespacedName{Name: r.Name, Namespace: hyd.GetNamespace()}
+}

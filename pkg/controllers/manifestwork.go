@@ -23,7 +23,6 @@ import (
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,6 +40,13 @@ const (
 	NamespaceNameSeperator        = "/"
 )
 
+//loadManifest will get hostedclsuter's crs and put them to the manifest array
+type loadManifest func(*hypdeployment.HypershiftDeployment, *[]workv1.Manifest) error
+
+func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
+	return fmt.Sprintf("%s-%s", hyd.GetName(), hyd.Spec.InfraID)
+}
+
 func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
 	if len(hyd.Spec.InfraID) == 0 {
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
@@ -51,7 +57,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		ObjectMeta: metav1.ObjectMeta{
 			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
 			// generated manifestworks are unqinue.
-			Name:      fmt.Sprintf("%s-%s", hyd.GetName(), hyd.Spec.InfraID),
+			Name:      generateManifestName(hyd),
 			Namespace: getTargetManagedCluster(hyd),
 			Annotations: map[string]string{
 				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
@@ -107,23 +113,23 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 		return ctrl.Result{},
 			r.Client.Status().Patch(r.ctx, hyd, client.MergeFrom(inHyd))
-
 	}
 
-	appendSecrets, err := r.appendReferenceSecrets(ctx, hyd)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 	payload := []workv1.Manifest{}
 
 	manifestFuncs := []loadManifest{
 		appendHostedCluster,
 		appendNodePool,
-		appendSecrets,
+		r.appendHostedClusterReferenceSecrets(ctx),
+		r.ensureConfiguration(ctx),
 	}
 
 	for _, f := range manifestFuncs {
-		f(hyd, &payload)
+		err := f(hyd, &payload)
+		if err != nil {
+			r.Log.Error(err, "failed to load paylaod to manifestwork")
+			return ctrl.Result{}, err
+		}
 	}
 
 	m.Spec.Workload.Manifests = payload
@@ -174,39 +180,25 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	return ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, nil
 }
 
-func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (loadManifest, error) {
+func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context) loadManifest {
+	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
+		pullCreds, err := r.generateSecret(ctx,
+			types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
+				Namespace: hyd.GetNamespace()})
 
-	pullCreds := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
-		Namespace: hyd.GetNamespace()}, pullCreds); err != nil {
-		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
-	}
-
-	overrideSecret := func(in *corev1.Secret) *corev1.Secret {
-		out := &corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
+		if err != nil {
+			return fmt.Errorf("failed to duplicateSecret, err %w", err)
 		}
 
-		out.SetName(in.GetName())
-		out.SetNamespace(getTargetNamespace(hyd))
-		out.SetLabels(in.GetLabels())
-		out.Data = in.Data
+		refSecrets := append(ScaffoldSecrets(hyd), pullCreds)
 
-		return out
-	}
-
-	refSecrets := append(ScaffoldSecrets(hyd), pullCreds)
-
-	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
 		for _, s := range refSecrets {
-			o := overrideSecret(s)
+			o := duplicateSecretWithOverride(s, overrideNamespace(getTargetNamespace(hyd)))
 			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: o}})
 		}
 
-	}, nil
+		return nil
+	}
 }
 
 //TODO @ianzhang366 integrate with the clusterSet logic
@@ -218,7 +210,7 @@ func getTargetManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
 	return hyd.Spec.TargetManagedCluster
 }
 
-func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
+func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 	hc := ScaffoldHostedCluster(hyd)
 
 	hc.TypeMeta = metav1.TypeMeta{
@@ -227,9 +219,11 @@ func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]wor
 	}
 
 	*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
+
+	return nil
 }
 
-func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
+func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 	for _, hdNp := range hyd.Spec.NodePools {
 		np := ScaffoldNodePool(hyd, hdNp)
 
@@ -240,4 +234,6 @@ func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.M
 
 		*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
 	}
+
+	return nil
 }
