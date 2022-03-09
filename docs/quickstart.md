@@ -1,4 +1,4 @@
-# Quick start
+# [DRAFT] Quick start
 
 You need at least one cluster to initialize as you hub. In this demostration we will start with two clusters, one will be the hub, the other the Management Cluster (the host for our control planes).
 

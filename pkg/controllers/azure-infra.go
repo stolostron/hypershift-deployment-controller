@@ -21,10 +21,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/hypershift/api/fixtures"
@@ -92,15 +92,8 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 		if hyd.Spec.Override != hypdeployment.InfraConfigureWithManifest {
 			r.Log.Info("Creating cloud credential secret")
 			cloudCredSecret := ScaffoldAzureCloudCredential(hyd, credentials)
-			if err := r.Create(r.ctx, cloudCredSecret); err != nil {
-				if err := r.Update(r.ctx, cloudCredSecret); err != nil {
-					if apierrors.IsAlreadyExists(err) {
-						err = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Could not create or update the cloud credential secret", hypdeployment.MisConfiguredReason)
-					}
-					if err != nil {
-						return ctrl.Result{}, err
-					}
-				}
+			if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, cloudCredSecret, func() error { return nil }); err != nil {
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Could not create or update the cloud credential secret", hypdeployment.MisConfiguredReason)
 			}
 		}
 		// Todo, this should be skipped and the manifestwork should generate it from a providerCredential
