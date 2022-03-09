@@ -101,7 +101,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	var err error
 
 	configureInfra := hyd.Spec.Infrastructure.Configure
-	if configureInfra {
+	if configureInfra ||
+		(hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.Azure != nil) {
 		secretName := hyd.Spec.Infrastructure.CloudProvider.Name
 		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: secretName}, &providerSecret)
 		if err != nil {
@@ -162,11 +163,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
-		log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
-		return r.createMainfestwork(ctx, req, hyd.DeepCopy())
-	}
-
 	// Work on the HostedCluster resource
 	var hc hyp.HostedCluster
 	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc)
@@ -175,6 +171,12 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
+
+		// In Azure, the providerSecret is needed for Configure true or false
+		if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+			log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
+			return r.createMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
+		}
 
 		if apierrors.IsNotFound(err) {
 
@@ -201,13 +203,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				log.Info("HostedCluster resource updated: " + hc.Name)
 			}
 		}
-	}
-
-	// Work on the NodePool resources
-	// Apply NodePool(s) if Infrastructure is AsExpected or configureInfra: false (user brings their own)
-	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
-		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
-		!configureInfra {
 
 		// We loop through what exists, so that we can delete pools if appropriate
 		var nodePools hyp.NodePoolList

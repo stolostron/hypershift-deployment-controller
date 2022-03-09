@@ -93,7 +93,7 @@ func syncManifestworkStatusToHypershiftDeployment(
 	}
 }
 
-func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
+func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -110,7 +110,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	}
 
-	appendSecrets, err := r.appendReferenceSecrets(ctx, hyd)
+	appendSecrets, err := r.appendReferenceSecrets(ctx, hyd, providerSecret)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -174,7 +174,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	return ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, nil
 }
 
-func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (loadManifest, error) {
+func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Context, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (loadManifest, error) {
 
 	pullCreds := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
@@ -197,8 +197,16 @@ func (r *HypershiftDeploymentReconciler) appendReferenceSecrets(ctx context.Cont
 
 		return out
 	}
-
-	refSecrets := append(ScaffoldSecrets(hyd), pullCreds)
+	refSecrets := []*corev1.Secret{pullCreds}
+	if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {
+		refSecrets = append(refSecrets, ScaffoldSecrets(hyd)...)
+	} else if hyd.Spec.HostedClusterSpec.Platform.Azure != nil {
+		creds, err := getAzureCloudProviderCreds(providerSecret)
+		if err != nil {
+			return nil, err
+		}
+		refSecrets = append(refSecrets, ScaffoldAzureCloudCredential(hyd, creds))
+	}
 
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) {
 		for _, s := range refSecrets {

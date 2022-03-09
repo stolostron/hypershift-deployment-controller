@@ -45,8 +45,8 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 	// Skip reconcile based on condition
 	// Does both INFRA
 	var o azure.CreateInfraOptions
-	credentials := &fixtures.AzureCreds{}
-	if err := json.Unmarshal(providerSecret.Data["osServicePrincipal.json"], &credentials); err != nil {
+	credentials, err := getAzureCloudProviderCreds(providerSecret)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
@@ -89,18 +89,21 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 		log.Info("Infrastructure configured")
 	}
 	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
-		r.Log.Info("Creating cloud credential secret")
-		cloudCredSecret := ScaffoldAzureCloudCredential(hyd, credentials)
-		if err := r.Create(r.ctx, cloudCredSecret); err != nil {
-			if err := r.Update(r.ctx, cloudCredSecret); err != nil {
-				if apierrors.IsAlreadyExists(err) {
-					err = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Could not create or update the cloud credential secret", hypdeployment.MisConfiguredReason)
-				}
-				if err != nil {
-					return ctrl.Result{}, err
+		if hyd.Spec.Override != hypdeployment.InfraConfigureWithManifest {
+			r.Log.Info("Creating cloud credential secret")
+			cloudCredSecret := ScaffoldAzureCloudCredential(hyd, credentials)
+			if err := r.Create(r.ctx, cloudCredSecret); err != nil {
+				if err := r.Update(r.ctx, cloudCredSecret); err != nil {
+					if apierrors.IsAlreadyExists(err) {
+						err = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Could not create or update the cloud credential secret", hypdeployment.MisConfiguredReason)
+					}
+					if err != nil {
+						return ctrl.Result{}, err
+					}
 				}
 			}
 		}
+		// Todo, this should be skipped and the manifestwork should generate it from a providerCredential
 		log.Info("Creating pull secret")
 		if err := r.createPullSecret(hyd, *providerSecret); err != nil {
 			return ctrl.Result{}, err
@@ -140,4 +143,10 @@ func (r *HypershiftDeploymentReconciler) destroyAzureInfrastructure(hyd *hypdepl
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+func getAzureCloudProviderCreds(providerSecret *corev1.Secret) (*fixtures.AzureCreds, error) {
+	credentials := &fixtures.AzureCreds{}
+	err := json.Unmarshal(providerSecret.Data["osServicePrincipal.json"], &credentials)
+	return credentials, err
 }
