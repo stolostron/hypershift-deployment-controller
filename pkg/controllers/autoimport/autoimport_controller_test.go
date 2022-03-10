@@ -19,11 +19,9 @@ import (
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	mcv1 "open-cluster-management.io/api/cluster/v1"
 
 	hydapi "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
-	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
@@ -38,8 +36,6 @@ func init() {
 	hydapi.AddToScheme(s)
 
 	mcv1.AddToScheme(s)
-
-	addonv1alpha1.AddToScheme(s)
 }
 
 func getRequest() ctrl.Request {
@@ -147,7 +143,7 @@ func TestReconcileCreate(t *testing.T) {
 		expectedErr     string
 	}{
 		{
-			name:       "create managed cluster and addons",
+			name:       "create managed cluster",
 			kubesecret: nil,
 			hyd:        hyd.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
@@ -156,15 +152,11 @@ func TestReconcileCreate(t *testing.T) {
 				err := client.Get(ctx, getNamespaceName("", mcName), &mc)
 				assert.Nil(t, err, "when managedCluster resource is retrieved")
 
-				var addons addonv1alpha1.ManagedClusterAddOnList
-				err = client.List(ctx, &addons, &crclient.ListOptions{Namespace: mcName})
-				assert.Nil(t, err, "list addons")
-				assert.Equal(t, len(addons.Items), len(constant.InstallAddons), "addon count")
 				assertAnnoNotContainCreateCM(t, ctx, client)
 			},
 		},
 		{
-			name:       "create managed cluster, addons and secret",
+			name:       "create managed cluster and secret",
 			kubesecret: GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
 			hyd:        hyd.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
@@ -175,11 +167,6 @@ func TestReconcileCreate(t *testing.T) {
 				var autoImportSecret corev1.Secret
 				err = client.Get(ctx, getNamespaceName(mc.Name, "auto-import-secret"), &autoImportSecret)
 				assert.Nil(t, err, "managedCluster resource is retrieved")
-
-				var addons addonv1alpha1.ManagedClusterAddOnList
-				err = client.List(ctx, &addons)
-				assert.Nil(t, err, "list addons")
-				assert.Equal(t, len(addons.Items), len(constant.InstallAddons), "addon count")
 
 				assertAnnoCreateCMFalse(t, ctx, client)
 			},
@@ -202,11 +189,6 @@ func TestReconcileCreate(t *testing.T) {
 				var mc mcv1.ManagedCluster
 				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
 				assert.Nil(t, err, "managedCluster resource is retrieved")
-
-				var addons addonv1alpha1.ManagedClusterAddOnList
-				err = client.List(ctx, &addons)
-				assert.Nil(t, err, "list addons")
-				assert.Equal(t, len(addons.Items), 0, "addon count")
 
 				assertAnnoNotContainCreateCM(t, ctx, client)
 			},

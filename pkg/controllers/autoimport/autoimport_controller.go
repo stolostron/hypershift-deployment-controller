@@ -26,8 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	// kacv1 "github.com/stolostron/klusterlet-addon-controller/pkg/apis/agent/v1"
-	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	mcv1 "open-cluster-management.io/api/cluster/v1"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
@@ -58,7 +56,6 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclusters,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclustersets/join,verbs=create
 //+kubebuilder:rbac:groups=register.open-cluster-management.io,resources=managedclusters/accept,verbs=update
-//+kubebuilder:rbac:groups=addon.open-cluster-management.io,resources=managedclusteraddons,verbs=create;delete;get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -88,9 +85,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		"targetNamespace", hyd.Spec.TargetNamespace, "targetManagedCluster", hyd.Spec.TargetManagedCluster)
 
 	managedClusterName := helper.ManagedClusterName(&hyd)
-	// Delete the ManagedCluster and Addons
+	// Delete the ManagedCluster
 	if hyd.DeletionTimestamp != nil {
-		if err := deleteResources(r, managedClusterName); err != nil {
+		if err := deleteManagedCluster(r, managedClusterName); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -101,7 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if len(hyd.Annotations) > 0 {
 		aValue, found := hyd.Annotations[CREATECM]
 		if found && strings.ToLower(aValue) == "false" {
-			log.V(WARN).Info("Skip creation of managedCluster and addons")
+			log.V(WARN).Info("Skip creation of managedCluster")
 			return ctrl.Result{}, nil
 		}
 	}
@@ -116,12 +113,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Once we are sure there is a ManagedCluster, we set the finalizer
 	if !controllerutil.ContainsFinalizer(&hyd, FINALIZER) {
 		return ctrl.Result{}, setFinalizer(r, &hyd)
-	}
-
-	// Addons
-	err = ensureAddons(r, managedClusterName)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	if !meta.IsStatusConditionTrue(managedCluster.Status.Conditions, mcv1.ManagedClusterConditionJoined) {
@@ -226,44 +217,6 @@ func ensureManagedCluster(r *Reconciler,
 	return &mc, nil
 }
 
-func ensureAddons(r *Reconciler, namespace string) error {
-	for _, addon := range constant.InstallAddons {
-		if err := ensureManagedClusterAddon(r, namespace, addon); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func ensureManagedClusterAddon(r *Reconciler, namespace, name string) error {
-	log := r.Log.WithValues("addonName", name)
-	ctx := context.Background()
-
-	var addon addonv1alpha1.ManagedClusterAddOn
-	err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &addon)
-	if k8serrors.IsNotFound(err) {
-
-		log.V(INFO).Info("Create a new ManagedClusterAddon resource")
-		addon.Name = name
-		addon.Namespace = namespace
-		addon.Spec.InstallNamespace = constant.DefaultAddonInstallNamespace
-
-		if err = r.Create(ctx, &addon, &client.CreateOptions{}); err != nil {
-			log.V(ERROR).Info("Could not create ManagedClusterAddon resource")
-			return err
-		}
-
-		return nil
-	}
-	if err != nil {
-		log.V(WARN).Info("Error when attempting to retreive the ManagedClusterAddon resource")
-		return err
-	}
-
-	return nil
-}
-
 func ensureAutoImportSecret(r *Reconciler, managedClusterName string, kubeSecret *corev1.Secret) error {
 	log := r.Log.WithValues("managedClusterName", managedClusterName)
 	ctx := context.Background()
@@ -321,13 +274,6 @@ func removeFinalizer(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) err
 
 }
 
-func deleteResources(r *Reconciler, managedClusterName string) error {
-	if err := deleteManagedCluster(r, managedClusterName); err != nil {
-		return err
-	}
-	return deleteAddons(r, managedClusterName)
-}
-
 func deleteManagedCluster(r *Reconciler, name string) error {
 	ctx := context.Background()
 	log := r.Log.WithValues("managedClusterName", name)
@@ -354,45 +300,5 @@ func deleteManagedCluster(r *Reconciler, name string) error {
 	}
 
 	log.V(INFO).Info("Deleted ManagedCluster resource")
-	return nil
-}
-
-func deleteManagedClusterAddon(r *Reconciler, namespace, name string) error {
-	log := r.Log.WithValues("addonName", name)
-	ctx := context.Background()
-
-	var addon addonv1alpha1.ManagedClusterAddOn
-	err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &addon)
-	if k8serrors.IsNotFound(err) {
-		log.V(INFO).Info("The ManagedClusterAddon resource was not found, can not delete")
-		return nil
-	}
-	if err != nil {
-		log.V(WARN).Info("Error when attempting to retreive the ManagedClusterAddon resource", "error", err)
-		return err
-	}
-
-	if addon.DeletionTimestamp != nil {
-		log.V(INFO).Info("The ManagedClusterAddon resource is already being deleted")
-		return nil
-	}
-
-	err = r.Delete(ctx, &addon)
-	if err != nil {
-		log.V(WARN).Info("Error while deleting ManagedClusterAddon resource", "error", err)
-		return err
-	}
-
-	log.V(INFO).Info("Deleted ManagedClusterAddon resource")
-	return nil
-}
-
-func deleteAddons(r *Reconciler, namespace string) error {
-	for _, addon := range constant.InstallAddons {
-		if err := deleteManagedClusterAddon(r, namespace, addon); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
