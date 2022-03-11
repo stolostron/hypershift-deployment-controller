@@ -2,7 +2,6 @@ package helper
 
 import (
 	"fmt"
-	"strings"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 )
@@ -25,10 +24,7 @@ func GetTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
 }
 
 func ManagedClusterName(hyd *hypdeployment.HypershiftDeployment) string {
-	if strings.HasPrefix(hyd.Spec.InfraID, hyd.GetName()) {
-		return hyd.Spec.InfraID
-	}
-	return fmt.Sprintf("%s-%s", hyd.GetName(), hyd.Spec.InfraID)
+	return hyd.Spec.InfraID
 }
 
 // TODO(zhujian7) get this from hyd.Status.Kubeconfig

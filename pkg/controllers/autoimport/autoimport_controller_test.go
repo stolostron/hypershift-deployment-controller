@@ -4,6 +4,7 @@ package autoimport
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	mcv1 "open-cluster-management.io/api/cluster/v1"
 
 	hydapi "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
@@ -151,7 +153,8 @@ func TestReconcileCreate(t *testing.T) {
 				mcName := helper.ManagedClusterName(hyd)
 				err := client.Get(ctx, getNamespaceName("", mcName), &mc)
 				assert.Nil(t, err, "when managedCluster resource is retrieved")
-
+				assert.Equal(t, mc.Annotations[constant.AnnoHypershiftDeployment],
+					fmt.Sprintf("%s%s%s", hyd.Namespace, constant.NamespaceNameSeperator, hyd.Name))
 				assertAnnoNotContainCreateCM(t, ctx, client)
 			},
 		},

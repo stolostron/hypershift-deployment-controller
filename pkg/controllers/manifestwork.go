@@ -33,13 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
 const (
 	ManifestTargetNamespace       = "manifestwork-target-namespace"
 	CreatedByHypershiftDeployment = "hypershift-deployment.open-cluster-management.io/created-by"
-	NamespaceNameSeperator        = "/"
 )
 
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
@@ -64,7 +64,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 			Annotations: map[string]string{
 				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
 					hyd.GetNamespace(),
-					NamespaceNameSeperator,
+					constant.NamespaceNameSeperator,
 					hyd.GetName()),
 			},
 		},

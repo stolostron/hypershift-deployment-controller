@@ -105,7 +105,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	managementClusterName := helper.GetTargetManagedCluster(&hyd)
 	// ManagedCluster
-	managedCluster, err := ensureManagedCluster(r, managedClusterName, managementClusterName)
+	managedCluster, err := ensureManagedCluster(r, req.NamespacedName, managedClusterName, managementClusterName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -147,7 +147,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return []reconcile.Request{}
 			}
 
-			res := strings.Split(an[constant.AnnoHypershiftDeployment], "/")
+			res := strings.Split(an[constant.AnnoHypershiftDeployment], constant.NamespaceNameSeperator)
 			if len(res) != 2 {
 				log.Log.Error(fmt.Errorf("failed to get hypershiftDeployment"), "annotation invalid",
 					"constant.AnnoHypershiftDeployment", an[constant.AnnoHypershiftDeployment])
@@ -184,7 +184,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).Named("hypershiftimport").Complete(r)
 }
 
-func ensureManagedCluster(r *Reconciler,
+func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 	managedClusterName, managementClusterName string) (*mcv1.ManagedCluster, error) {
 	log := r.Log.WithValues("managedClusterName", managedClusterName)
 	ctx := context.Background()
@@ -199,6 +199,8 @@ func ensureManagedCluster(r *Reconciler,
 		mc.ObjectMeta.Annotations = map[string]string{
 			"import.open-cluster-management.io/klusterlet-deploy-mode":  "Detached",
 			"import.open-cluster-management.io/management-cluster-name": managementClusterName,
+			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
+				hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
 		}
 
 		if err = r.Create(ctx, &mc, &client.CreateOptions{}); err != nil {
