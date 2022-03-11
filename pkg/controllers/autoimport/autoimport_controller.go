@@ -197,6 +197,7 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		mc.Spec.HubAcceptsClient = true
 
 		mc.ObjectMeta.Annotations = map[string]string{
+			// TODO(zhujian7): change `Detached` to `Hosted` after the upstream ocm changes this name.
 			"import.open-cluster-management.io/klusterlet-deploy-mode":  "Detached",
 			"import.open-cluster-management.io/management-cluster-name": managementClusterName,
 			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
