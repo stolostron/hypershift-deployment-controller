@@ -41,6 +41,7 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/util"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -481,7 +482,7 @@ func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) erro
 					return []reconcile.Request{}
 				}
 
-				res := strings.Split(an[CreatedByHypershiftDeployment], NamespaceNameSeperator)
+				res := strings.Split(an[CreatedByHypershiftDeployment], constant.NamespaceNameSeperator)
 
 				if len(res) != 2 {
 					r.Log.Error(fmt.Errorf("failed to get manifestwork's hypershiftDeployment"), "")

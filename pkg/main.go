@@ -25,19 +25,21 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
+	hyp "github.com/openshift/hypershift/api/v1alpha1"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	mcv1 "open-cluster-management.io/api/cluster/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
-	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	clusteropenclustermanagementiov1alpha1 "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/controllers"
-	"go.uber.org/zap"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/controllers/autoimport"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -53,6 +55,8 @@ func init() {
 	utilruntime.Must(hyp.AddToScheme(scheme))
 
 	utilruntime.Must(workv1.AddToScheme(scheme))
+
+	utilruntime.Must(mcv1.AddToScheme(scheme))
 
 	//+kubebuilder:scaffold:scheme
 }
@@ -101,6 +105,14 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "HypershiftDeployment")
+		os.Exit(1)
+	}
+
+	if err = (&autoimport.Reconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AutoImport")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
