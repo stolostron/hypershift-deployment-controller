@@ -39,6 +39,7 @@ const WARN = -1
 const ERROR = -2
 const FINALIZER = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"
 const CREATECM = "cluster.open-cluster-management.io/createmanagedcluster"
+const provisionerAnnotation = "cluster.open-cluster-management.io/provisioner"
 
 // Reconciler reconciles a HypershiftDeployment object to
 // import the related hypershift hosted cluster to the hub cluster.
@@ -201,6 +202,10 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 			"import.open-cluster-management.io/management-cluster-name": managementClusterName,
 			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
 				hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
+			// format is <name>.<namespace>.<kind>.<apiversion>
+			// klusterlet addon controller will use this annotation to create klusterletaddonconfig for the hypershift clusters.
+			provisionerAnnotation: fmt.Sprintf("%s.%s.HypershiftDeployment.cluster.open-cluster-management.io",
+				hydNamespaceName.Name, hydNamespaceName.Namespace),
 		}
 
 		if err = r.Create(ctx, &mc, &client.CreateOptions{}); err != nil {
