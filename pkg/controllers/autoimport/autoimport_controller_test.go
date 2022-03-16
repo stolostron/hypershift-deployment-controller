@@ -124,7 +124,7 @@ func assertAnnoCreateCMFalse(t *testing.T, ctx context.Context, client crclient.
 	err := client.Get(ctx, getNamespaceName(HYD_NAMESPACE, HYD_NAME), &hyd)
 	assert.Nil(t, err, "hypershift deployment resource is retrieved")
 	assert.Contains(t, hyd.Annotations, CREATECM, "annotation should contain create cm")
-	assert.Equal(t, hyd.Annotations[CREATECM], "false", "assert annotation value be false")
+	assert.Equal(t, "false", hyd.Annotations[CREATECM], "assert create cm annotation value be false")
 }
 
 func assertAnnoNotContainCreateCM(t *testing.T, ctx context.Context, client crclient.Client) {
@@ -153,8 +153,16 @@ func TestReconcileCreate(t *testing.T) {
 				mcName := helper.ManagedClusterName(hyd)
 				err := client.Get(ctx, getNamespaceName("", mcName), &mc)
 				assert.Nil(t, err, "when managedCluster resource is retrieved")
-				assert.Equal(t, mc.Annotations[constant.AnnoHypershiftDeployment],
-					fmt.Sprintf("%s%s%s", hyd.Namespace, constant.NamespaceNameSeperator, hyd.Name))
+
+				assert.Equal(t, fmt.Sprintf("%s.%s.HypershiftDeployment.cluster.open-cluster-management.io",
+					hyd.Name, hyd.Namespace), mc.Annotations[provisionerAnnotation], "assert provisioner annotation value")
+				assert.Equal(t, fmt.Sprintf("%s%s%s", hyd.Namespace, constant.NamespaceNameSeperator, hyd.Name),
+					mc.Annotations[constant.AnnoHypershiftDeployment], "assert hypershift deployment annotation value")
+				assert.Equal(t, "Hosted",
+					mc.Annotations["import.open-cluster-management.io/klusterlet-deploy-mode"], "assert hosted mode annotation value")
+				assert.Equal(t, helper.GetTargetManagedCluster(hyd),
+					mc.Annotations["import.open-cluster-management.io/management-cluster-name"], "assert management cluster annotation value")
+
 				assertAnnoNotContainCreateCM(t, ctx, client)
 			},
 		},
