@@ -197,8 +197,7 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		mc.Spec.HubAcceptsClient = true
 
 		mc.ObjectMeta.Annotations = map[string]string{
-			// TODO(zhujian7): change `Detached` to `Hosted` after the upstream ocm changes this name.
-			"import.open-cluster-management.io/klusterlet-deploy-mode":  "Detached",
+			"import.open-cluster-management.io/klusterlet-deploy-mode":  "Hosted",
 			"import.open-cluster-management.io/management-cluster-name": managementClusterName,
 			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
 				hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
@@ -250,7 +249,7 @@ func ensureAutoImportSecret(r *Reconciler, managedClusterName string, kubeSecret
 }
 
 func ensureCreateManagedClusterAnnotationFalse(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
-	//Make sure we don't create the ManagedCluster if it is detached, uses the finalizer to update hyd
+	//Make sure we don't create the ManagedCluster if it is detached
 	if len(hyd.Annotations) > 0 {
 		hyd.Annotations[CREATECM] = "false"
 	} else {
