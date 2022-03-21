@@ -107,7 +107,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
 	// Since you can omit the nodePool, we only check hostedClusterSpec
 	if hyd.Spec.HostedClusterSpec == nil {
-		r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
+		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
 		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec is nil")
 		return ctrl.Result{}, nil
 	}
