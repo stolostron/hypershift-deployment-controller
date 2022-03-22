@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -522,4 +524,36 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	var testNP hyp.NodePool
 	err = client.Get(context.Background(), getNN, &testNP)
 	assert.Nil(t, err, "err is Nil when NodePool is successfully created")
+}
+
+func TestConfigureFalseWithManifestWork(t *testing.T) {
+
+	client := initClient()
+
+	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name)
+	testHD.Spec.Override = hyd.InfraConfigureWithManifest
+	testHD.Spec.TargetManagedCluster = "local-host"
+	testHD.Spec.TargetNamespace = "multicluster-engine"
+
+	client.Create(context.Background(), testHD)
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+	}
+	_, err := hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successful")
+
+	var resultHD hyd.HypershiftDeployment
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+	assert.True(t, meta.IsStatusConditionFalse(resultHD.Status.Conditions, string(hyd.WorkConfigured)), "is true when ManifestWork is not configured correctly")
+
+	err = client.Delete(context.Background(), &resultHD)
+	assert.Nil(t, err, "is nill when HypershiftDeployment resource is deleted")
+
+	_, err = hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile on delete was successful")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.True(t, errors.IsNotFound(err), "is not found when HypershiftDeployment resource is deleted successfully")
 }

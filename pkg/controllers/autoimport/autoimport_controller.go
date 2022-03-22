@@ -288,7 +288,7 @@ func deleteManagedCluster(r *Reconciler, name string) error {
 	var mc mcv1.ManagedCluster
 	err := r.Get(ctx, types.NamespacedName{Name: name}, &mc)
 	if k8serrors.IsNotFound(err) {
-		log.V(INFO).Info("The ManagedCluster resource was not found, can not delete")
+		log.V(INFO).Info("The ManagedCluster resource was not found, skipped")
 		return nil
 	}
 	if err != nil {

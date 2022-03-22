@@ -57,6 +57,8 @@ const (
 	// WorkDegraded represents that the current state of work does not match
 	// the desired state for a certain period.
 	WorkDegraded ConditionType = "Degraded"
+	// WorkConfigured indicates the status of applying the ManifestWork
+	WorkConfigured ConditionType = "ManifestWorkConfigured"
 
 	InfraOverrideDestroy       = "ORPHAN"
 	InfraConfigureOnly         = "INFRA-ONLY"

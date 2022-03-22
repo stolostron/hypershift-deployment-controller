@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -102,6 +103,15 @@ func syncManifestworkStatusToHypershiftDeployment(
 }
 
 func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
+
+	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
+	// Since you can omit the nodePool, we only check hostedClusterSpec
+	if hyd.Spec.HostedClusterSpec == nil {
+		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
+		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec is nil")
+		return ctrl.Result{}, nil
+	}
+
 	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err

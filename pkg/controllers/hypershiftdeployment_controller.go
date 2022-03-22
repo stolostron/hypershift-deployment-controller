@@ -444,7 +444,8 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		}
 	}
 
-	if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
+	if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy &&
+		hyd.Spec.Infrastructure.Configure {
 		// Infrastructure is the last step
 		if hyd.Spec.Infrastructure.Platform.AWS != nil {
 			if result, err := r.destroyAWSInfrastructure(hyd, providerSecret); err != nil {
