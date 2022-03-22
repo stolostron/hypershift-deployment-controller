@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +29,13 @@ import (
 
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
+)
+
+const (
+	oidcStorageProvider        = "oidc-storage-provider-s3-config"
+	oidcSPNamespace            = "kube-public"
+	hypershiftBucketSecretName = "hypershift-operator-oidc-provider-s3-credentials"
 )
 
 func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
@@ -89,7 +97,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 
 		oHyd = *hyd.DeepCopy()
 
-		oidcSPName, oidcSPRegion, iamErr := oidcDiscoveryURL(r, hyd.Spec.InfraID)
+		oidcSPName, oidcSPRegion, iamErr := oidcDiscoveryURL(r, hyd)
 		if iamErr == nil {
 			iamOpt := aws.CreateIAMOptions{
 				Region:                          hyd.Spec.Infrastructure.Platform.AWS.Region,
@@ -182,4 +190,24 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) (string, string, error) {
+	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+		// If the override is manifestwork that means we are using the hypershift created by mce hypershift-addon,
+		// so there must exist a hypershift bucket secret in the management cluster namespace.
+		secret := &corev1.Secret{}
+		if err := r.Client.Get(context.Background(), types.NamespacedName{
+			Name: hypershiftBucketSecretName, Namespace: helper.GetTargetManagedCluster(hyd)}, secret); err != nil {
+			return "", "", err
+		}
+
+		return string(secret.Data["bucket"]), string(secret.Data["region"]), nil
+	}
+
+	cm := &corev1.ConfigMap{}
+	if err := r.Client.Get(context.Background(), types.NamespacedName{Name: oidcStorageProvider, Namespace: oidcSPNamespace}, cm); err != nil {
+		return "", "", err
+	}
+	return cm.Data["name"], cm.Data["region"], nil
 }

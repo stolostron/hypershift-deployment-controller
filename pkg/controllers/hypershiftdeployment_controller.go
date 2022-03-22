@@ -23,11 +23,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -37,14 +40,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/go-logr/logr"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/util"
+	workv1 "open-cluster-management.io/api/work/v1"
+
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	workv1 "open-cluster-management.io/api/work/v1"
 )
 
 // HypershiftDeploymentReconciler reconciles a HypershiftDeployment object
@@ -58,8 +59,6 @@ type HypershiftDeploymentReconciler struct {
 const (
 	destroyFinalizer       = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
 	HostedClusterFinalizer = "hypershift.openshift.io/used-by-hostedcluster"
-	oidcStorageProvider    = "oidc-storage-provider-s3-config"
-	oidcSPNamespace        = "kube-public"
 	AutoInfraLabelName     = "hypershift.openshift.io/auto-created-for-infra"
 	InfraLabelName         = "hypershift.openshift.io/infra-id"
 )
@@ -259,15 +258,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	return ctrl.Result{}, nil
 }
 
-func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, infraID string) (string, string, error) {
-
-	cm := &corev1.ConfigMap{}
-	if err := r.Client.Get(context.Background(), types.NamespacedName{Name: oidcStorageProvider, Namespace: oidcSPNamespace}, cm); err != nil {
-		return "", "", err
-	}
-	return cm.Data["name"], cm.Data["region"], nil
-}
-
 func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.HypershiftDeployment, providerSecret corev1.Secret) error {
 
 	buildPullSecret := &corev1.Secret{
@@ -394,7 +384,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	inHyd := hyd.DeepCopy()
 
 	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
-		log.Info("Removing Manifestwork and wait for hostedclsuter and noodpool to be cleaned up.")
+		log.Info("Removing Manifestwork and wait for hostedclsuter and nodepool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
 
 		if stErr := r.Client.Status().Patch(ctx, hyd, client.MergeFrom(inHyd)); stErr != nil {

@@ -32,7 +32,7 @@ import (
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 )
 
-const CCredsSuffix = "-cloud-credentials"
+const CCredsSuffix = "-cloud-credentials" // #nosec G101
 
 func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 	oHyd := *hyd.DeepCopy()
