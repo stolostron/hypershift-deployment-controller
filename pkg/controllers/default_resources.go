@@ -51,7 +51,7 @@ func getReleaseImagePullSpec() string {
 }
 
 func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
-	return &hyp.HostedCluster{
+	hostedCluster := &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
 			Namespace: helper.GetTargetNamespace(hyd),
@@ -61,6 +61,13 @@ func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedC
 		},
 		Spec: *hyd.Spec.HostedClusterSpec,
 	}
+
+	// Pass the control plane operator image annotation.
+	// This is used for development and e2e workflows
+	if val, ok := hyd.Annotations[hyp.ControlPlaneOperatorImageAnnotation]; ok {
+		hostedCluster.Annotations[hyp.ControlPlaneOperatorImageAnnotation] = val
+	}
+	return hostedCluster
 }
 
 // Creates an instance of ServicePublishingStrategyMapping
@@ -199,7 +206,7 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 		}
 		if np.Spec.Platform.AWS.SecurityGroups == nil {
 			np.Spec.Platform.AWS.SecurityGroups = []hyp.AWSResourceReference{
-				hyp.AWSResourceReference{
+				{
 					ID: &infraOut.SecurityGroupID,
 				},
 			}
@@ -213,7 +220,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 
 	if len(hyd.Spec.NodePools) == 0 {
 		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{
-			&hypdeployment.HypershiftNodePools{
+			{
 				Name: hyd.Name,
 				Spec: hyp.NodePoolSpec{
 					ClusterName: hyd.Name,
