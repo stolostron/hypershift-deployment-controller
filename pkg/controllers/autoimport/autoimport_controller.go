@@ -38,7 +38,7 @@ const INFO = 0
 const WARN = -1
 const ERROR = -2
 const FINALIZER = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"
-const CREATECM = "cluster.open-cluster-management.io/createmanagedcluster"
+const createManagedClusterAnnotation = "cluster.open-cluster-management.io/createmanagedcluster"
 const provisionerAnnotation = "cluster.open-cluster-management.io/provisioner"
 
 // Reconciler reconciles a HypershiftDeployment object to
@@ -97,7 +97,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Do not exit till this point when importmanagedcluster=false, so deletion will work properly if manually imported
 	if len(hyd.Annotations) > 0 {
-		aValue, found := hyd.Annotations[CREATECM]
+		aValue, found := hyd.Annotations[createManagedClusterAnnotation]
 		if found && strings.ToLower(aValue) == "false" {
 			log.V(WARN).Info("Skip creation of managedCluster")
 			return ctrl.Result{}, nil
@@ -130,6 +130,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
+	// Make sure we don't create the ManagedCluster if it is detached
 	return ctrl.Result{}, ensureCreateManagedClusterAnnotationFalse(r, &hyd)
 }
 
@@ -254,19 +255,24 @@ func ensureAutoImportSecret(r *Reconciler, managedClusterName string, kubeSecret
 }
 
 func ensureCreateManagedClusterAnnotationFalse(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
-	//Make sure we don't create the ManagedCluster if it is detached
-	if len(hyd.Annotations) > 0 {
-		hyd.Annotations[CREATECM] = "false"
-	} else {
-		hyd.ObjectMeta.Annotations = map[string]string{CREATECM: "false"}
+	if createmc, ok := hyd.Annotations[createManagedClusterAnnotation]; ok && createmc == "false" {
+		return nil
 	}
-	return r.Update(context.Background(), hyd)
+
+	patch := client.MergeFrom(hyd.DeepCopy())
+	if hyd.Annotations == nil {
+		hyd.Annotations = make(map[string]string)
+	}
+
+	hyd.Annotations[createManagedClusterAnnotation] = "false"
+	return r.Client.Patch(context.TODO(), hyd, patch)
 }
 
 func setFinalizer(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
+	patch := client.MergeFrom(hyd.DeepCopy())
 	controllerutil.AddFinalizer(hyd, FINALIZER)
 	r.Log.V(INFO).Info("Added finalizer on hypershift deployment: " + hyd.Name)
-	return r.Update(context.Background(), hyd)
+	return r.Client.Patch(context.TODO(), hyd, patch)
 }
 
 func removeFinalizer(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
@@ -274,11 +280,10 @@ func removeFinalizer(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) err
 		return nil
 	}
 
+	patch := client.MergeFrom(hyd.DeepCopy())
 	controllerutil.RemoveFinalizer(hyd, FINALIZER)
-
 	r.Log.V(INFO).Info("Removed finalizer on hypershift deployment: " + hyd.Name)
-	return r.Update(context.Background(), hyd)
-
+	return r.Client.Patch(context.TODO(), hyd, patch)
 }
 
 func deleteManagedCluster(r *Reconciler, name string) error {

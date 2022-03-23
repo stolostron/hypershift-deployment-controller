@@ -119,19 +119,26 @@ func GetAutoImportReconciler() *Reconciler {
 	}
 }
 
-func assertAnnoCreateCMFalse(t *testing.T, ctx context.Context, client crclient.Client) {
+func assertAnnoCreateMCFalse(t *testing.T, ctx context.Context, client crclient.Client) {
 	var hyd hydapi.HypershiftDeployment
 	err := client.Get(ctx, getNamespaceName(HYD_NAMESPACE, HYD_NAME), &hyd)
 	assert.Nil(t, err, "hypershift deployment resource is retrieved")
-	assert.Contains(t, hyd.Annotations, CREATECM, "annotation should contain create cm")
-	assert.Equal(t, "false", hyd.Annotations[CREATECM], "assert create cm annotation value be false")
+	assert.Contains(t, hyd.Annotations, createManagedClusterAnnotation, "annotation should contain create cm")
+	assert.Equal(t, "false", hyd.Annotations[createManagedClusterAnnotation], "assert create cm annotation value be false")
 }
 
-func assertAnnoNotContainCreateCM(t *testing.T, ctx context.Context, client crclient.Client) {
+func assertAnnoNotContainCreateMC(t *testing.T, ctx context.Context, client crclient.Client) {
 	var hyd hydapi.HypershiftDeployment
 	err := client.Get(ctx, getNamespaceName(HYD_NAMESPACE, HYD_NAME), &hyd)
 	assert.Nil(t, err, "hypershift deployment resource is retrieved")
-	assert.NotContains(t, hyd.Annotations, CREATECM, "annotation should not contain create cm")
+	assert.NotContains(t, hyd.Annotations, createManagedClusterAnnotation, "annotation should not contain create cm")
+}
+
+func assertContainFinalizer(t *testing.T, ctx context.Context, client crclient.Client) {
+	var hyd hydapi.HypershiftDeployment
+	err := client.Get(ctx, getNamespaceName(HYD_NAMESPACE, HYD_NAME), &hyd)
+	assert.Nil(t, err, "hypershift deployment resource is retrieved")
+	assert.Contains(t, hyd.Finalizers, FINALIZER, "finalizer should be contained")
 }
 
 func TestReconcileCreate(t *testing.T) {
@@ -163,7 +170,7 @@ func TestReconcileCreate(t *testing.T) {
 				assert.Equal(t, helper.GetTargetManagedCluster(hyd),
 					mc.Annotations["import.open-cluster-management.io/management-cluster-name"], "assert management cluster annotation value")
 
-				assertAnnoNotContainCreateCM(t, ctx, client)
+				assertAnnoNotContainCreateMC(t, ctx, client)
 			},
 		},
 		{
@@ -179,13 +186,13 @@ func TestReconcileCreate(t *testing.T) {
 				err = client.Get(ctx, getNamespaceName(mc.Name, "auto-import-secret"), &autoImportSecret)
 				assert.Nil(t, err, "managedCluster resource is retrieved")
 
-				assertAnnoCreateCMFalse(t, ctx, client)
+				assertAnnoCreateMCFalse(t, ctx, client)
 			},
 		},
 		{
 			name:       "should not create managed cluster, annotation false",
 			kubesecret: GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
-			hyd:        setAnnotationHYD(hyd.DeepCopy(), map[string]string{CREATECM: "false"}),
+			hyd:        setAnnotationHYD(hyd.DeepCopy(), map[string]string{createManagedClusterAnnotation: "false"}),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
@@ -201,7 +208,8 @@ func TestReconcileCreate(t *testing.T) {
 				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
 				assert.Nil(t, err, "managedCluster resource is retrieved")
 
-				assertAnnoNotContainCreateCM(t, ctx, client)
+				assertContainFinalizer(t, ctx, client)
+				assertAnnoNotContainCreateMC(t, ctx, client)
 			},
 		},
 	}
