@@ -109,7 +109,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 	// We need a targetManagedCluster if we use ManifestWork
 	if len(hyd.Spec.TargetManagedCluster) == 0 {
 		r.Log.Error(errors.New("targetManagedCluster is empty"), "Spec.targetManagedCluster needs a ManagedCluster name")
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Missing targetManagedCluster for override: MANIFESTWORK", hypdeployment.MisConfiguredReason)
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Missing targetManagedCluster with override: MANIFESTWORK", hypdeployment.MisConfiguredReason)
 	}
 
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
@@ -209,7 +209,19 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-		pullCreds := r.scaffoldPullSecret(hyd, *providerSecret)
+		var pullCreds *corev1.Secret
+		var err error
+		if hyd.Spec.Infrastructure.Configure == false {
+			pullCreds, err = r.generateSecret(ctx,
+				types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
+					Namespace: hyd.GetNamespace()})
+
+			if err != nil {
+				return fmt.Errorf("failed to duplicateSecret, err %w", err)
+			}
+		} else {
+			pullCreds = r.scaffoldPullSecret(hyd, *providerSecret)
+		}
 
 		refSecrets := []*corev1.Secret{pullCreds}
 		if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {
