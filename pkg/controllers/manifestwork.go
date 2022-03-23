@@ -55,11 +55,12 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
 
+	targetNamespace := helper.GetTargetNamespace(hyd)
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
-			// generated manifestworks are unqinue.
+			// generated manifestworks are unique.
 			Name:      generateManifestName(hyd),
 			Namespace: helper.GetTargetManagedCluster(hyd),
 			Annotations: map[string]string{
@@ -69,11 +70,34 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 					hyd.GetName()),
 			},
 		},
-		Spec: workv1.ManifestWorkSpec{},
-	}
-
-	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
-		w.Spec.DeleteOption = &workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}
+		Spec: workv1.ManifestWorkSpec{
+			Workload: workv1.ManifestsTemplate{
+				Manifests: []workv1.Manifest{
+					{
+						RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: targetNamespace,
+							},
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "Namespace",
+								APIVersion: corev1.SchemeGroupVersion.String(),
+							},
+						}},
+					},
+				},
+			},
+			DeleteOption: &workv1.DeleteOption{
+				PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
+				SelectivelyOrphan: &workv1.SelectivelyOrphan{
+					OrphaningRules: []workv1.OrphaningRule{
+						{
+							Resource: "namespaces",
+							Name:     targetNamespace,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	return w, nil
@@ -144,7 +168,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		}
 	}
 
-	m.Spec.Workload.Manifests = payload
+	m.Spec.Workload.Manifests = append(m.Spec.Workload.Manifests, payload...)
 
 	// a placeholder for later use
 	noOp := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {

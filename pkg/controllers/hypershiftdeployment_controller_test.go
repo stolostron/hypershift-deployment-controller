@@ -242,7 +242,7 @@ type kindAndKey struct {
 }
 
 // TestManifestWorkFlow tests when override is set to manifestwork, test if the manifestwork is created
-// and referenece secret is put into manifestwork payload
+// and reference secret is put into manifestwork payload
 func TestManifestWorkFlow(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
@@ -292,35 +292,41 @@ func TestManifestWorkFlow(t *testing.T) {
 	assert.Nil(t, err, "err nil when manifestwork generated")
 
 	requiredResource := map[kindAndKey]bool{
-		kindAndKey{
+		{
+			GroupVersionKind: schema.GroupVersionKind{
+				Group: "", Version: "v1", Kind: "Namespace"},
+			NamespacedName: types.NamespacedName{
+				Name: "default", Namespace: ""}}: false,
+
+		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "hypershift.openshift.io", Version: "v1alpha1", Kind: "HostedCluster"},
 			NamespacedName: genKeyFromObject(testHD)}: false,
 
-		kindAndKey{
+		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "hypershift.openshift.io", Version: "v1alpha1", Kind: "NodePool"},
 			NamespacedName: genKeyFromObject(testHD)}: false,
 
-		kindAndKey{
+		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
 				Name: "test1-node-mgmt-creds", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
-		kindAndKey{
+		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
 				Name: "test1-cpo-creds", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
-		kindAndKey{
+		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
 				Name: "test1-node-mgmt-creds", Namespace: helper.GetTargetNamespace(testHD)}}: false,
 
-		kindAndKey{
+		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
