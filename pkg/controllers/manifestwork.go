@@ -51,6 +51,8 @@ func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
 }
 
 func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
+
+	// TODO @jnpacker, check for the managedCluster as well, or where we validate ClusterSet
 	if len(hyd.Spec.InfraID) == 0 {
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
@@ -104,17 +106,30 @@ func syncManifestworkStatusToHypershiftDeployment(
 
 func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
+	// We need a targetManagedCluster if we use ManifestWork
+	if len(hyd.Spec.TargetManagedCluster) == 0 {
+		r.Log.Error(errors.New("targetManagedCluster is empty"), "Spec.targetManagedCluster needs a ManagedCluster name")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Missing targetManagedCluster for override: MANIFESTWORK", hypdeployment.MisConfiguredReason)
+	}
+
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
 	// Since you can omit the nodePool, we only check hostedClusterSpec
 	if hyd.Spec.HostedClusterSpec == nil {
-		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
 		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec is nil")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
 	}
 
 	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// This is a special check to make sure these values are provided as they are Not part of the standard
+	// HostedClusterSpec
+	if hyd.Spec.Credentials == nil ||
+		hyd.Spec.Credentials.AWS == nil {
+		r.Log.Error(errors.New("hyd.Spec.Credentials.AWS == nil"), "missing IAM configuration")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
 	}
 
 	// if the manifestwork is created, then move the status to hypershiftDeployment
@@ -161,7 +176,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, helper.GetTargetManagedCluster(hyd)))
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
@@ -194,13 +209,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-		pullCreds, err := r.generateSecret(ctx,
-			types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
-				Namespace: hyd.GetNamespace()})
-
-		if err != nil {
-			return fmt.Errorf("failed to duplicateSecret, err %w", err)
-		}
+		pullCreds := r.scaffoldPullSecret(hyd, *providerSecret)
 
 		refSecrets := []*corev1.Secret{pullCreds}
 		if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {

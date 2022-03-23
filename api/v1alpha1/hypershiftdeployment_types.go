@@ -95,6 +95,7 @@ type HypershiftDeploymentSpec struct {
 	TargetNamespace string `json:"targetNamespace"`
 
 	//TargetManagedCluster specify which managedcluster's namespace the manifestwork would be deployed.
+	//Only applies when Spec.Override: MANIFESTWORK
 	//If not specified, it uses the current namespace.
 	//The TargetManagedCluster would be the management cluster of the hostedcluster and nodepool generated
 	//by the hypershiftDeployment
@@ -193,6 +194,7 @@ type HypershiftDeploymentStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].status",description="Configured"
 // +kubebuilder:printcolumn:name="IAM",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
+// +kubebuilder:printcolumn:name="MANIFEST",type="string",JSONPath=".status.conditions[?(@.type==\"ManifestWorkConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="PROVIDER REF",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Found",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].status",description="Found"
 
