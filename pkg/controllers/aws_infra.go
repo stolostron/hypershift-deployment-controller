@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -137,7 +138,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			}
 		}
 		if iamErr != nil {
-			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.ConfiguredAsExpectedReason)
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
 			return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
 		}
 	}
@@ -194,6 +195,13 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 
 func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) (string, string, error) {
 	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+
+		if len(hyd.Spec.TargetManagedCluster) == 0 {
+			err := errors.New("spec.targetManagedCluster value is missing")
+			r.Log.Error(err, "Spec.targetManagedCluster needs a ManagedCluster name")
+			return "", "", err
+		}
+
 		// If the override is manifestwork that means we are using the hypershift created by mce hypershift-addon,
 		// so there must exist a hypershift bucket secret in the management cluster namespace.
 		secret := &corev1.Secret{}

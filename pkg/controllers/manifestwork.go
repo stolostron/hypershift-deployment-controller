@@ -51,15 +51,18 @@ func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
 }
 
 func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
+
+	// TODO @jnpacker, check for the managedCluster as well, or where we validate ClusterSet
 	if len(hyd.Spec.InfraID) == 0 {
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
 
+	targetNamespace := helper.GetTargetNamespace(hyd)
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
-			// generated manifestworks are unqinue.
+			// generated manifestworks are unique.
 			Name:      generateManifestName(hyd),
 			Namespace: helper.GetTargetManagedCluster(hyd),
 			Annotations: map[string]string{
@@ -69,14 +72,46 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 					hyd.GetName()),
 			},
 		},
-		Spec: workv1.ManifestWorkSpec{},
-	}
-
-	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
-		w.Spec.DeleteOption = &workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}
+		Spec: workv1.ManifestWorkSpec{
+			Workload: workv1.ManifestsTemplate{
+				Manifests: []workv1.Manifest{
+					{
+						RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: targetNamespace,
+							},
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "Namespace",
+								APIVersion: corev1.SchemeGroupVersion.String(),
+							},
+						}},
+					},
+				},
+			},
+			DeleteOption: &workv1.DeleteOption{
+				// Set the delete option to orphan to prevent the manifestwork from being deleted by mistake
+				// When we really want to delete the manifestwork, we need to invoke the
+				// "setManifestWorkSelectivelyDeleteOption" func to set the delete option before deleting.
+				PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan,
+			},
+		},
 	}
 
 	return w, nil
+}
+
+func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, targetNamespace string) {
+	mw.Spec.DeleteOption = &workv1.DeleteOption{
+		PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
+		SelectivelyOrphan: &workv1.SelectivelyOrphan{
+			OrphaningRules: []workv1.OrphaningRule{
+				{
+					Resource: "namespaces",
+					Name:     targetNamespace,
+				},
+			},
+		},
+	}
 }
 
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
@@ -104,17 +139,30 @@ func syncManifestworkStatusToHypershiftDeployment(
 
 func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
+	// We need a targetManagedCluster if we use ManifestWork
+	if len(hyd.Spec.TargetManagedCluster) == 0 {
+		r.Log.Error(errors.New("targetManagedCluster is empty"), "Spec.targetManagedCluster needs a ManagedCluster name")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Missing targetManagedCluster with override: MANIFESTWORK", hypdeployment.MisConfiguredReason)
+	}
+
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
 	// Since you can omit the nodePool, we only check hostedClusterSpec
 	if hyd.Spec.HostedClusterSpec == nil {
-		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
 		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec is nil")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
 	}
 
 	m, err := ScaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// This is a special check to make sure these values are provided as they are Not part of the standard
+	// HostedClusterSpec
+	if hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
+		(hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
+		r.Log.Error(errors.New("hyd.Spec.Credentials.AWS == nil"), "missing IAM configuration")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
 	}
 
 	// if the manifestwork is created, then move the status to hypershiftDeployment
@@ -142,7 +190,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 			return ctrl.Result{}, err
 		}
 	}
-
+ 
 	// the in object will get override by a GET
 	// after the GET, the update will be called and the payload will be wrote to
 	// the in object, which will be send with a UPDATE
@@ -162,7 +210,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, helper.GetTargetManagedCluster(hyd)))
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
@@ -180,6 +228,13 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	}
 
 	if m.GetDeletionTimestamp().IsZero() {
+		patch := client.MergeFrom(m.DeepCopy())
+		setManifestWorkSelectivelyDeleteOption(m, helper.GetTargetNamespace(hyd))
+		if err := r.Client.Patch(ctx, m, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+		}
+		r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
+
 		if err := r.Delete(ctx, m); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
@@ -195,12 +250,18 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-		pullCreds, err := r.generateSecret(ctx,
-			types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
-				Namespace: hyd.GetNamespace()})
+		var pullCreds *corev1.Secret
+		var err error
+		if hyd.Spec.Infrastructure.Configure == false {
+			pullCreds, err = r.generateSecret(ctx,
+				types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
+					Namespace: hyd.GetNamespace()})
 
-		if err != nil {
-			return fmt.Errorf("failed to duplicateSecret, err %w", err)
+			if err != nil {
+				return fmt.Errorf("failed to duplicateSecret, err %w", err)
+			}
+		} else {
+			pullCreds = r.scaffoldPullSecret(hyd, *providerSecret)
 		}
 
 		refSecrets := []*corev1.Secret{pullCreds}

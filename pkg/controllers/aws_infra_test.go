@@ -23,7 +23,7 @@ func init() {
 	clientgoscheme.AddToScheme(s)
 }
 
-func GetHypershiftDeployment(namespace string, name string, targetManagedCluster string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
+func GetHypershiftDeployment(namespace string, name string, targetManagedCluster string, targetNamespace string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
 	return &hydapi.HypershiftDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
@@ -31,6 +31,7 @@ func GetHypershiftDeployment(namespace string, name string, targetManagedCluster
 		},
 		Spec: hydapi.HypershiftDeploymentSpec{
 			TargetManagedCluster: targetManagedCluster,
+			TargetNamespace:      targetNamespace,
 			Override:             override,
 		},
 	}
@@ -58,7 +59,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 		expectRegion string
 	}{
 		{
-			name: "get info from secret successfully",
+			name: "err no targetManagedCluster",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      hypershiftBucketSecretName,
@@ -69,9 +70,23 @@ func TestOidcDiscoveryURL(t *testing.T) {
 					"region": []byte("region1"),
 				},
 			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "", hydapi.InfraConfigureWithManifest),
-			expectBucket: "bucket1",
-			expectRegion: "region1",
+			hyd:         GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraConfigureWithManifest),
+			expectedErr: "spec.targetManagedCluster value is missing",
+		},
+		{
+			name: "err no targetNamespace configure true",
+			existObj: &corev1.Secret{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      hypershiftBucketSecretName,
+					Namespace: "test",
+				},
+				Data: map[string][]byte{
+					"bucket": []byte("bucket1"),
+					"region": []byte("region1"),
+				},
+			},
+			hyd:         GetHypershiftDeployment("test", "hyd1", "test1", "", hydapi.InfraConfigureWithManifest),
+			expectedErr: "not found",
 		},
 		{
 			name: "get info from secret with specific management cluster",
@@ -85,7 +100,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 					"region": []byte("region1"),
 				},
 			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "test1", hydapi.InfraConfigureWithManifest),
+			hyd:          GetHypershiftDeployment("test", "hyd1", "test1", "mynamespace", hydapi.InfraConfigureWithManifest),
 			expectBucket: "bucket1",
 			expectRegion: "region1",
 		},
@@ -101,7 +116,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 					"region": "region1",
 				},
 			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "", hydapi.InfraConfigureOnly),
+			hyd:          GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraConfigureOnly),
 			expectBucket: "bucket1",
 			expectRegion: "region1",
 		},
@@ -117,18 +132,18 @@ func TestOidcDiscoveryURL(t *testing.T) {
 					"region": "region1",
 				},
 			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "", hydapi.InfraOverrideDestroy),
+			hyd:          GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraOverrideDestroy),
 			expectBucket: "bucket1",
 			expectRegion: "region1",
 		},
 		{
 			name:        "get info from secret not found",
-			hyd:         GetHypershiftDeployment("test", "hyd1", "", hydapi.InfraConfigureWithManifest),
+			hyd:         GetHypershiftDeployment("test", "hyd1", "test1", "mynamespace", hydapi.InfraConfigureWithManifest),
 			expectedErr: "not found",
 		},
 		{
 			name:        "get info from configmap not found",
-			hyd:         GetHypershiftDeployment("test", "hyd1", "", hydapi.InfraConfigureOnly),
+			hyd:         GetHypershiftDeployment("test", "hyd1", "test1", "mynamespace", hydapi.InfraConfigureOnly),
 			expectedErr: "not found",
 		},
 	}
