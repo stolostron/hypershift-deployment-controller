@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
-	github.com/openshift/hypershift v0.0.0-20220322200626-7d5d1ee01dd2
+	github.com/openshift/hypershift v0.0.0-20220322145644-fe045fd56f45
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1
 	k8s.io/api v0.23.3

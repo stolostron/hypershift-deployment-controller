@@ -42,7 +42,7 @@ spec:
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="ManifestWorkConfigured")].reason
-      name: MANIFEST
+      name: MANIFESTWORK
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].reason

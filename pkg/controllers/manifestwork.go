@@ -126,8 +126,8 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	// This is a special check to make sure these values are provided as they are Not part of the standard
 	// HostedClusterSpec
-	if hyd.Spec.Credentials == nil ||
-		hyd.Spec.Credentials.AWS == nil {
+	if hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
+		(hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
 		r.Log.Error(errors.New("hyd.Spec.Credentials.AWS == nil"), "missing IAM configuration")
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
 	}
