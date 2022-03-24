@@ -63,7 +63,7 @@ func duplicateSecretWithOverride(in *corev1.Secret, ops ...override) *corev1.Sec
 func (r *HypershiftDeploymentReconciler) generateSecret(ctx context.Context, key types.NamespacedName, ops ...override) (*corev1.Secret, error) {
 	origin := &corev1.Secret{}
 	if err := r.Get(ctx, key, origin); err != nil {
-		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
+		return nil, fmt.Errorf("failed to get the %s secret, err: %w", key, err)
 	}
 
 	return duplicateSecretWithOverride(origin, ops...), nil
