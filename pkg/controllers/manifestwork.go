@@ -55,11 +55,12 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
 
+	targetNamespace := helper.GetTargetNamespace(hyd)
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
-			// generated manifestworks are unqinue.
+			// generated manifestworks are unique.
 			Name:      generateManifestName(hyd),
 			Namespace: helper.GetTargetManagedCluster(hyd),
 			Annotations: map[string]string{
@@ -69,14 +70,46 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 					hyd.GetName()),
 			},
 		},
-		Spec: workv1.ManifestWorkSpec{},
-	}
-
-	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
-		w.Spec.DeleteOption = &workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}
+		Spec: workv1.ManifestWorkSpec{
+			Workload: workv1.ManifestsTemplate{
+				Manifests: []workv1.Manifest{
+					{
+						RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: targetNamespace,
+							},
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "Namespace",
+								APIVersion: corev1.SchemeGroupVersion.String(),
+							},
+						}},
+					},
+				},
+			},
+			DeleteOption: &workv1.DeleteOption{
+				// Set the delete option to orphan to prevent the manifestwork from being deleted by mistake
+				// When we really want to delete the manifestwork, we need to invoke the
+				// "setManifestWorkSelectivelyDeleteOption" func to set the delete option before deleting.
+				PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan,
+			},
+		},
 	}
 
 	return w, nil
+}
+
+func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, targetNamespace string) {
+	mw.Spec.DeleteOption = &workv1.DeleteOption{
+		PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
+		SelectivelyOrphan: &workv1.SelectivelyOrphan{
+			OrphaningRules: []workv1.OrphaningRule{
+				{
+					Resource: "namespaces",
+					Name:     targetNamespace,
+				},
+			},
+		},
+	}
 }
 
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
@@ -144,7 +177,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		}
 	}
 
-	m.Spec.Workload.Manifests = payload
+	m.Spec.Workload.Manifests = append(m.Spec.Workload.Manifests, payload...)
 
 	// a placeholder for later use
 	noOp := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
@@ -179,6 +212,13 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	}
 
 	if m.GetDeletionTimestamp().IsZero() {
+		patch := client.MergeFrom(m.DeepCopy())
+		setManifestWorkSelectivelyDeleteOption(m, helper.GetTargetNamespace(hyd))
+		if err := r.Client.Patch(ctx, m, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+		}
+		r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
+
 		if err := r.Delete(ctx, m); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
