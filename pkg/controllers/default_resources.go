@@ -262,6 +262,7 @@ func scaffoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePo
 		RootVolume: &hyp.Volume{
 			Size: volSize,
 			Type: "gp3",
+			IOPS: int64(0),
 		},
 	}
 }

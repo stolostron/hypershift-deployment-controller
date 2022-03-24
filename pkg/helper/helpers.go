@@ -17,9 +17,8 @@ func GetTargetManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
 
 func GetTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
 	if len(hyd.Spec.TargetNamespace) == 0 {
-		return hyd.GetNamespace()
+		hyd.Spec.TargetNamespace = hyd.GetNamespace()
 	}
-
 	return hyd.Spec.TargetNamespace
 }
 

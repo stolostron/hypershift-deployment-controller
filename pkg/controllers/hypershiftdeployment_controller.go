@@ -46,6 +46,7 @@ import (
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
 // HypershiftDeploymentReconciler reconciles a HypershiftDeployment object
@@ -130,6 +131,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 		// Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
 		setStatusCondition(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
+		setStatusCondition(&hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Configuring ManifestWork: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 		r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 	}
 
@@ -162,12 +164,15 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Work on the HostedCluster resource
 	var hc hyp.HostedCluster
-	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc)
+	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: hyd.Name}, &hc)
 
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
+
+		// hyd.Spec.TargetNamespace is set by both createManifestwork and ScaffoldHostedCluster,
+		// using the helper.GetTargetNamespace function
 
 		// In Azure, the providerSecret is needed for Configure true or false
 		if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
@@ -203,9 +208,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 		// We loop through what exists, so that we can delete pools if appropriate
 		var nodePools hyp.NodePoolList
-		if err := r.List(ctx, &nodePools, client.MatchingLabels{AutoInfraLabelName: hyd.Spec.InfraID}); err != nil {
+		if err := r.List(ctx, &nodePools, client.InNamespace(hyd.Spec.TargetNamespace), client.MatchingLabels{AutoInfraLabelName: hyd.Spec.InfraID}); err != nil {
 			return ctrl.Result{}, err
 		}
+		log.Info("Processing " + fmt.Sprint(len(nodePools.Items)) + " NodePools")
 
 		// Create and Update HypershiftDeployment.Spec.NodePools
 		for _, np := range hyd.Spec.NodePools {
@@ -258,15 +264,14 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	return ctrl.Result{}, nil
 }
 
-func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.HypershiftDeployment, providerSecret corev1.Secret) error {
-
-	buildPullSecret := &corev1.Secret{
+func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.HypershiftDeployment, providerSecret corev1.Secret) *corev1.Secret {
+	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: hyd.Namespace,
+			Namespace: helper.GetTargetNamespace(hyd),
 			Name:      hyd.Name + "-pull-secret",
 			Labels: map[string]string{
 				AutoInfraLabelName: hyd.Spec.InfraID,
@@ -276,12 +281,10 @@ func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.Hyp
 			".dockerconfigjson": providerSecret.Data["pullSecret"],
 		},
 	}
-	if err := r.Create(r.ctx, buildPullSecret); apierrors.IsAlreadyExists(err) {
-		if err := r.Update(r.ctx, buildPullSecret); err != nil {
-			return err
-		}
-	}
-	return nil
+}
+func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.HypershiftDeployment, providerSecret corev1.Secret) error {
+	_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, r.scaffoldPullSecret(hyd, providerSecret), func() error { return nil })
+	return err
 }
 
 func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
@@ -404,7 +407,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		log.Info("Remove any NodePools")
 		for _, np := range hyd.Spec.NodePools {
 			var nodePool hyp.NodePool
-			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: np.Name}, &nodePool); err == nil {
+			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: np.Name}, &nodePool); err == nil {
 				if nodePool.DeletionTimestamp == nil {
 					r.Log.Info("Deleting NodePool " + np.Name)
 					if err := r.Delete(ctx, &nodePool); err != nil {
@@ -421,7 +424,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 		// Delete the HostedCluster
 		var hc hyp.HostedCluster
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
+		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
 			if hc.DeletionTimestamp == nil {
 				log.Info("Deleting HostedCluster " + hyd.Name)
 				// The delete action can take a while and we don't want to block the reconciler
