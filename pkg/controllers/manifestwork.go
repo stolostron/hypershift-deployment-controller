@@ -192,16 +192,16 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		}
 	}
 
-	m.Spec.Workload.Manifests = append(m.Spec.Workload.Manifests, payload...)
-
-	// a placeholder for later use
-	noOp := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
+	// the in object will get override by a GET
+	// after the GET, the update will be called and the payload will be wrote to
+	// the in object, which will be send with a UPDATE
+	update := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
 		return func() error {
+			m.Spec.Workload.Manifests = payload
 			return nil
 		}
 	}
-
-	if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, m, noOp(m, payload)); err != nil {
+	if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, m, update(m, payload)); err != nil {
 		r.Log.Error(err, fmt.Sprintf("failed to CreateOrUpdate the existing manifestwork %s", getManifestWorkKey(hyd)))
 		return ctrl.Result{}, err
 
@@ -272,6 +272,19 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 				return nil
 			}
 			refSecrets = append(refSecrets, ScaffoldAzureCloudCredential(hyd, creds))
+		}
+
+		sshKey := hyd.Spec.HostedClusterSpec.SSHKey
+		if len(sshKey.Name) != 0 {
+			s, err := r.generateSecret(ctx,
+				types.NamespacedName{Name: sshKey.Name,
+					Namespace: hyd.GetNamespace()})
+
+			if err != nil {
+				return fmt.Errorf("failed to duplicateSecret, err %w", err)
+			}
+
+			refSecrets = append(refSecrets, s)
 		}
 
 		for _, s := range refSecrets {
