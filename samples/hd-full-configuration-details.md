@@ -45,6 +45,15 @@ spec:
             - name: <CUSTOMRESOURCE01>
             - name: <CUSTOMRESOURCE02>
         secretEncryption:          #OPTIONAL
+          kms:
+            aws:
+              auth:
+                name: <SECRET03>
+          aescbc:
+            activeKey:
+              name: <SECRET04>
+            backupKey:
+              name: <SECRET05>
         kms:
             aws:
             auth:
