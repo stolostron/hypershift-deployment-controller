@@ -24,7 +24,7 @@ spec:
 This approach to containing these core ARN's in the HypershiftDeployment will save three secret resources for the standard deploy.
 
 ### HostedClusterSpec
-* The minimal hostedClusterSpec is supported, but this includes the ability to have operator customizations
+* The minimal hostedClusterSpec is supported, but operator customizations are allowed
   * Secrets
   * ConfigMaps
   * Items  custom resources
@@ -33,41 +33,31 @@ spec:
   hostedClusterSpec:
     sshKey:                      #OPTIONAL
         name: <SECRET06>
-    hostedClusterSpec:
-        configuration:
-        secretRef:               #OPTIONAL
-            - name: <SECRET01>
-            - name: <SECRET02>
-        configMapRef:            #OPTIONAL
-            - name: <CONFIGMAP01>
-            - name: <CONFIGMAP02>
-        items:                   #OPTIONAL
-            - name: <CUSTOMRESOURCE01>
-            - name: <CUSTOMRESOURCE02>
-        secretEncryption:          #OPTIONAL
-          kms:
-            aws:
-              auth:
-                name: <SECRET03>
-          aescbc:
-            activeKey:
-              name: <SECRET04>
-            backupKey:
-              name: <SECRET05>
-        kms:
-            aws:
-            auth:
-                name: <SECRET03>
-        aescbc:
-            activeKey:
-            name: <SECRET04>
-            backupKey:
-            name: <SECRET05>
+    configuration:
+      secretRef:               #OPTIONAL
+          - name: <SECRET01>
+          - name: <SECRET02>
+      configMapRef:            #OPTIONAL
+          - name: <CONFIGMAP01>
+          - name: <CONFIGMAP02>
+      items:                   #OPTIONAL
+          - name: <CUSTOMRESOURCE01>
+          - name: <CUSTOMRESOURCE02>
+    secretEncryption:          #OPTIONAL
+      kms:
+        aws:
+          auth:
+            name: <SECRET03>
+      aescbc:
+        activeKey:
+          name: <SECRET04>
+        backupKey:
+          name: <SECRET05>
 ```
 * The `hypershift-deployment-controller` will look for the references
-  * If found it is copied to the ManifestWork manifest list
+  * If found the are copied to the ManifestWork manifest list (payload)
   * If not found, the condition status is updated with the missing secret/configmap/customResource name.
-  * If delete on read annotation is present, the secret is removed after it is copied to the ManifestWork (reduce resource counts)
+  * TODO: If delete on read annotation is present, the secret is removed after it is copied to the ManifestWork (reduce resource counts)
 
 ### NodePoolSpec
 * The minimal nodePoolSpec is supported, but this includes the ability to have operator customizations.
