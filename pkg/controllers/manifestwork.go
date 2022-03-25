@@ -57,7 +57,6 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
 
-	targetNamespace := helper.GetTargetNamespace(hyd)
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -74,19 +73,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		},
 		Spec: workv1.ManifestWorkSpec{
 			Workload: workv1.ManifestsTemplate{
-				Manifests: []workv1.Manifest{
-					{
-						RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: targetNamespace,
-							},
-							TypeMeta: metav1.TypeMeta{
-								Kind:       "Namespace",
-								APIVersion: corev1.SchemeGroupVersion.String(),
-							},
-						}},
-					},
-				},
+				Manifests: []workv1.Manifest{},
 			},
 			DeleteOption: &workv1.DeleteOption{
 				// Set the delete option to orphan to prevent the manifestwork from being deleted by mistake
@@ -178,6 +165,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 	payload := []workv1.Manifest{}
 
 	manifestFuncs := []loadManifest{
+		ensureTaregetNamespace,
 		appendHostedCluster,
 		appendNodePool,
 		r.appendHostedClusterReferenceSecrets(ctx, providerSecret),
@@ -305,6 +293,23 @@ func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]wor
 	}
 
 	*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
+
+	return nil
+}
+
+func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
+	targetNamespace := helper.GetTargetNamespace(hyd)
+	*payload = append(*payload, workv1.Manifest{
+		RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: targetNamespace,
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Namespace",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+		}},
+	})
 
 	return nil
 }

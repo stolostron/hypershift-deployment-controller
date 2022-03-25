@@ -25,12 +25,25 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-    "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 type kindAndKey struct {
 	schema.GroupVersionKind
 	types.NamespacedName
+}
+
+func getHDforManifestWork() *hyd.HypershiftDeployment {
+	infraOut := getAWSInfrastructureOut()
+	testHD := getHypershiftDeployment("default", "test1")
+	testHD.Spec.Override = hyd.InfraConfigureWithManifest
+
+	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
+	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
+	testHD.Spec.InfraID = infraOut.InfraID
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
+	return testHD
 }
 
 type manifestworkChecker struct {
@@ -99,10 +112,9 @@ func (m *manifestworkChecker) shouldNotHave(res map[kindAndKey]bool) error {
 	return nil
 }
 
-
 // TestManifestWorkFlow tests when override is set to manifestwork, test if the manifestwork is created
 // and reference secret is put into manifestwork payload
-func TestManifestWorkFlow(t *testing.T) {
+func TestManifestWorkFlowBaseCase(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
 
@@ -127,11 +139,6 @@ func TestManifestWorkFlow(t *testing.T) {
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
 		Namespace: helper.GetTargetManagedCluster(testHD)}
-
-	manifestWork := &workv1.ManifestWork{}
-
-	err = client.Get(ctx, manifestWorkKey, manifestWork)
-	assert.Nil(t, err, "err nil when manifestwork generated")
 
 	requiredResource := map[kindAndKey]bool{
 		{
@@ -269,48 +276,30 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 		Name:      generateManifestName(testHD),
 		Namespace: helper.GetTargetManagedCluster(testHD)}
 
-	manifestWork := &workv1.ManifestWork{}
-
-	err = client.Get(ctx, manifestWorkKey, manifestWork)
-	assert.Nil(t, err, "err nil when manifestwork generated")
-
 	requiredResource := map[kindAndKey]bool{
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: false,
+				Name: cfgSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgItemSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: false,
+				Name: cfgItemSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "ConfigMap"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgConfigName, Namespace: helper.GetTargetNamespace(testHD)}}: false,
+				Name: cfgConfigName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
 	}
 
 	checker, err := newManifestResourceChecker(ctx, client, manifestWorkKey)
 	assert.Nil(t, err, "err nil when the mainfestwork check created")
 	assert.Nil(t, checker.shouldHave(requiredResource), "err nil when all requrie resource exist in manifestwork")
 
-}
-
-func getHDforManifestWork() *hyd.HypershiftDeployment {
-	infraOut := getAWSInfrastructureOut()
-	testHD := getHypershiftDeployment("default", "test1")
-	testHD.Spec.Override = hyd.InfraConfigureWithManifest
-
-	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
-	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
-	testHD.Spec.InfraID = infraOut.InfraID
-	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
-	ScaffoldAWSNodePoolSpec(testHD, infraOut)
-	return testHD
 }
 
 func TestManifestWorkFlowNoTargetManagedCluster(t *testing.T) {
@@ -374,7 +363,6 @@ func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
 	t.Log("Condition msg: " + c.Message)
 	assert.Equal(t, "Missing Spec.Crednetials.AWS.* platform IAM", c.Message, "is equal when spec.credentials is missing")
 }
-
 
 // TestManifestWorkFlow tests when override is set to manifestwork, test if the manifestwork is created
 // and referenece secret is put into manifestwork payload
