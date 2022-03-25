@@ -281,7 +281,7 @@ func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment
 	}
 }
 
-func ScaffoldSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
+func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
 	var secrets []*corev1.Secret
 
 	buildAWSCreds := func(name, arn string) *corev1.Secret {
@@ -307,9 +307,10 @@ func ScaffoldSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
 	}
 	return append(
 		secrets,
-		buildAWSCreds(hyd.Name+"-cpo-creds", hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
-		buildAWSCreds(hyd.Name+"-cloud-ctrl-creds", hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
-		buildAWSCreds(hyd.Name+"-node-mgmt-creds", hyd.Spec.Credentials.AWS.NodePoolManagementARN),
+		//These ObjectRef.Name's will always be set by this point.
+		buildAWSCreds(hyd.Spec.HostedClusterSpec.Platform.AWS.ControlPlaneOperatorCreds.Name, hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
+		buildAWSCreds(hyd.Spec.HostedClusterSpec.Platform.AWS.KubeCloudControllerCreds.Name, hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
+		buildAWSCreds(hyd.Spec.HostedClusterSpec.Platform.AWS.NodePoolManagementCreds.Name, hyd.Spec.Credentials.AWS.NodePoolManagementARN),
 	)
 }
 
@@ -320,7 +321,7 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 			Kind:       "Secret",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      hyd.Name + CCredsSuffix,
+			Name:      hyd.Spec.HostedClusterSpec.Platform.Azure.Credentials.Name,
 			Namespace: helper.GetTargetNamespace(hyd),
 			Labels: map[string]string{
 				util.AutoInfraLabelName: hyd.Spec.InfraID,
