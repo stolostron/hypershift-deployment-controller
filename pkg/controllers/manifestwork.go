@@ -57,7 +57,6 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
 
-	targetNamespace := helper.GetTargetNamespace(hyd)
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -74,19 +73,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		},
 		Spec: workv1.ManifestWorkSpec{
 			Workload: workv1.ManifestsTemplate{
-				Manifests: []workv1.Manifest{
-					{
-						RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: targetNamespace,
-							},
-							TypeMeta: metav1.TypeMeta{
-								Kind:       "Namespace",
-								APIVersion: corev1.SchemeGroupVersion.String(),
-							},
-						}},
-					},
-				},
+				Manifests: []workv1.Manifest{},
 			},
 			DeleteOption: &workv1.DeleteOption{
 				// Set the delete option to orphan to prevent the manifestwork from being deleted by mistake
@@ -178,6 +165,7 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 	payload := []workv1.Manifest{}
 
 	manifestFuncs := []loadManifest{
+		ensureTaregetNamespace,
 		appendHostedCluster,
 		appendNodePool,
 		r.appendHostedClusterReferenceSecrets(ctx, providerSecret),
@@ -192,16 +180,16 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		}
 	}
 
-	m.Spec.Workload.Manifests = append(m.Spec.Workload.Manifests, payload...)
-
-	// a placeholder for later use
-	noOp := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
+	// the in object will get override by a GET
+	// after the GET, the update will be called and the payload will be wrote to
+	// the in object, which will be send with a UPDATE
+	update := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
 		return func() error {
+			m.Spec.Workload.Manifests = payload
 			return nil
 		}
 	}
-
-	if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, m, noOp(m, payload)); err != nil {
+	if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, m, update(m, payload)); err != nil {
 		r.Log.Error(err, fmt.Sprintf("failed to CreateOrUpdate the existing manifestwork %s", getManifestWorkKey(hyd)))
 		return ctrl.Result{}, err
 
@@ -274,6 +262,19 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			refSecrets = append(refSecrets, ScaffoldAzureCloudCredential(hyd, creds))
 		}
 
+		sshKey := hyd.Spec.HostedClusterSpec.SSHKey
+		if len(sshKey.Name) != 0 {
+			s, err := r.generateSecret(ctx,
+				types.NamespacedName{Name: sshKey.Name,
+					Namespace: hyd.GetNamespace()})
+
+			if err != nil {
+				return fmt.Errorf("failed to duplicateSecret, err %w", err)
+			}
+
+			refSecrets = append(refSecrets, s)
+		}
+
 		for _, s := range refSecrets {
 			o := duplicateSecretWithOverride(s, overrideNamespace(helper.GetTargetNamespace(hyd)))
 			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: o}})
@@ -292,6 +293,23 @@ func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]wor
 	}
 
 	*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
+
+	return nil
+}
+
+func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
+	targetNamespace := helper.GetTargetNamespace(hyd)
+	*payload = append(*payload, workv1.Manifest{
+		RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: targetNamespace,
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Namespace",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+		}},
+	})
 
 	return nil
 }
