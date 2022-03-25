@@ -65,11 +65,11 @@ spec:
 ```yaml
 spec:
   nodePools:
-  - name: MY_POOL
-    spec:
-      config:     
-        - name: <CONFIGMAP03>
-        - name: <CONFIGMAP04>
+    - name: MY_POOL
+      spec:
+        config:     
+          - name: <CONFIGMAP03>
+          - name: <CONFIGMAP04>
 ```
 * The `hypershift-deployment-controller` will look for the references
   * If found it is copied to the ManifestWork manifest list
