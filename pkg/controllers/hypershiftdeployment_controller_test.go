@@ -236,9 +236,6 @@ func genKeyFromObject(obj metav1.Object) types.NamespacedName {
 	return types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
 }
 
-
-
-
 func TestHypershiftdeployment_controller(t *testing.T) {
 
 	client := initClient()
