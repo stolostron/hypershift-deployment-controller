@@ -78,7 +78,7 @@ func (m *manifestworkChecker) update() error {
 	for _, w := range wl {
 		u := &unstructured.Unstructured{}
 		if err := json.Unmarshal(w.Raw, u); err != nil {
-			return fmt.Errorf("faield convert manifest to unstructured, err: %w", err)
+			return fmt.Errorf("failed convert manifest to unstructured, err: %w", err)
 		}
 
 		k := kindAndKey{
@@ -633,6 +633,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	trueStr := "True"
 	falseStr := "False"
 	msgStr := "nope"
+	progress := "Partial"
 
 	_ = falseStr
 
@@ -670,6 +671,13 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 					Value: workv1.FieldValue{
 						Type:   workv1.String,
 						String: &msgStr,
+					},
+				},
+				{
+					Name: Progress,
+					Value: workv1.FieldValue{
+						Type:   workv1.String,
+						String: &progress,
 					},
 				},
 			},
@@ -766,11 +774,15 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	updatedHD := &hyd.HypershiftDeployment{}
 	assert.Nil(t, clt.Get(ctx, getNN, updatedHD), "err nil Get updated hypershiftDeployment")
 
-	hcCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedCluster))
+	hcAvaCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedClusterAvaliable))
 
-	assert.NotNil(t, hcCond, "not nil, should find a hostedcluster condition")
+	assert.NotNil(t, hcAvaCond, "not nil, should find a hostedcluster condition")
+	assert.NotEmpty(t, hcAvaCond.Reason, "condition reason should be nil")
 
-	assert.NotEmpty(t, hcCond.Reason, "condition reason should be nil")
+	hcProCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedClusterProgress))
+
+	assert.NotNil(t, hcProCond, "not nil, should find a hostedcluster condition")
+	assert.NotEmpty(t, hcProCond.Reason, "condition reason should be nil")
 
 	nodepoolCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.Nodepool))
 

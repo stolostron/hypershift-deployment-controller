@@ -25,6 +25,8 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -50,6 +52,7 @@ var (
 	Reason                = "reason"
 	StatusFlag            = "status"
 	Message               = "message"
+	Progress              = "progress"
 )
 
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
@@ -162,7 +165,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		return ctrl.Result{}, err
 	}
 
-	enableManifestStatusFeedback(m, hyd)
+	mwCfg := enableManifestStatusFeedback(m, hyd)
 
 	// This is a special check to make sure these values are provided as they are Not part of the standard
 	// HostedClusterSpec
@@ -196,12 +199,13 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		}
 	}
 
-	// the in object will get override by a GET
+	// the object in controllerutil.CreateOrUpdate will get override by a GET
 	// after the GET, the update will be called and the payload will be wrote to
 	// the in object, which will be send with a UPDATE
 	update := func(in *workv1.ManifestWork, payload []workv1.Manifest) controllerutil.MutateFn {
 		return func() error {
 			m.Spec.Workload.Manifests = payload
+			m.Spec.ManifestConfigs = mwCfg
 			return nil
 		}
 	}
@@ -368,6 +372,7 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 		FeedbackRules: []workv1.FeedbackRule{
 			{
 				Type: workv1.JSONPathsType,
+				// mirroring https://github.com/openshift/hypershift/blob/b9418cb392b94bc6682c76ce21b5dfd2744b9e8c/api/v1alpha1/hostedcluster_types.go#L1209
 				JsonPaths: []workv1.JsonPath{
 					{
 						Name: Reason,
@@ -380,6 +385,10 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 					{
 						Name: Message,
 						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].message"),
+					},
+					{
+						Name: Progress,
+						Path: fmt.Sprintf(".status.version.history[?(@.state!=\"\")].state"),
 					},
 				},
 			},
@@ -422,31 +431,47 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 	return out
 }
 
-func feedbackToCondition(t hypdeployment.ConditionType, fvs []workv1.FeedbackValue) metav1.Condition {
+func feedbackToCondition(t hypdeployment.ConditionType, fvs []workv1.FeedbackValue) (metav1.Condition, bool) {
 	m := metav1.Condition{
 		Type: string(t),
 	}
 
-	for _, v := range fvs {
-		if v.Name == Reason {
-			m.Reason = string(*v.Value.String)
+	switch t {
+	case hypdeployment.HostedClusterProgress:
+		for _, v := range fvs {
+			if v.Name == Progress {
+				m.Reason = string(*v.Value.String)
+			}
 		}
 
-		if v.Name == StatusFlag {
-			m.Status = metav1.ConditionStatus(*v.Value.String)
-		}
+		m.Status = "True"
+	default:
+		for _, v := range fvs {
+			if v.Name == Reason {
+				m.Reason = string(*v.Value.String)
+			}
 
-		if v.Name == Message {
-			m.Message = string(*v.Value.String)
+			if v.Name == StatusFlag {
+				m.Status = metav1.ConditionStatus(*v.Value.String)
+			}
+
+			if v.Name == Message {
+				m.Message = string(*v.Value.String)
+			}
 		}
 	}
 
-	return m
+	// field is missing or not update properly
+	if len(m.Reason) == 0 || len(m.Status) == 0 {
+		return metav1.Condition{}, false
+	}
+
+	return m, true
 }
 
-func enableManifestStatusFeedback(m *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) {
+func enableManifestStatusFeedback(m *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) []workv1.ManifestConfigOption {
 	if m == nil {
-		return
+		return []workv1.ManifestConfigOption{}
 	}
 
 	cfg := []workv1.ManifestConfigOption{}
@@ -458,6 +483,8 @@ func enableManifestStatusFeedback(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	}
 
 	m.Spec.ManifestConfigs = cfg
+
+	return cfg
 }
 
 func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) []metav1.Condition {
@@ -466,18 +493,10 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 		return []metav1.Condition{}
 	}
 
-	out := []metav1.Condition{
-		metav1.Condition{ //the default nodepool status, will be override if there's false status
-			Type:   string(hypdeployment.Nodepool),
-			Status: "True",
-			Reason: hypdeployment.NodePoolProvision,
-		},
-	}
+	out := []metav1.Condition{}
 
-	found := false
 	for _, obj := range m.Status.ResourceStatus.Manifests {
 		rMeta := resourceMeta(obj.ResourceMeta)
-
 		id := rMeta.ToIdentifier()
 
 		if _, ok := idMap[id]; !ok {
@@ -485,18 +504,41 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 		}
 
 		if id.Resource == NodePoolResource {
-			if isFeedbackStatusFalse(obj.StatusFeedbacks) && !found {
-				npCond := feedbackToCondition(hypdeployment.Nodepool, obj.StatusFeedbacks.Values)
-				out = append(out, npCond)
-				found = true
+			npCond, ok := feedbackToCondition(hypdeployment.Nodepool, obj.StatusFeedbacks.Values)
+			if !ok {
+				continue
+			}
+
+			// find and set failed nodepool to condition
+			st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
+			if st == nil {
+				meta.SetStatusCondition(&out, npCond)
+			} else if npCond.Status != "True" {
+				meta.SetStatusCondition(&out, npCond)
 			}
 		}
 
 		if id.Resource == HostedClusterResource {
-			hcCond := feedbackToCondition(hypdeployment.HostedCluster, obj.StatusFeedbacks.Values)
-			out = append(out, hcCond)
-		}
+			hcAvaCond, ok := feedbackToCondition(hypdeployment.HostedClusterAvaliable, obj.StatusFeedbacks.Values)
+			if ok {
+				out = append(out, hcAvaCond)
+			}
 
+			hcProCond, ok := feedbackToCondition(hypdeployment.HostedClusterProgress, obj.StatusFeedbacks.Values)
+			if ok {
+				out = append(out, hcProCond)
+			}
+		}
+	}
+
+	// if there's nodepool condition and it's not false, then all nodepool are ready
+	st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
+	if st != nil && st.Status == "True" {
+		meta.SetStatusCondition(&out, metav1.Condition{
+			Type:   string(hypdeployment.Nodepool),
+			Status: "True",
+			Reason: hypdeployment.NodePoolProvision,
+		})
 	}
 
 	return out

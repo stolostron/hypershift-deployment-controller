@@ -46,7 +46,10 @@ const (
 	ProviderSecretConfigured ConditionType = "ProviderSecretConfigured"
 
 	// HostedCluster indicates the state of the hostedcluster
-	HostedCluster ConditionType = "HostedCluster"
+	HostedClusterAvaliable ConditionType = "HostedClusterAvaliable"
+
+	// HostedCluster indicates the state of the hostedcluster
+	HostedClusterProgress ConditionType = "HostedClusterProgress"
 
 	// Nodepool indicates the state of the nodepools
 	Nodepool ConditionType = "NodePool"
