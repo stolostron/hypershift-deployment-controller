@@ -11,12 +11,14 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 
 	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,14 +52,23 @@ func getHDforManifestWork() *hyd.HypershiftDeployment {
 type manifestworkChecker struct {
 	clt      client.Client
 	ctx      context.Context
+	key      types.NamespacedName
 	resource map[kindAndKey]bool
+	obj      *workv1.ManifestWork
+	status   workv1.ManifestWorkStatus
+	spec     workv1.ManifestWorkSpec
 }
 
 func newManifestResourceChecker(ctx context.Context, clt client.Client, key types.NamespacedName) (*manifestworkChecker, error) {
-	manifestWork := &workv1.ManifestWork{}
+	m := &manifestworkChecker{ctx: ctx, clt: clt, key: key}
+	err := m.update()
+	return m, err
+}
 
-	if err := clt.Get(ctx, key, manifestWork); err != nil {
-		return nil, err
+func (m *manifestworkChecker) update() error {
+	manifestWork := &workv1.ManifestWork{}
+	if err := m.clt.Get(m.ctx, m.key, manifestWork); err != nil {
+		return err
 	}
 
 	wl := manifestWork.Spec.Workload.Manifests
@@ -67,7 +78,7 @@ func newManifestResourceChecker(ctx context.Context, clt client.Client, key type
 	for _, w := range wl {
 		u := &unstructured.Unstructured{}
 		if err := json.Unmarshal(w.Raw, u); err != nil {
-			return nil, fmt.Errorf("faield convert manifest to unstructured, err: %w", err)
+			return fmt.Errorf("failed convert manifest to unstructured, err: %w", err)
 		}
 
 		k := kindAndKey{
@@ -78,11 +89,12 @@ func newManifestResourceChecker(ctx context.Context, clt client.Client, key type
 		got[k] = true
 	}
 
-	return &manifestworkChecker{
-		clt:      clt,
-		ctx:      ctx,
-		resource: got,
-	}, nil
+	m.resource = got
+	m.status = manifestWork.Status
+	m.spec = manifestWork.Spec
+	m.obj = manifestWork
+
+	return nil
 }
 
 func (m *manifestworkChecker) shouldHave(res map[kindAndKey]bool) error {
@@ -137,10 +149,6 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
 	assert.Nil(t, err, "err nil when reconcile was successfull")
 
-	manifestWorkKey := types.NamespacedName{
-		Name:      generateManifestName(testHD),
-		Namespace: helper.GetTargetManagedCluster(testHD)}
-
 	requiredResource := map[kindAndKey]bool{
 		{
 			GroupVersionKind: schema.GroupVersionKind{
@@ -183,7 +191,7 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 				Name: "test1-pull-secret", Namespace: helper.GetTargetNamespace(testHD)}}: true,
 	}
 
-	checker, err := newManifestResourceChecker(ctx, client, manifestWorkKey)
+	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
 	assert.Nil(t, err, "err nil when the mainfestwork check created")
 	assert.Nil(t, checker.shouldHave(requiredResource), "err nil when all requrie resource exist in manifestwork")
 }
@@ -273,10 +281,6 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
 	assert.Nil(t, err, "err nil when reconcile was successfull")
 
-	manifestWorkKey := types.NamespacedName{
-		Name:      generateManifestName(testHD),
-		Namespace: helper.GetTargetManagedCluster(testHD)}
-
 	requiredResource := map[kindAndKey]bool{
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
@@ -297,7 +301,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 				Name: cfgConfigName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
 	}
 
-	checker, err := newManifestResourceChecker(ctx, client, manifestWorkKey)
+	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
 	assert.Nil(t, err, "err nil when the mainfestwork check created")
 	assert.Nil(t, checker.shouldHave(requiredResource), "err nil when all requrie resource exist in manifestwork")
 
@@ -372,17 +376,9 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 
 	ctx := context.Background()
 
-	infraOut := getAWSInfrastructureOut()
-	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name)
-	testHD.Spec.Override = hyd.InfraConfigureWithManifest
+	testHD := getHDforManifestWork()
 	testHD.Spec.TargetManagedCluster = "local-host"
 	testHD.Spec.TargetNamespace = "multicluster-engine"
-
-	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
-	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
-	testHD.Spec.InfraID = infraOut.InfraID
-	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
-	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	sshKeySecretName := fmt.Sprintf("%s-ssh-key", testHD.GetName())
 	pullSecretName := fmt.Sprintf("%s-pull-secret", testHD.GetName())
@@ -430,10 +426,6 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 	_, err = hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
 	assert.Nil(t, err, "err nil when reconcile was successful")
 
-	manifestWorkKey := types.NamespacedName{
-		Name:      generateManifestName(testHD),
-		Namespace: helper.GetTargetManagedCluster(testHD)}
-
 	requiredResource := map[kindAndKey]bool{
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
@@ -448,7 +440,7 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 				Name: sshKeySecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
 	}
 
-	checker, err := newManifestResourceChecker(ctx, client, manifestWorkKey)
+	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
 	assert.Nil(t, err, "err nil when the mainfestwork check created")
 	assert.Nil(t, checker.shouldHave(requiredResource), "err nil when all requrie resource exist in manifestwork")
 
@@ -480,7 +472,7 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 				Name: sshKeySecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
 	}
 
-	checker, err = newManifestResourceChecker(ctx, client, manifestWorkKey)
+	checker, err = newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
 	assert.Nil(t, err, "err nil when the mainfestwork check created")
 	assert.Nil(t, checker.shouldNotHave(deleted), "err nil when all requrie resource exist in manifestwork")
 }
@@ -603,4 +595,198 @@ func TestManifestWorkCustomSecretNames(t *testing.T) {
 			t.Error("Did not find secret", sc)
 		}
 	}
+}
+
+func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
+	clt := initClient()
+	ctx := context.Background()
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: clt,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.TargetManagedCluster = "local-host"
+	testHD.Spec.TargetNamespace = "multicluster-engine"
+
+	clt.Create(ctx, testHD)
+	defer clt.Delete(ctx, testHD)
+
+	// ensure the pull secret exist in cluster
+	// this pull secret is generated by the hypershift operator
+	pullSecret := getPullSecret(testHD)
+
+	clt.Create(ctx, pullSecret)
+	defer clt.Delete(ctx, pullSecret)
+
+	_, err := hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successful")
+
+	checker, err := newManifestResourceChecker(ctx, clt, getManifestWorkKey(testHD))
+	assert.Nil(t, err, "err nil when the mainfestwork check created")
+
+	assert.True(t, len(checker.spec.ManifestConfigs) != 0, "should have manifestconfigs")
+
+	assert.Nil(t, checker.update(), "err nil when can get the target manifestwork")
+
+	resStr := "test"
+	trueStr := "True"
+	falseStr := "False"
+	msgStr := "nope"
+	progress := "Partial"
+
+	_ = falseStr
+
+	resStr1 := "WaitingForAvailableMachines"
+
+	manifestWork := checker.obj
+
+	origin := manifestWork.DeepCopy()
+
+	hcCondInput := workv1.ManifestCondition{
+		ResourceMeta: workv1.ManifestResourceMeta{
+			Group:     hyp.GroupVersion.Group,
+			Resource:  HostedClusterResource,
+			Name:      testHD.Name,
+			Namespace: helper.GetTargetNamespace(testHD),
+		},
+		StatusFeedbacks: workv1.StatusFeedbackResult{
+			Values: []workv1.FeedbackValue{
+				{
+					Name: Reason,
+					Value: workv1.FieldValue{
+						Type:   workv1.String,
+						String: &resStr,
+					},
+				},
+				{
+					Name: StatusFlag,
+					Value: workv1.FieldValue{
+						Type:   workv1.String,
+						String: &trueStr,
+					},
+				},
+				{
+					Name: Message,
+					Value: workv1.FieldValue{
+						Type:   workv1.String,
+						String: &msgStr,
+					},
+				},
+				{
+					Name: Progress,
+					Value: workv1.FieldValue{
+						Type:   workv1.String,
+						String: &progress,
+					},
+				},
+			},
+		},
+	}
+
+	nodepoolInput := []workv1.ManifestCondition{
+		{
+			ResourceMeta: workv1.ManifestResourceMeta{
+				Group:     hyp.GroupVersion.Group,
+				Resource:  NodePoolResource,
+				Name:      testHD.Name,
+				Namespace: helper.GetTargetNamespace(testHD),
+			},
+			StatusFeedbacks: workv1.StatusFeedbackResult{
+				Values: []workv1.FeedbackValue{
+					{
+						Name: Reason,
+						Value: workv1.FieldValue{
+							Type:   workv1.String,
+							String: &resStr,
+						},
+					},
+					{
+						Name: StatusFlag,
+						Value: workv1.FieldValue{
+							Type:   workv1.String,
+							String: &trueStr,
+						},
+					},
+					{
+						Name: Message,
+						Value: workv1.FieldValue{
+							Type:   workv1.String,
+							String: &msgStr,
+						},
+					},
+				},
+			},
+		},
+
+		{
+			ResourceMeta: workv1.ManifestResourceMeta{
+				Group:     hyp.GroupVersion.Group,
+				Resource:  NodePoolResource,
+				Name:      testHD.Name,
+				Namespace: helper.GetTargetNamespace(testHD),
+			},
+			StatusFeedbacks: workv1.StatusFeedbackResult{
+				Values: []workv1.FeedbackValue{
+					{
+						Name: Reason,
+						Value: workv1.FieldValue{
+							Type:   workv1.String,
+							String: &resStr1,
+						},
+					},
+					{
+						Name: StatusFlag,
+						Value: workv1.FieldValue{
+							Type:   workv1.String,
+							String: &falseStr,
+						},
+					},
+					{
+						Name: Message,
+						Value: workv1.FieldValue{
+							Type:   workv1.String,
+							String: &msgStr,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	feedbackFine := workv1.ManifestResourceStatus{
+		Manifests: append(nodepoolInput, hcCondInput),
+	}
+
+	manifestWork.Status.ResourceStatus = feedbackFine
+
+	assert.Nil(t, clt.Status().Patch(ctx, manifestWork, client.MergeFrom(origin)), "err nil when update manifetwork status")
+
+	checker.update()
+
+	workNodepoolCond := checker.status.ResourceStatus.Manifests
+
+	assert.Len(t, workNodepoolCond, 3, "should have 3 feedbacks")
+
+	_, err = hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successful")
+
+	updatedHD := &hyd.HypershiftDeployment{}
+	assert.Nil(t, clt.Get(ctx, getNN, updatedHD), "err nil Get updated hypershiftDeployment")
+
+	hcAvaCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedClusterAvaliable))
+
+	assert.NotNil(t, hcAvaCond, "not nil, should find a hostedcluster condition")
+	assert.NotEmpty(t, hcAvaCond.Reason, "condition reason should be nil")
+
+	hcProCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedClusterProgress))
+
+	assert.NotNil(t, hcProCond, "not nil, should find a hostedcluster condition")
+	assert.NotEmpty(t, hcProCond.Reason, "condition reason should be nil")
+
+	nodepoolCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.Nodepool))
+
+	assert.NotNil(t, nodepoolCond, "not nil, should find a hostedcluster condition")
+	assert.NotEmpty(t, nodepoolCond.Reason, "condition reason should be nil")
+	assert.True(t, nodepoolCond.Reason == resStr1, "true, only contain a failed reason")
 }

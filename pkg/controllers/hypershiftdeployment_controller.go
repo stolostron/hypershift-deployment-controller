@@ -177,7 +177,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		// In Azure, the providerSecret is needed for Configure true or false
 		if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 			log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
-			return r.createMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
+			return r.createOrUpdateMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
 		}
 
 		if apierrors.IsNotFound(err) {

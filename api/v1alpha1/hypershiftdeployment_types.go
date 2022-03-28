@@ -35,6 +35,7 @@ const (
 	BeingConfiguredReason      = "BeingConfigured"
 	RemovingReason             = "Removing"
 	AsExpectedReason           = "AsExpected"
+	NodePoolProvision          = "NodePoolsProvisioned"
 
 	// PlatformConfigured indicates (if status is true) that the
 	// platform configuration specified for the platform provider has been applied
@@ -43,6 +44,15 @@ const (
 	PlatformIAMConfigured ConditionType = "PlatformIAMConfigured"
 	// ProviderSecretConfigured indicates the state of the secret reference
 	ProviderSecretConfigured ConditionType = "ProviderSecretConfigured"
+
+	// HostedCluster indicates the state of the hostedcluster
+	HostedClusterAvaliable ConditionType = "HostedClusterAvaliable"
+
+	// HostedCluster indicates the state of the hostedcluster
+	HostedClusterProgress ConditionType = "HostedClusterProgress"
+
+	// Nodepool indicates the state of the nodepools
+	Nodepool ConditionType = "NodePool"
 
 	// this mirror open-cluster-management.io/api/work/v1/types.go#L266-L279
 	// WorkProgressing represents that the work is in the progress to be
