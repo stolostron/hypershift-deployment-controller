@@ -272,7 +272,7 @@ func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.H
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: helper.GetTargetNamespace(hyd),
-			Name:      hyd.Name + "-pull-secret",
+			Name:      hyd.Spec.HostedClusterSpec.PullSecret.Name,
 			Labels: map[string]string{
 				AutoInfraLabelName: hyd.Spec.InfraID,
 			},
@@ -289,7 +289,7 @@ func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.Hyp
 
 func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
 
-	for _, secret := range ScaffoldSecrets(hyd) {
+	for _, secret := range ScaffoldAWSSecrets(hyd) {
 		if err := r.Create(r.ctx, secret); apierrors.IsAlreadyExists(err) {
 			if err := r.Update(r.ctx, secret); err != nil {
 				return err
