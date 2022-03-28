@@ -253,7 +253,7 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 
 		refSecrets := []*corev1.Secret{pullCreds}
 		if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {
-			refSecrets = append(refSecrets, ScaffoldSecrets(hyd)...)
+			refSecrets = append(refSecrets, ScaffoldAWSSecrets(hyd)...)
 		} else if hyd.Spec.HostedClusterSpec.Platform.Azure != nil {
 			creds, err := getAzureCloudProviderCreds(providerSecret)
 			if err != nil {
