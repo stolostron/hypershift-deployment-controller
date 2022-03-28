@@ -43,6 +43,15 @@ const (
 	CreatedByHypershiftDeployment = "hypershift-deployment.open-cluster-management.io/created-by"
 )
 
+// variables defined for manifestwork status sync
+var (
+	HostedClusterResource = "hostedclusters"
+	NodePoolResource      = "nodepools"
+	Reason                = "reason"
+	StatusFlag            = "status"
+	Message               = "message"
+)
+
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
 type loadManifest func(*hypdeployment.HypershiftDeployment, *[]workv1.Manifest) error
 
@@ -245,6 +254,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	}
 
 	syncManifestworkStatusToHypershiftDeployment(hyd, m)
+	//caller will execute the status update
 	setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment's manifestwork and related resources", hypdeployment.RemovingReason)
 
 	return ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, nil
@@ -343,14 +353,6 @@ func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.M
 
 	return nil
 }
-
-var (
-	HostedClusterResource = "hostedclusters"
-	NodePoolResource      = "nodepools"
-	Reason                = "reason"
-	StatusFlag            = "status"
-	Message               = "message"
-)
 
 func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.ResourceIdentifier]workv1.ManifestConfigOption {
 	out := map[workv1.ResourceIdentifier]workv1.ManifestConfigOption{}
@@ -468,6 +470,7 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 		metav1.Condition{ //the default nodepool status, will be override if there's false status
 			Type:   string(hypdeployment.Nodepool),
 			Status: "True",
+			Reason: hypdeployment.NodePoolProvision,
 		},
 	}
 
@@ -498,8 +501,6 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 
 	return out
 }
-
-// statusfeedbacks.values => condition
 
 func isFeedbackStatusFalse(fbs workv1.StatusFeedbackResult) bool {
 	for _, v := range fbs.Values {

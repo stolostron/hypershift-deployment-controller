@@ -634,6 +634,8 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	falseStr := "False"
 	msgStr := "nope"
 
+	_ = falseStr
+
 	resStr1 := "WaitingForAvailableMachines"
 
 	manifestWork := checker.obj
@@ -768,9 +770,11 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 
 	assert.NotNil(t, hcCond, "not nil, should find a hostedcluster condition")
 
+	assert.NotEmpty(t, hcCond.Reason, "condition reason should be nil")
+
 	nodepoolCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.Nodepool))
 
 	assert.NotNil(t, nodepoolCond, "not nil, should find a hostedcluster condition")
-
+	assert.NotEmpty(t, nodepoolCond.Reason, "condition reason should be nil")
 	assert.True(t, nodepoolCond.Reason == resStr1, "true, only contain a failed reason")
 }
