@@ -57,13 +57,15 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 		return nil, fmt.Errorf("hypershiftDeployment.Spec.InfraID is not set or rendered")
 	}
 
+	k := getManifestWorkKey(hyd)
+
 	w := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			// make sure when deploying 2 hostedclusters with the same name but in different namespaces, the
 			// generated manifestworks are unique.
-			Name:      generateManifestName(hyd),
-			Namespace: helper.GetTargetManagedCluster(hyd),
+			Name:      k.Name,
+			Namespace: k.Namespace,
 			Annotations: map[string]string{
 				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
 					hyd.GetNamespace(),
@@ -103,7 +105,7 @@ func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, targetNames
 
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      hyd.GetName(),
+		Name:      generateManifestName(hyd),
 		Namespace: helper.GetTargetManagedCluster(hyd),
 	}
 }
@@ -113,7 +115,14 @@ func syncManifestworkStatusToHypershiftDeployment(
 	work *workv1.ManifestWork) {
 	workConds := work.Status.Conditions
 
-	for _, cond := range workConds {
+	conds := []metav1.Condition{}
+
+	conds = append(conds, workConds...)
+
+	feedback := getStatusFeedbackAsCondition(work, hyd)
+	conds = append(conds, feedback...)
+
+	for _, cond := range conds {
 		setStatusCondition(
 			hyd,
 			hypdeployment.ConditionType(cond.Type),
@@ -124,7 +133,7 @@ func syncManifestworkStatusToHypershiftDeployment(
 	}
 }
 
-func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
+func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
 	// We need a targetManagedCluster if we use ManifestWork
 	if len(hyd.Spec.TargetManagedCluster) == 0 {
@@ -144,6 +153,8 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		return ctrl.Result{}, err
 	}
 
+	enableManifestStatusFeedback(m, hyd)
+
 	// This is a special check to make sure these values are provided as they are Not part of the standard
 	// HostedClusterSpec
 	if hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
@@ -152,14 +163,10 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
 	}
 
+	inHyd := hyd.DeepCopy()
 	// if the manifestwork is created, then move the status to hypershiftDeployment
-	// TODO: @ianzhang366 might want to do some upate/patch when the manifestwork is created.
 	if err := r.Get(ctx, getManifestWorkKey(hyd), m); err == nil {
-		inHyd := hyd.DeepCopy()
 		syncManifestworkStatusToHypershiftDeployment(hyd, m)
-
-		return ctrl.Result{},
-			r.Client.Status().Patch(r.ctx, hyd, client.MergeFrom(inHyd))
 	}
 
 	payload := []workv1.Manifest{}
@@ -195,9 +202,17 @@ func (r *HypershiftDeploymentReconciler) createMainfestwork(ctx context.Context,
 
 	}
 
-	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork for hypershiftDeployment: %s at targetNamespace: %s", req, helper.GetTargetManagedCluster(hyd)))
+	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork %s for hypershiftDeployment: %s at targetNamespace: %s", getManifestWorkKey(hyd), req, helper.GetTargetManagedCluster(hyd)))
 
-	return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
+	setStatusCondition(
+		hyd,
+		hypdeployment.WorkConfigured,
+		metav1.ConditionTrue,
+		"",
+		hypdeployment.ConfiguredAsExpectedReason,
+	)
+
+	return ctrl.Result{}, r.Client.Status().Patch(r.ctx, hyd, client.MergeFrom(inHyd))
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
@@ -327,4 +342,183 @@ func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.M
 	}
 
 	return nil
+}
+
+var (
+	HostedClusterResource = "hostedclusters"
+	NodePoolResource      = "nodepools"
+	Reason                = "reason"
+	StatusFlag            = "status"
+	Message               = "message"
+)
+
+func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.ResourceIdentifier]workv1.ManifestConfigOption {
+	out := map[workv1.ResourceIdentifier]workv1.ManifestConfigOption{}
+	k := workv1.ResourceIdentifier{
+		Group:     hyp.GroupVersion.Group,
+		Resource:  HostedClusterResource,
+		Name:      hyd.Name,
+		Namespace: helper.GetTargetNamespace(hyd),
+	}
+
+	out[k] = workv1.ManifestConfigOption{
+		ResourceIdentifier: k,
+		FeedbackRules: []workv1.FeedbackRule{
+			{
+				Type: workv1.JSONPathsType,
+				JsonPaths: []workv1.JsonPath{
+					{
+						Name: Reason,
+						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].reason"),
+					},
+					{
+						Name: StatusFlag,
+						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].status"),
+					},
+					{
+						Name: Message,
+						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].message"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, np := range hyd.Spec.NodePools {
+		k := workv1.ResourceIdentifier{
+			Group:     hyp.GroupVersion.Group,
+			Resource:  NodePoolResource,
+			Name:      np.Name,
+			Namespace: helper.GetTargetNamespace(hyd),
+		}
+
+		out[k] = workv1.ManifestConfigOption{
+			ResourceIdentifier: k,
+			FeedbackRules: []workv1.FeedbackRule{
+				{
+					Type: workv1.JSONPathsType,
+					JsonPaths: []workv1.JsonPath{
+						{
+							Name: Reason,
+							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].reason"),
+						},
+						{
+							Name: StatusFlag,
+							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].status"),
+						},
+						{
+							Name: Message,
+							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].message"),
+						},
+					},
+				},
+			},
+		}
+
+	}
+
+	return out
+}
+
+func feedbackToCondition(t hypdeployment.ConditionType, fvs []workv1.FeedbackValue) metav1.Condition {
+	m := metav1.Condition{
+		Type: string(t),
+	}
+
+	for _, v := range fvs {
+		if v.Name == Reason {
+			m.Reason = string(*v.Value.String)
+		}
+
+		if v.Name == StatusFlag {
+			m.Status = metav1.ConditionStatus(*v.Value.String)
+		}
+
+		if v.Name == Message {
+			m.Message = string(*v.Value.String)
+		}
+	}
+
+	return m
+}
+
+func enableManifestStatusFeedback(m *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) {
+	if m == nil {
+		return
+	}
+
+	cfg := []workv1.ManifestConfigOption{}
+
+	cfgMap := getManifestWorkConfigs(hyd)
+
+	for _, v := range cfgMap {
+		cfg = append(cfg, v)
+	}
+
+	m.Spec.ManifestConfigs = cfg
+}
+
+func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) []metav1.Condition {
+	idMap := getManifestWorkConfigs(hyd)
+	if m == nil || hyd == nil {
+		return []metav1.Condition{}
+	}
+
+	out := []metav1.Condition{
+		metav1.Condition{ //the default nodepool status, will be override if there's false status
+			Type:   string(hypdeployment.Nodepool),
+			Status: "True",
+		},
+	}
+
+	found := false
+	for _, obj := range m.Status.ResourceStatus.Manifests {
+		rMeta := resourceMeta(obj.ResourceMeta)
+
+		id := rMeta.ToIdentifier()
+
+		if _, ok := idMap[id]; !ok {
+			continue
+		}
+
+		if id.Resource == NodePoolResource {
+			if isFeedbackStatusFalse(obj.StatusFeedbacks) && !found {
+				npCond := feedbackToCondition(hypdeployment.Nodepool, obj.StatusFeedbacks.Values)
+				out = append(out, npCond)
+				found = true
+			}
+		}
+
+		if id.Resource == HostedClusterResource {
+			hcCond := feedbackToCondition(hypdeployment.HostedCluster, obj.StatusFeedbacks.Values)
+			out = append(out, hcCond)
+		}
+
+	}
+
+	return out
+}
+
+// statusfeedbacks.values => condition
+
+func isFeedbackStatusFalse(fbs workv1.StatusFeedbackResult) bool {
+	for _, v := range fbs.Values {
+		//if there's not ready nodepool, report this one
+		if v.Name == StatusFlag && *v.Value.String != "True" {
+			return true
+		}
+	}
+
+	return false
+}
+
+type resourceMeta workv1.ManifestResourceMeta
+
+func (r resourceMeta) ToIdentifier() workv1.ResourceIdentifier {
+	return workv1.ResourceIdentifier{
+		Group:     r.Group,
+		Resource:  r.Resource,
+		Name:      r.Name,
+		Namespace: r.Namespace,
+	}
 }
