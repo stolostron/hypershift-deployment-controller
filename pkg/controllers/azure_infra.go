@@ -95,13 +95,13 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 			if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, cloudCredSecret, func() error { return nil }); err != nil {
 				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Could not create or update the cloud credential secret", hypdeployment.MisConfiguredReason)
 			}
+			// Todo, this should be skipped and the manifestwork should generate it from a providerCredential
+			log.Info("Creating pull secret")
+			if err := r.createPullSecret(hyd, *providerSecret); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
-		// Todo, this should be skipped and the manifestwork should generate it from a providerCredential
-		log.Info("Creating pull secret")
-		if err := r.createPullSecret(hyd, *providerSecret); err != nil {
-			return ctrl.Result{}, err
-		}
-		log.Info("Complete IAM configuration")
+		log.Info("IAM configured")
 		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 	}
 	return ctrl.Result{}, nil

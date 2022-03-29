@@ -115,31 +115,36 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			}
 
 			iamOut, iamErr = iamOpt.CreateIAM(r.ctx, r.Client)
-			if iamErr == nil {
-				if iamErr = r.createPullSecret(hyd, *providerSecret); iamErr == nil {
-					hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
-					hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
-					hyd.Spec.Credentials = &hypdeployment.CredentialARNs{
-						AWS: &hypdeployment.AWSCredentials{
-							ControlPlaneOperatorARN: iamOut.ControlPlaneOperatorRoleARN,
-							KubeCloudControllerARN:  iamOut.KubeCloudControllerRoleARN,
-							NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
-						}}
-					if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
-						return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
-					}
-				}
-				if iamErr == nil {
-					if iamErr = createOIDCSecrets(r, hyd); iamErr == nil {
-						_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
-						log.Info("IAM and Secrets configured")
-					}
-				}
+			if iamErr != nil {
+				_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
+				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
 			}
-		}
-		if iamErr != nil {
-			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
-			return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
+
+			hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
+			hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
+			hyd.Spec.Credentials = &hypdeployment.CredentialARNs{
+				AWS: &hypdeployment.AWSCredentials{
+					ControlPlaneOperatorARN: iamOut.ControlPlaneOperatorRoleARN,
+					KubeCloudControllerARN:  iamOut.KubeCloudControllerRoleARN,
+					NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
+				}}
+			if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+			}
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
+			log.Info("IAM configured")
+
+			if hyd.Spec.Override != hypdeployment.InfraConfigureWithManifest {
+				if iamErr = r.createPullSecret(hyd, *providerSecret); iamErr == nil {
+					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
+					return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
+				}
+				if iamErr = createOIDCSecrets(r, hyd); iamErr == nil {
+					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
+					return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
+				}
+				log.Info("Secrets configured")
+			}
 		}
 	}
 
