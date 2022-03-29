@@ -62,12 +62,41 @@ func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedC
 		Spec: *hyd.Spec.HostedClusterSpec,
 	}
 
-	// Pass the control plane operator image annotation.
-	// This is used for development and e2e workflows
-	if val, ok := hyd.Annotations[hyp.ControlPlaneOperatorImageAnnotation]; ok {
-		hostedCluster.Annotations[hyp.ControlPlaneOperatorImageAnnotation] = val
-	}
+	// Pass all appropriate annotations to the HostedCluster
+	// Find Annotation references here: https://github.com/openshift/hypershift/blob/main/api/v1alpha1/hostedcluster_types.go
+	transferHostedClusterAnnotations(hyd.Annotations, hostedCluster.Annotations)
+
 	return hostedCluster
+}
+
+var checkHostedClusterAnnotations = map[string]bool{
+	"DisablePKIReconciliationAnnotation":        true,
+	"IdentityProviderOverridesAnnotationPrefix": true,
+	"OauthLoginURLOverrideAnnotation":           true,
+	"KonnectivityServerImageAnnotation":         true,
+	"KonnectivityAgentImageAnnotation":          true,
+	"ControlPlaneOperatorImageAnnotation":       true,
+	"RestartDateAnnotation":                     true,
+	"ReleaseImageAnnotation":                    true,
+	"ClusterAPIManagerImage":                    true,
+	"ClusterAutoscalerImage":                    true,
+	"AWSKMSProviderImage":                       true,
+	"IBMCloudKMSProviderImage":                  true,
+	"PortierisImageAnnotation":                  true,
+	"ClusterAPIProviderAWSImage":                true,
+	"ClusterAPIKubeVirtProviderImage":           true,
+	"ClusterAPIAgentProviderImage":              true,
+	"ClusterAPIAzureProviderImage":              true,
+	"ExternalDNSHostnameAnnotation":             true,
+}
+
+// Looping through annotations on HypershiftDeployment and checking against the MAP is the fastest
+func transferHostedClusterAnnotations(hdAnnotations map[string]string, hcAnnotations map[string]string) {
+	for a, val := range hdAnnotations {
+		if checkHostedClusterAnnotations[a] {
+			hcAnnotations[a] = val
+		}
+	}
 }
 
 // Creates an instance of ServicePublishingStrategyMapping
