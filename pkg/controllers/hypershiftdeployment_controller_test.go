@@ -36,6 +36,10 @@ func getHypershiftDeployment(namespace string, name string) *hyd.HypershiftDeplo
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				"test1": "doNotTransfer1",
+				"test2": "doNotTransfer2",
+			},
 		},
 		Spec: hyd.HypershiftDeploymentSpec{
 			Infrastructure: hyd.InfraSpec{
@@ -236,9 +240,6 @@ func genKeyFromObject(obj metav1.Object) types.NamespacedName {
 	return types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
 }
 
-
-
-
 func TestHypershiftdeployment_controller(t *testing.T) {
 
 	client := initClient()
@@ -321,6 +322,36 @@ func getProviderSecret() *corev1.Secret {
 			"pullSecret": []byte(`docker-pull-secret`),
 		},
 	}
+}
+
+func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
+
+	testHD := getHDforManifestWork()
+	_, found := testHD.Annotations["test1"]
+	assert.Equal(t, true, found, "validating annotation is present")
+
+	_, found = testHD.Annotations["test2"]
+	assert.Equal(t, true, found, "validating annotation is present")
+
+	// Add all known annotations
+	for a, _ := range checkHostedClusterAnnotations {
+		testHD.Annotations[a] = "value--" + a
+	}
+
+	resultHC := ScaffoldHostedCluster(testHD)
+
+	// Validate all known annotations
+	for a, _ := range checkHostedClusterAnnotations {
+		assert.EqualValues(t, "value--"+a, resultHC.Annotations[a], "Equal when annotation copied")
+	}
+
+	// Make sure test1 and test2 annotations were not transferred to the hostedCluster
+	_, found = resultHC.Annotations["test1"]
+	assert.NotEqual(t, true, found, "validating annotation is present")
+
+	_, found = resultHC.Annotations["test2"]
+	assert.NotEqual(t, true, found, "validating annotation is present")
+
 }
 
 // TODO Azure test using provider secret
