@@ -168,7 +168,7 @@ func TestReconcileCreate(t *testing.T) {
 				assert.Equal(t, "Hosted",
 					mc.Annotations["import.open-cluster-management.io/klusterlet-deploy-mode"], "assert hosted mode annotation value")
 				assert.Equal(t, helper.GetTargetManagedCluster(hyd),
-					mc.Annotations["import.open-cluster-management.io/management-cluster-name"], "assert management cluster annotation value")
+					mc.Annotations["import.open-cluster-management.io/hosting-cluster-name"], "assert management cluster annotation value")
 
 				assertAnnoNotContainCreateMC(t, ctx, client)
 			},
