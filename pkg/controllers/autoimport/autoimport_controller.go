@@ -83,7 +83,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	log.V(INFO).Info("Hypershift Deployment info", "InfraID", hyd.Spec.InfraID,
-		"targetNamespace", hyd.Spec.TargetNamespace, "targetManagedCluster", hyd.Spec.TargetManagedCluster)
+		"hostingNamespace", hyd.Spec.HostingNamespace, "hostingManagedCluster", hyd.Spec.HostingManagedCluster)
 
 	managedClusterName := helper.ManagedClusterName(&hyd)
 	// Delete the ManagedCluster
@@ -104,7 +104,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	managementClusterName := helper.GetTargetManagedCluster(&hyd)
+	managementClusterName := helper.GetHostingManagedCluster(&hyd)
 	// ManagedCluster
 	managedCluster, err := ensureManagedCluster(r, req.NamespacedName, managedClusterName, managementClusterName)
 	if err != nil {

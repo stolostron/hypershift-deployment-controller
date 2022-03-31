@@ -32,12 +32,12 @@ import (
 
 type override func(obj metav1.Object)
 
-func overrideNamespace(targetNamespace string) override {
+func overrideNamespace(hostingNamespace string) override {
 	return func(o metav1.Object) {
-		if len(targetNamespace) == 0 {
+		if len(hostingNamespace) == 0 {
 			return
 		}
-		o.SetNamespace(targetNamespace)
+		o.SetNamespace(hostingNamespace)
 	}
 }
 

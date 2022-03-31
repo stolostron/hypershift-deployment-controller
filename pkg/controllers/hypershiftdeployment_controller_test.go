@@ -384,5 +384,5 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.ProviderSecretConfigured))
 	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, "Missing targetManagedCluster for override: MANIFESTWORK", c.Message, "is equal when targetManagedCluster is missing")
+	assert.Equal(t, helper.HostingManagedClusterMissing, c.Message, "is equal when hostingManagedCluster is missing")
 }*/

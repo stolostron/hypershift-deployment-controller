@@ -60,7 +60,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 		expectRegion string
 	}{
 		{
-			name: "err no targetManagedCluster",
+			name: "err no hostingManagedCluster",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      hypershiftBucketSecretName,
@@ -75,7 +75,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 			expectedErr: helper.HostingManagedClusterMissing,
 		},
 		{
-			name: "err no targetNamespace configure true",
+			name: "err no hostingNamespace configure true",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      hypershiftBucketSecretName,

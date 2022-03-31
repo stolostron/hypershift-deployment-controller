@@ -41,7 +41,6 @@ import (
 )
 
 const (
-	ManifestTargetNamespace       = "manifestwork-target-namespace"
 	CreatedByHypershiftDeployment = "hypershift-deployment.open-cluster-management.io/created-by"
 )
 
@@ -101,14 +100,14 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 	return w, nil
 }
 
-func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, targetNamespace string) {
+func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hostingNamespace string) {
 	mw.Spec.DeleteOption = &workv1.DeleteOption{
 		PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
 		SelectivelyOrphan: &workv1.SelectivelyOrphan{
 			OrphaningRules: []workv1.OrphaningRule{
 				{
 					Resource: "namespaces",
-					Name:     targetNamespace,
+					Name:     hostingNamespace,
 				},
 			},
 		},
@@ -327,11 +326,11 @@ func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]wor
 }
 
 func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-	targetNamespace := helper.GetHostingNamespace(hyd)
+	hostingNamespace := helper.GetHostingNamespace(hyd)
 	*payload = append(*payload, workv1.Manifest{
 		RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: targetNamespace,
+				Name: hostingNamespace,
 			},
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Namespace",

@@ -171,7 +171,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 
-		// hyd.Spec.TargetNamespace is set by both createManifestwork and ScaffoldHostedCluster,
+		// hyd.Spec.HostingNamespace is set by both createManifestwork and ScaffoldHostedCluster,
 		// using the helper.GetHostingNamespace function
 
 		// In Azure, the providerSecret is needed for Configure true or false
@@ -398,7 +398,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 			return res, fmt.Errorf("failed to delete manifestwork %v", err)
 		}
 
-		// wait for the nodepools and hostedcluster in target namespace is deleted(via the work agent)
+		// wait for the nodepools and hostedcluster in hosting namespace is deleted(via the work agent)
 		if !res.IsZero() {
 			return res, nil
 		}

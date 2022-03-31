@@ -5,8 +5,8 @@ metadata:
   name: manifestwork-status
   namespace: default #${hostClusterNamespace}
 spec:
-  targetManagedCluster: local-cluster
-  targetNamespace: default
+  hostingManagedCluster: local-cluster
+  hostingNamespace: default
   override: MANIFESTWORK
   infrastructure:
     cloudProvider:

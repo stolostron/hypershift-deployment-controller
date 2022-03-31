@@ -334,7 +334,7 @@ func TestManifestWorkFlowNoHostingManagedCluster(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, helper.HostingManagedClusterMissing, c.Message, "is equal when targetManagedCluster is missing")
+	assert.Equal(t, helper.HostingManagedClusterMissing, c.Message, "is equal when hostingManagedCluster is missing")
 }
 
 func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
@@ -627,7 +627,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 
 	assert.True(t, len(checker.spec.ManifestConfigs) != 0, "should have manifestconfigs")
 
-	assert.Nil(t, checker.update(), "err nil when can get the target manifestwork")
+	assert.Nil(t, checker.update(), "err nil when can get the hosting manifestwork")
 
 	resStr := "test"
 	trueStr := "True"
