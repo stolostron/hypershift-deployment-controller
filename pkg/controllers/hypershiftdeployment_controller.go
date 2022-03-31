@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -162,10 +161,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// Work on the HostedCluster resource
-	var hc hyp.HostedCluster
-	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: hyd.Name}, &hc)
-
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
@@ -175,90 +170,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		// using the helper.GetTargetNamespace function
 
 		// In Azure, the providerSecret is needed for Configure true or false
-		if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+		if len(hyd.Spec.Override) == 0 || hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 			log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
 			return r.createOrUpdateMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
-		}
-
-		if apierrors.IsNotFound(err) {
-
-			hostedCluster := ScaffoldHostedCluster(&hyd)
-
-			if err := r.Create(ctx, hostedCluster); err != nil {
-				if apierrors.IsAlreadyExists(err) {
-					log.Error(err, "Failed to create HostedCluster resource")
-					return ctrl.Result{}, err
-				}
-				log.Info("HostedCluster created " + hc.Name)
-
-			}
-			log.Info("HostedCluster resource created: " + hostedCluster.Name)
-		} else {
-			if !reflect.DeepEqual(hc.Spec.Autoscaling, hyd.Spec.HostedClusterSpec.Autoscaling) ||
-				!reflect.DeepEqual(hc.Spec.Release, hyd.Spec.HostedClusterSpec.Release) ||
-				!reflect.DeepEqual(hc.Spec.ControllerAvailabilityPolicy, hyd.Spec.HostedClusterSpec.ControllerAvailabilityPolicy) {
-				hc.Spec = *hyd.Spec.HostedClusterSpec
-				if err := r.Update(ctx, &hc); err != nil {
-					log.Error(err, "Failed to update HostedCluster resource")
-					return ctrl.Result{}, err
-				}
-				log.Info("HostedCluster resource updated: " + hc.Name)
-			}
-		}
-
-		// We loop through what exists, so that we can delete pools if appropriate
-		var nodePools hyp.NodePoolList
-		if err := r.List(ctx, &nodePools, client.InNamespace(hyd.Spec.TargetNamespace), client.MatchingLabels{AutoInfraLabelName: hyd.Spec.InfraID}); err != nil {
-			return ctrl.Result{}, err
-		}
-		log.Info("Processing " + fmt.Sprint(len(nodePools.Items)) + " NodePools")
-
-		// Create and Update HypershiftDeployment.Spec.NodePools
-		for _, np := range hyd.Spec.NodePools {
-			noMatch := true
-			for _, foundNodePool := range nodePools.Items {
-				if np.Name == foundNodePool.Name {
-					if !reflect.DeepEqual(foundNodePool.Spec, np.Spec) {
-						foundNodePool.Spec = np.Spec
-						if err := r.Update(ctx, &foundNodePool); err != nil {
-							log.Error(err, "Failed to update NodePool resource")
-							return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-						}
-						log.Info("NodePool resource updated: " + np.Name)
-					}
-					noMatch = false
-					break
-				}
-			}
-			if noMatch {
-				nodePool := ScaffoldNodePool(&hyd, np)
-
-				if err := r.Create(ctx, nodePool); err != nil {
-					log.Error(err, "Failed to create NodePool resource")
-					return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-				}
-				log.Info("NodePool resource created: " + np.Name)
-			}
-		}
-
-		// Delete a NodePool if it no longer is present in the HypershiftDeployment.Spec.NodePools
-		for _, nodePool := range nodePools.Items {
-			noMatch := true
-			for _, np := range hyd.Spec.NodePools {
-				if nodePool.Name == np.Name {
-					noMatch = false
-				}
-			}
-			if noMatch {
-				if nodePool.DeletionTimestamp == nil {
-					if err := r.Delete(ctx, &nodePool); err != nil {
-						log.Error(err, "Failed to delete NodePool resource")
-						return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-					}
-					log.Info("NodePool resource deleted: " + nodePool.Name)
-				}
-			}
-
 		}
 	}
 	return ctrl.Result{}, nil
@@ -401,39 +315,6 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		// wait for the nodepools and hostedcluster in target namespace is deleted(via the work agent)
 		if !res.IsZero() {
 			return res, nil
-		}
-	} else if hyd.Spec.Override != hypdeployment.InfraOverrideDestroy {
-		// Delete nodepools first
-		log.Info("Remove any NodePools")
-		for _, np := range hyd.Spec.NodePools {
-			var nodePool hyp.NodePool
-			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: np.Name}, &nodePool); err == nil {
-				if nodePool.DeletionTimestamp == nil {
-					r.Log.Info("Deleting NodePool " + np.Name)
-					if err := r.Delete(ctx, &nodePool); err != nil {
-						log.Error(err, "Failed to delete NodePool resource")
-						return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-					}
-				}
-				log.Info("Waiting for NodePool " + np.Name + " to be deleted, retry in 10s")
-				return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-			} else {
-				log.Info("NodePool " + np.Name + " already deleted...")
-			}
-		}
-
-		// Delete the HostedCluster
-		var hc hyp.HostedCluster
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
-			if hc.DeletionTimestamp == nil {
-				log.Info("Deleting HostedCluster " + hyd.Name)
-				// The delete action can take a while and we don't want to block the reconciler
-				go r.spawnDelete(ctx, hc)
-			}
-			log.Info("Waiting for HostedCluster " + hyd.Name + " to be deleted, retry in 10s")
-			return ctrl.Result{RequeueAfter: 10 * time.Second, Requeue: true}, nil
-		} else {
-			log.Info("HostedCluster " + hyd.Name + " already deleted...")
 		}
 	}
 
