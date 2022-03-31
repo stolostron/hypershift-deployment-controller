@@ -45,7 +45,20 @@ if [ "${BUCKET_REGION}" == "" ]; then
 fi
 printf "S3 credentials: ${S3_CREDS}\n"
 printf "Bucket name   : ${BUCKET_NAME}\n"
-printf "Bucket region : ${BUCKET_REGION}\n"
+printf "Bucket region : ${BUCKET_REGION}\nTesting bucket\n"
+
+CMD="AWS_SHARED_CREDENTIALS_FILE=${S3_CREDS} aws --region ${BUCKET_REGION} s3 ls ${BUCKET_NAME}"
+which aws
+if [ $? -ne 0 ]; then
+  printf "**WARNING** AWS CLI is not present, so S3_CREDS can not be validated, continuing to test URL"
+  CMD="curl https://${BUCKET_NAME}.s3.${BUCKET_REGION}.amazonaws.com 2>&1 | grep \"Access Denied\""
+fi
+
+eval ${CMD}
+if [ $? -ne 0 ]; then
+  printf "Bucket with details listed above does not exist\n"
+  exit 1
+fi
 
 oc get mce multiclusterengine-sample
 if [ $? -ne 0 ]; then
@@ -71,6 +84,9 @@ while [ $? -ne 0 ]; do
   oc get secret -n local-cluster local-cluster-import > /dev/null 2>&1
 done
 
+sleep 10
+
+oc get secret -n local-cluster local-cluster-import -o yaml > sOut1
 oc get secret -n local-cluster local-cluster-import -ojsonpath={.data.crds\\.yaml} | base64 -d | oc apply -f -
 
 oc get secret -n local-cluster local-cluster-import -ojsonpath={.data.import\\.yaml} | base64 -d | oc apply -f -
