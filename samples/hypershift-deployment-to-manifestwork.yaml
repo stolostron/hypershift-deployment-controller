@@ -2,11 +2,11 @@
 apiVersion: cluster.open-cluster-management.io/v1alpha1
 kind: HypershiftDeployment
 metadata:
-  name: ${hostClusterName}
-  namespace: clusters #${hostClusterNamespace}
+  name: manifestwork-status
+  namespace: default #${hostClusterNamespace}
 spec:
-  targetManagedCluster: spoke
-  targetNamespace: default
+  hostingCluster: local-cluster
+  hostingNamespace: default
   override: MANIFESTWORK
   infrastructure:
     cloudProvider:

@@ -54,7 +54,7 @@ func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedC
 	hostedCluster := &hyp.HostedCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      hyd.Name,
-			Namespace: helper.GetTargetNamespace(hyd),
+			Namespace: helper.GetHostingNamespace(hyd),
 			Annotations: map[string]string{
 				constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
 			},
@@ -301,7 +301,7 @@ func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      np.Name,
-			Namespace: helper.GetTargetNamespace(hyd),
+			Namespace: helper.GetHostingNamespace(hyd),
 			Labels: map[string]string{
 				AutoInfraLabelName: hyd.Spec.InfraID,
 			},
@@ -320,7 +320,7 @@ func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secre
 				APIVersion: corev1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: helper.GetTargetNamespace(hyd),
+				Namespace: helper.GetHostingNamespace(hyd),
 				Name:      name,
 				Labels: map[string]string{
 					AutoInfraLabelName: hyd.Spec.InfraID,
@@ -351,7 +351,7 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hyd.Spec.HostedClusterSpec.Platform.Azure.Credentials.Name,
-			Namespace: helper.GetTargetNamespace(hyd),
+			Namespace: helper.GetHostingNamespace(hyd),
 			Labels: map[string]string{
 				util.AutoInfraLabelName: hyd.Spec.InfraID,
 			},

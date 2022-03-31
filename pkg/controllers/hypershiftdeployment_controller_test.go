@@ -274,8 +274,8 @@ func TestConfigureFalseWithManifestWork(t *testing.T) {
 
 	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name)
 	testHD.Spec.Override = hyd.InfraConfigureWithManifest
-	testHD.Spec.TargetManagedCluster = "local-host"
-	testHD.Spec.TargetNamespace = "multicluster-engine"
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	client.Create(context.Background(), testHD)
 
@@ -360,7 +360,7 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 	testHD.Spec.Infrastructure.CloudProvider.Name = "providersecret"
 
 	client.Create(ctx, testHD)
@@ -384,5 +384,5 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.ProviderSecretConfigured))
 	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, "Missing targetManagedCluster for override: MANIFESTWORK", c.Message, "is equal when targetManagedCluster is missing")
+	assert.Equal(t, helper.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
 }*/

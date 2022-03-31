@@ -6,20 +6,24 @@ import (
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 )
 
+const (
+	HostingClusterMissing = "spec.hostingCluster value is missing"
+)
+
 //TODO @ianzhang366 integrate with the clusterSet logic
-func GetTargetManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
-	if len(hyd.Spec.TargetManagedCluster) == 0 {
+func GetHostingCluster(hyd *hypdeployment.HypershiftDeployment) string {
+	if len(hyd.Spec.HostingCluster) == 0 {
 		return hyd.GetNamespace()
 	}
 
-	return hyd.Spec.TargetManagedCluster
+	return hyd.Spec.HostingCluster
 }
 
-func GetTargetNamespace(hyd *hypdeployment.HypershiftDeployment) string {
-	if len(hyd.Spec.TargetNamespace) == 0 {
-		hyd.Spec.TargetNamespace = hyd.GetNamespace()
+func GetHostingNamespace(hyd *hypdeployment.HypershiftDeployment) string {
+	if len(hyd.Spec.HostingNamespace) == 0 {
+		hyd.Spec.HostingNamespace = hyd.GetNamespace()
 	}
-	return hyd.Spec.TargetNamespace
+	return hyd.Spec.HostingNamespace
 }
 
 func ManagedClusterName(hyd *hypdeployment.HypershiftDeployment) string {
@@ -28,5 +32,5 @@ func ManagedClusterName(hyd *hypdeployment.HypershiftDeployment) string {
 
 // TODO(zhujian7) get this from hyd.Status.Kubeconfig
 func HostedKubeconfigName(hyd *hypdeployment.HypershiftDeployment) string {
-	return fmt.Sprintf("%s-%s-admin-kubeconfig", GetTargetNamespace(hyd), hyd.GetName())
+	return fmt.Sprintf("%s-%s-admin-kubeconfig", GetHostingNamespace(hyd), hyd.GetName())
 }

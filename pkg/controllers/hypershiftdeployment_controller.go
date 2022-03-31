@@ -164,15 +164,15 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Work on the HostedCluster resource
 	var hc hyp.HostedCluster
-	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: hyd.Name}, &hc)
+	err = r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.HostingNamespace, Name: hyd.Name}, &hc)
 
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 
-		// hyd.Spec.TargetNamespace is set by both createManifestwork and ScaffoldHostedCluster,
-		// using the helper.GetTargetNamespace function
+		// hyd.Spec.HostingNamespace is set by both createManifestwork and ScaffoldHostedCluster,
+		// using the helper.GetHostingNamespace function
 
 		// In Azure, the providerSecret is needed for Configure true or false
 		if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
@@ -208,7 +208,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 		// We loop through what exists, so that we can delete pools if appropriate
 		var nodePools hyp.NodePoolList
-		if err := r.List(ctx, &nodePools, client.InNamespace(hyd.Spec.TargetNamespace), client.MatchingLabels{AutoInfraLabelName: hyd.Spec.InfraID}); err != nil {
+		if err := r.List(ctx, &nodePools, client.InNamespace(hyd.Spec.HostingNamespace), client.MatchingLabels{AutoInfraLabelName: hyd.Spec.InfraID}); err != nil {
 			return ctrl.Result{}, err
 		}
 		log.Info("Processing " + fmt.Sprint(len(nodePools.Items)) + " NodePools")
@@ -271,7 +271,7 @@ func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.H
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: helper.GetTargetNamespace(hyd),
+			Namespace: helper.GetHostingNamespace(hyd),
 			Name:      hyd.Spec.HostedClusterSpec.PullSecret.Name,
 			Labels: map[string]string{
 				AutoInfraLabelName: hyd.Spec.InfraID,
@@ -398,7 +398,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 			return res, fmt.Errorf("failed to delete manifestwork %v", err)
 		}
 
-		// wait for the nodepools and hostedcluster in target namespace is deleted(via the work agent)
+		// wait for the nodepools and hostedcluster in hosting namespace is deleted(via the work agent)
 		if !res.IsZero() {
 			return res, nil
 		}
@@ -407,7 +407,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		log.Info("Remove any NodePools")
 		for _, np := range hyd.Spec.NodePools {
 			var nodePool hyp.NodePool
-			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: np.Name}, &nodePool); err == nil {
+			if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.HostingNamespace, Name: np.Name}, &nodePool); err == nil {
 				if nodePool.DeletionTimestamp == nil {
 					r.Log.Info("Deleting NodePool " + np.Name)
 					if err := r.Delete(ctx, &nodePool); err != nil {
@@ -424,7 +424,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 		// Delete the HostedCluster
 		var hc hyp.HostedCluster
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.TargetNamespace, Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
+		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Spec.HostingNamespace, Name: hyd.Name}, &hc); !apierrors.IsNotFound(err) {
 			if hc.DeletionTimestamp == nil {
 				log.Info("Deleting HostedCluster " + hyd.Name)
 				// The delete action can take a while and we don't want to block the reconciler

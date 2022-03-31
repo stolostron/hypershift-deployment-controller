@@ -41,6 +41,11 @@ const FINALIZER = "hypershiftdeployment.cluster.open-cluster-management.io/manag
 const createManagedClusterAnnotation = "cluster.open-cluster-management.io/createmanagedcluster"
 const provisionerAnnotation = "cluster.open-cluster-management.io/provisioner"
 
+const (
+	klusterletDeployMode = "import.open-cluster-management.io/klusterlet-deploy-mode"
+	hostingClusterName   = "import.open-cluster-management.io/hosting-cluster-name"
+)
+
 // Reconciler reconciles a HypershiftDeployment object to
 // import the related hypershift hosted cluster to the hub cluster.
 type Reconciler struct {
@@ -83,7 +88,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	log.V(INFO).Info("Hypershift Deployment info", "InfraID", hyd.Spec.InfraID,
-		"targetNamespace", hyd.Spec.TargetNamespace, "targetManagedCluster", hyd.Spec.TargetManagedCluster)
+		"hostingNamespace", hyd.Spec.HostingNamespace, "hostingCluster", hyd.Spec.HostingCluster)
 
 	managedClusterName := helper.ManagedClusterName(&hyd)
 	// Delete the ManagedCluster
@@ -104,7 +109,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	managementClusterName := helper.GetTargetManagedCluster(&hyd)
+	managementClusterName := helper.GetHostingCluster(&hyd)
 	// ManagedCluster
 	managedCluster, err := ensureManagedCluster(r, req.NamespacedName, managedClusterName, managementClusterName)
 	if err != nil {
@@ -199,8 +204,8 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		mc.Spec.HubAcceptsClient = true
 
 		mc.ObjectMeta.Annotations = map[string]string{
-			"import.open-cluster-management.io/klusterlet-deploy-mode": "Hosted",
-			"import.open-cluster-management.io/hosting-cluster-name":   managementClusterName,
+			klusterletDeployMode: "Hosted",
+			hostingClusterName:   managementClusterName,
 			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
 				hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
 			// format is <name>.<namespace>.<kind>.<apiversion>

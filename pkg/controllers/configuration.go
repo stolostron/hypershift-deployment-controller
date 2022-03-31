@@ -32,12 +32,12 @@ import (
 
 type override func(obj metav1.Object)
 
-func overrideNamespace(targetNamespace string) override {
+func overrideNamespace(hostingNamespace string) override {
 	return func(o metav1.Object) {
-		if len(targetNamespace) == 0 {
+		if len(hostingNamespace) == 0 {
 			return
 		}
-		o.SetNamespace(targetNamespace)
+		o.SetNamespace(hostingNamespace)
 	}
 }
 
@@ -163,7 +163,7 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 
 		for _, se := range secretRefs {
 			k := genKey(se, hyd)
-			t, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetTargetNamespace(hyd)))
+			t, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetHostingNamespace(hyd)))
 			if err != nil {
 				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
 				allErr = append(allErr, err)
@@ -175,7 +175,7 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 
 		for _, cm := range configMapRefs {
 			k := genKey(cm, hyd)
-			t, err := r.generateConfigMap(ctx, k, overrideNamespace(helper.GetTargetNamespace(hyd)))
+			t, err := r.generateConfigMap(ctx, k, overrideNamespace(helper.GetHostingNamespace(hyd)))
 			if err != nil {
 				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
 				allErr = append(allErr, err)
