@@ -13,6 +13,7 @@ import (
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
 	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -268,12 +269,12 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
 
 	c := meta.FindStatusCondition(updated.Status.Conditions, string(hyd.WorkConfigured))
-	assert.Equal(t, "Missing targetManagedCluster with override: MANIFESTWORK", c.Message, "is equal when targetManagedCluster is missing")
+	assert.Equal(t, helper.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
 
 	key := getManifestWorkKey(testHD)
 	manifestwork := &workv1.ManifestWork{}
 	assert.NotNil(t, client.Get(context.Background(), key, manifestwork), "err is Nil when Manifestwork is successfully created")
-	updated.Spec.TargetManagedCluster = "local-cluster"
+	updated.Spec.HostingCluster = "local-cluster"
 	err = client.Update(context.Background(), &updated)
 	assert.Nil(t, err, "is nil when HypershiftDeployment resource is updated")
 
