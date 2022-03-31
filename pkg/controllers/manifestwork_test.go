@@ -132,7 +132,7 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
@@ -205,7 +205,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	cfgSecretName := "hostedcluster-config-secret-1"
 	cfgConfigName := "hostedcluster-config-configmap-1"
@@ -307,7 +307,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 }
 
-func TestManifestWorkFlowNoHostingManagedCluster(t *testing.T) {
+func TestManifestWorkFlowNoHostingCluster(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
 
@@ -334,7 +334,7 @@ func TestManifestWorkFlowNoHostingManagedCluster(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, helper.HostingManagedClusterMissing, c.Message, "is equal when hostingManagedCluster is missing")
+	assert.Equal(t, helper.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
 }
 
 func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
@@ -342,7 +342,7 @@ func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 	testHD.Spec.Credentials = nil
 
 	client.Create(ctx, testHD)
@@ -377,7 +377,7 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-host"
+	testHD.Spec.HostingCluster = "local-host"
 	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	sshKeySecretName := fmt.Sprintf("%s-ssh-key", testHD.GetName())
@@ -483,7 +483,7 @@ func TestManifestWorkSecrets(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
@@ -502,7 +502,7 @@ func TestManifestWorkSecrets(t *testing.T) {
 
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
-		Namespace: helper.GetHostingManagedCluster(testHD)}
+		Namespace: helper.GetHostingCluster(testHD)}
 
 	var mw workv1.ManifestWork
 	err = client.Get(ctx, manifestWorkKey, &mw)
@@ -536,7 +536,7 @@ func TestManifestWorkCustomSecretNames(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	//Customize the secret names
 	testHD.Spec.HostedClusterSpec.PullSecret.Name = "my-secret-to-pull"
@@ -570,7 +570,7 @@ func TestManifestWorkCustomSecretNames(t *testing.T) {
 
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
-		Namespace: helper.GetHostingManagedCluster(testHD)}
+		Namespace: helper.GetHostingCluster(testHD)}
 
 	var mw workv1.ManifestWork
 	err = client.Get(ctx, manifestWorkKey, &mw)
@@ -606,7 +606,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	}
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.HostingManagedCluster = "local-host"
+	testHD.Spec.HostingCluster = "local-host"
 	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	clt.Create(ctx, testHD)

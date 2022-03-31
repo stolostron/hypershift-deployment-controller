@@ -104,12 +104,12 @@ type HypershiftDeploymentSpec struct {
 	// +optional
 	HostingNamespace string `json:"hostingNamespace"`
 
-	//HostingManagedCluster only applies to ManifestWork, and specifies which managedCluster's namespace the manifestwork will be applied to.
+	//HostingCluster only applies to ManifestWork, and specifies which managedCluster's namespace the manifestwork will be applied to.
 	//If not specified, the controller will flag an error condition.
-	//The HostingManagedCluster would be the management cluster of the hostedcluster and nodepool generated
+	//The HostingCluster would be the management cluster of the hostedcluster and nodepool generated
 	//by the hypershiftDeployment
 	// +optional
-	HostingManagedCluster string `json:"hostingManagedCluster"`
+	HostingCluster string `json:"hostingCluster"`
 
 	// HostedCluster that will be applied to the ManagementCluster by ACM, if omitted, it will be generated
 	// +optional

@@ -24,16 +24,16 @@ func init() {
 	clientgoscheme.AddToScheme(s)
 }
 
-func GetHypershiftDeployment(namespace string, name string, hostingManagedCluster string, hostingNamespace string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
+func GetHypershiftDeployment(namespace string, name string, hostingCluster string, hostingNamespace string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
 	return &hydapi.HypershiftDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: hydapi.HypershiftDeploymentSpec{
-			HostingManagedCluster: hostingManagedCluster,
-			HostingNamespace:      hostingNamespace,
-			Override:              override,
+			HostingCluster:   hostingCluster,
+			HostingNamespace: hostingNamespace,
+			Override:         override,
 		},
 	}
 }
@@ -60,7 +60,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 		expectRegion string
 	}{
 		{
-			name: "err no hostingManagedCluster",
+			name: "err no hostingCluster",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      hypershiftBucketSecretName,
@@ -72,7 +72,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 				},
 			},
 			hyd:         GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraConfigureWithManifest),
-			expectedErr: helper.HostingManagedClusterMissing,
+			expectedErr: helper.HostingClusterMissing,
 		},
 		{
 			name: "err no hostingNamespace configure true",

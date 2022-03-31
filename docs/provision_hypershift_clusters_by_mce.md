@@ -85,7 +85,7 @@ metadata:
   name: hypershift-demo
   namespace: default
 spec:
-  hostingManagedCluster: hypershift-management-cluster     # the hypershift management cluster name.
+  hostingCluster: hypershift-management-cluster     # the hypershift management cluster name.
   hostingNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
   override: MANIFESTWORK
   infrastructure:

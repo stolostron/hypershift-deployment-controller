@@ -5,7 +5,7 @@ metadata:
   name: manifestwork-status
   namespace: default #${hostClusterNamespace}
 spec:
-  hostingManagedCluster: local-cluster
+  hostingCluster: local-cluster
   hostingNamespace: default
   override: MANIFESTWORK
   infrastructure:

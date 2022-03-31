@@ -117,7 +117,7 @@ func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hostingName
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      generateManifestName(hyd),
-		Namespace: helper.GetHostingManagedCluster(hyd),
+		Namespace: helper.GetHostingCluster(hyd),
 	}
 }
 
@@ -146,10 +146,10 @@ func syncManifestworkStatusToHypershiftDeployment(
 
 func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
-	// We need a HostingManagedCluster if we use ManifestWork
-	if len(hyd.Spec.HostingManagedCluster) == 0 {
-		r.Log.Error(errors.New(helper.HostingManagedClusterMissing), "Spec.HostingManagedCluster needs a ManagedCluster name")
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, helper.HostingManagedClusterMissing, hypdeployment.MisConfiguredReason)
+	// We need a HostingCluster if we use ManifestWork
+	if len(hyd.Spec.HostingCluster) == 0 {
+		r.Log.Error(errors.New(helper.HostingClusterMissing), "Spec.HostingCluster needs a ManagedCluster name")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, helper.HostingClusterMissing, hypdeployment.MisConfiguredReason)
 	}
 
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
@@ -214,7 +214,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	}
 
-	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork %s for hypershiftDeployment: %s at hostingManagedCluster: %s", getManifestWorkKey(hyd), req, helper.GetHostingManagedCluster(hyd)))
+	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork %s for hypershiftDeployment: %s at hostingCluster: %s", getManifestWorkKey(hyd), req, helper.GetHostingCluster(hyd)))
 
 	setStatusCondition(
 		hyd,

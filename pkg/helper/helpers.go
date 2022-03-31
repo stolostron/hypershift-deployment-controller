@@ -7,16 +7,16 @@ import (
 )
 
 const (
-	HostingManagedClusterMissing = "spec.hostingManagedCluster value is missing"
+	HostingClusterMissing = "spec.hostingCluster value is missing"
 )
 
 //TODO @ianzhang366 integrate with the clusterSet logic
-func GetHostingManagedCluster(hyd *hypdeployment.HypershiftDeployment) string {
-	if len(hyd.Spec.HostingManagedCluster) == 0 {
+func GetHostingCluster(hyd *hypdeployment.HypershiftDeployment) string {
+	if len(hyd.Spec.HostingCluster) == 0 {
 		return hyd.GetNamespace()
 	}
 
-	return hyd.Spec.HostingManagedCluster
+	return hyd.Spec.HostingCluster
 }
 
 func GetHostingNamespace(hyd *hypdeployment.HypershiftDeployment) string {
