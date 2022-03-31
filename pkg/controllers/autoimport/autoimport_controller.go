@@ -199,8 +199,8 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		mc.Spec.HubAcceptsClient = true
 
 		mc.ObjectMeta.Annotations = map[string]string{
-			"import.open-cluster-management.io/klusterlet-deploy-mode":  "Hosted",
-			"import.open-cluster-management.io/management-cluster-name": managementClusterName,
+			"import.open-cluster-management.io/klusterlet-deploy-mode": "Hosted",
+			"import.open-cluster-management.io/hosting-cluster-name":   managementClusterName,
 			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
 				hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
 			// format is <name>.<namespace>.<kind>.<apiversion>
