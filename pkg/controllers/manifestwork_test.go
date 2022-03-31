@@ -132,7 +132,7 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
@@ -170,25 +170,25 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: "test1-node-mgmt-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-cpo-creds", Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: "test1-cpo-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: "test1-node-mgmt-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-pull-secret", Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: "test1-pull-secret", Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 
 	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
@@ -205,7 +205,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	cfgSecretName := "hostedcluster-config-secret-1"
 	cfgConfigName := "hostedcluster-config-configmap-1"
@@ -286,19 +286,19 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: cfgSecretName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgItemSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: cfgItemSecretName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "ConfigMap"},
 			NamespacedName: types.NamespacedName{
-				Name: cfgConfigName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: cfgConfigName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 
 	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
@@ -307,7 +307,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 }
 
-func TestManifestWorkFlowNoTargetManagedCluster(t *testing.T) {
+func TestManifestWorkFlowNoHostingCluster(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
 
@@ -334,7 +334,7 @@ func TestManifestWorkFlowNoTargetManagedCluster(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, "Missing targetManagedCluster with override: MANIFESTWORK", c.Message, "is equal when targetManagedCluster is missing")
+	assert.Equal(t, helper.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
 }
 
 func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
@@ -342,7 +342,7 @@ func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 	testHD.Spec.Credentials = nil
 
 	client.Create(ctx, testHD)
@@ -377,8 +377,8 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-host"
-	testHD.Spec.TargetNamespace = "multicluster-engine"
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	sshKeySecretName := fmt.Sprintf("%s-ssh-key", testHD.GetName())
 	pullSecretName := fmt.Sprintf("%s-pull-secret", testHD.GetName())
@@ -431,13 +431,13 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: pullSecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: pullSecretName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: sshKeySecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: sshKeySecretName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 
 	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
@@ -469,7 +469,7 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: sshKeySecretName, Namespace: helper.GetTargetNamespace(testHD)}}: true,
+				Name: sshKeySecretName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 
 	checker, err = newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
@@ -483,7 +483,7 @@ func TestManifestWorkSecrets(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
@@ -502,7 +502,7 @@ func TestManifestWorkSecrets(t *testing.T) {
 
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
-		Namespace: helper.GetTargetManagedCluster(testHD)}
+		Namespace: helper.GetHostingCluster(testHD)}
 
 	var mw workv1.ManifestWork
 	err = client.Get(ctx, manifestWorkKey, &mw)
@@ -536,7 +536,7 @@ func TestManifestWorkCustomSecretNames(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingCluster = "local-cluster"
 
 	//Customize the secret names
 	testHD.Spec.HostedClusterSpec.PullSecret.Name = "my-secret-to-pull"
@@ -570,7 +570,7 @@ func TestManifestWorkCustomSecretNames(t *testing.T) {
 
 	manifestWorkKey := types.NamespacedName{
 		Name:      generateManifestName(testHD),
-		Namespace: helper.GetTargetManagedCluster(testHD)}
+		Namespace: helper.GetHostingCluster(testHD)}
 
 	var mw workv1.ManifestWork
 	err = client.Get(ctx, manifestWorkKey, &mw)
@@ -606,8 +606,8 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	}
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-host"
-	testHD.Spec.TargetNamespace = "multicluster-engine"
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	clt.Create(ctx, testHD)
 	defer clt.Delete(ctx, testHD)
@@ -627,7 +627,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 
 	assert.True(t, len(checker.spec.ManifestConfigs) != 0, "should have manifestconfigs")
 
-	assert.Nil(t, checker.update(), "err nil when can get the target manifestwork")
+	assert.Nil(t, checker.update(), "err nil when can get the hosting manifestwork")
 
 	resStr := "test"
 	trueStr := "True"
@@ -648,7 +648,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 			Group:     hyp.GroupVersion.Group,
 			Resource:  HostedClusterResource,
 			Name:      testHD.Name,
-			Namespace: helper.GetTargetNamespace(testHD),
+			Namespace: helper.GetHostingNamespace(testHD),
 		},
 		StatusFeedbacks: workv1.StatusFeedbackResult{
 			Values: []workv1.FeedbackValue{
@@ -690,7 +690,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 				Group:     hyp.GroupVersion.Group,
 				Resource:  NodePoolResource,
 				Name:      testHD.Name,
-				Namespace: helper.GetTargetNamespace(testHD),
+				Namespace: helper.GetHostingNamespace(testHD),
 			},
 			StatusFeedbacks: workv1.StatusFeedbackResult{
 				Values: []workv1.FeedbackValue{
@@ -724,7 +724,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 				Group:     hyp.GroupVersion.Group,
 				Resource:  NodePoolResource,
 				Name:      testHD.Name,
-				Namespace: helper.GetTargetNamespace(testHD),
+				Namespace: helper.GetHostingNamespace(testHD),
 			},
 			StatusFeedbacks: workv1.StatusFeedbackResult{
 				Values: []workv1.FeedbackValue{

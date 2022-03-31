@@ -85,8 +85,8 @@ metadata:
   name: hypershift-demo
   namespace: default
 spec:
-  targetManagedCluster: hypershift-management-cluster     # the hypershift management cluster name.
-  targetNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
+  hostingCluster: hypershift-management-cluster     # the hypershift management cluster name.
+  hostingNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
   override: MANIFESTWORK
   infrastructure:
     cloudProvider:
@@ -114,8 +114,8 @@ oc get managedcluster <hypershiftDeployment.Spec.infraID>
 
 The access secrets are stored in the {hypershift-management-cluster} namespace.
 The formats of the secrets name are:
-- kubeconfig secret: `<hypershiftDeployment.Spec.targetNamespace>-<hypershiftDeployment.Name>-admin-kubeconfig` (e.g clusters-hypershift-demo-admin-kubeconfig)
-- kubeadmin password secret: `<hypershiftDeployment.Spec.targetNamespace>-<hypershiftDeployment.Name>-kubeadmin-password` (e.g clusters-hypershift-demo-kubeadmin-password)
+- kubeconfig secret: `<hypershiftDeployment.Spec.hostingNamespace>-<hypershiftDeployment.Name>-admin-kubeconfig` (e.g clusters-hypershift-demo-admin-kubeconfig)
+- kubeadmin password secret: `<hypershiftDeployment.Spec.hostingNamespace>-<hypershiftDeployment.Name>-kubeadmin-password` (e.g clusters-hypershift-demo-kubeadmin-password)
 
 ## Destroying your hypershift Hosted cluster
 

@@ -166,9 +166,9 @@ func TestReconcileCreate(t *testing.T) {
 				assert.Equal(t, fmt.Sprintf("%s%s%s", hyd.Namespace, constant.NamespaceNameSeperator, hyd.Name),
 					mc.Annotations[constant.AnnoHypershiftDeployment], "assert hypershift deployment annotation value")
 				assert.Equal(t, "Hosted",
-					mc.Annotations["import.open-cluster-management.io/klusterlet-deploy-mode"], "assert hosted mode annotation value")
-				assert.Equal(t, helper.GetTargetManagedCluster(hyd),
-					mc.Annotations["import.open-cluster-management.io/management-cluster-name"], "assert management cluster annotation value")
+					mc.Annotations[klusterletDeployMode], "assert hosted mode annotation value")
+				assert.Equal(t, helper.GetHostingCluster(hyd),
+					mc.Annotations[hostingClusterName], "assert management cluster annotation value")
 
 				assertAnnoNotContainCreateMC(t, ctx, client)
 			},

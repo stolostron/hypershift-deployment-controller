@@ -161,13 +161,14 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
+ 
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 
-		// hyd.Spec.TargetNamespace is set by both createManifestwork and ScaffoldHostedCluster,
-		// using the helper.GetTargetNamespace function
+		// hyd.Spec.HostingNamespace is set by both createManifestwork and ScaffoldHostedCluster,
+		// using the helper.GetHostingNamespace function
 
 		// In Azure, the providerSecret is needed for Configure true or false
 		if len(hyd.Spec.Override) == 0 || hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
@@ -185,7 +186,7 @@ func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.H
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: helper.GetTargetNamespace(hyd),
+			Namespace: helper.GetHostingNamespace(hyd),
 			Name:      hyd.Spec.HostedClusterSpec.PullSecret.Name,
 			Labels: map[string]string{
 				AutoInfraLabelName: hyd.Spec.InfraID,
@@ -312,7 +313,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 			return res, fmt.Errorf("failed to delete manifestwork %v", err)
 		}
 
-		// wait for the nodepools and hostedcluster in target namespace is deleted(via the work agent)
+		// wait for the nodepools and hostedcluster in hosting namespace is deleted(via the work agent)
 		if !res.IsZero() {
 			return res, nil
 		}
