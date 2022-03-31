@@ -274,8 +274,8 @@ func TestConfigureFalseWithManifestWork(t *testing.T) {
 
 	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name)
 	testHD.Spec.Override = hyd.InfraConfigureWithManifest
-	testHD.Spec.TargetManagedCluster = "local-host"
-	testHD.Spec.TargetNamespace = "multicluster-engine"
+	testHD.Spec.HostingManagedCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	client.Create(context.Background(), testHD)
 
@@ -360,7 +360,7 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
-	testHD.Spec.TargetManagedCluster = "local-cluster"
+	testHD.Spec.HostingManagedCluster = "local-cluster"
 	testHD.Spec.Infrastructure.CloudProvider.Name = "providersecret"
 
 	client.Create(ctx, testHD)

@@ -98,18 +98,18 @@ type HypershiftDeploymentSpec struct {
 	// +kubebuilder:validation:Enum=ORPHAN;INFRA-ONLY;MANIFESTWORK
 	Override InfraOverride `json:"override,omitempty"`
 
-	//TargetNamespace specify the where the children resouces(hostedcluster, nodepool)
+	//HostingNamespace specify the where the children resouces(hostedcluster, nodepool)
 	//to sit in
 	//if not provided, the default is "clusters"
 	// +optional
-	TargetNamespace string `json:"targetNamespace"`
+	HostingNamespace string `json:"hostingNamespace"`
 
-	//TargetManagedCluster only applies to ManifestWork, and specifies which managedCluster's namespace the manifestwork will be applied to.
+	//HostingManagedCluster only applies to ManifestWork, and specifies which managedCluster's namespace the manifestwork will be applied to.
 	//If not specified, the controller will flag an error condition.
-	//The TargetManagedCluster would be the management cluster of the hostedcluster and nodepool generated
+	//The HostingManagedCluster would be the management cluster of the hostedcluster and nodepool generated
 	//by the hypershiftDeployment
 	// +optional
-	TargetManagedCluster string `json:"targetManagedCluster"`
+	HostingManagedCluster string `json:"hostingManagedCluster"`
 
 	// HostedCluster that will be applied to the ManagementCluster by ACM, if omitted, it will be generated
 	// +optional

@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	hydapi "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
 var s = clientgoscheme.Scheme
@@ -23,16 +24,16 @@ func init() {
 	clientgoscheme.AddToScheme(s)
 }
 
-func GetHypershiftDeployment(namespace string, name string, targetManagedCluster string, targetNamespace string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
+func GetHypershiftDeployment(namespace string, name string, hostingManagedCluster string, hostingNamespace string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
 	return &hydapi.HypershiftDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: hydapi.HypershiftDeploymentSpec{
-			TargetManagedCluster: targetManagedCluster,
-			TargetNamespace:      targetNamespace,
-			Override:             override,
+			HostingManagedCluster: hostingManagedCluster,
+			HostingNamespace:      hostingNamespace,
+			Override:              override,
 		},
 	}
 }
@@ -71,7 +72,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 				},
 			},
 			hyd:         GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraConfigureWithManifest),
-			expectedErr: "spec.targetManagedCluster value is missing",
+			expectedErr: helper.HostingManagedClusterMissing,
 		},
 		{
 			name: "err no targetNamespace configure true",

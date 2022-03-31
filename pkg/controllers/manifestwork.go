@@ -118,7 +118,7 @@ func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, targetNames
 func getManifestWorkKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      generateManifestName(hyd),
-		Namespace: helper.GetTargetManagedCluster(hyd),
+		Namespace: helper.GetHostingManagedCluster(hyd),
 	}
 }
 
@@ -147,10 +147,10 @@ func syncManifestworkStatusToHypershiftDeployment(
 
 func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
-	// We need a targetManagedCluster if we use ManifestWork
-	if len(hyd.Spec.TargetManagedCluster) == 0 {
-		r.Log.Error(errors.New("targetManagedCluster is empty"), "Spec.targetManagedCluster needs a ManagedCluster name")
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Missing targetManagedCluster with override: MANIFESTWORK", hypdeployment.MisConfiguredReason)
+	// We need a HostingManagedCluster if we use ManifestWork
+	if len(hyd.Spec.HostingManagedCluster) == 0 {
+		r.Log.Error(errors.New(helper.HostingManagedClusterMissing), "Spec.HostingManagedCluster needs a ManagedCluster name")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, helper.HostingManagedClusterMissing, hypdeployment.MisConfiguredReason)
 	}
 
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
@@ -215,7 +215,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	}
 
-	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork %s for hypershiftDeployment: %s at targetNamespace: %s", getManifestWorkKey(hyd), req, helper.GetTargetManagedCluster(hyd)))
+	r.Log.Info(fmt.Sprintf("CreateOrUpdate manifestwork %s for hypershiftDeployment: %s at hostingManagedCluster: %s", getManifestWorkKey(hyd), req, helper.GetHostingManagedCluster(hyd)))
 
 	setStatusCondition(
 		hyd,
@@ -244,7 +244,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 	if m.GetDeletionTimestamp().IsZero() {
 		patch := client.MergeFrom(m.DeepCopy())
-		setManifestWorkSelectivelyDeleteOption(m, helper.GetTargetNamespace(hyd))
+		setManifestWorkSelectivelyDeleteOption(m, helper.GetHostingNamespace(hyd))
 		if err := r.Client.Patch(ctx, m, patch); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
 		}
@@ -305,7 +305,7 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 		}
 
 		for _, s := range refSecrets {
-			o := duplicateSecretWithOverride(s, overrideNamespace(helper.GetTargetNamespace(hyd)))
+			o := duplicateSecretWithOverride(s, overrideNamespace(helper.GetHostingNamespace(hyd)))
 			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: o}})
 		}
 
@@ -327,7 +327,7 @@ func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]wor
 }
 
 func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-	targetNamespace := helper.GetTargetNamespace(hyd)
+	targetNamespace := helper.GetHostingNamespace(hyd)
 	*payload = append(*payload, workv1.Manifest{
 		RawExtension: runtime.RawExtension{Object: &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -364,7 +364,7 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 		Group:     hyp.GroupVersion.Group,
 		Resource:  HostedClusterResource,
 		Name:      hyd.Name,
-		Namespace: helper.GetTargetNamespace(hyd),
+		Namespace: helper.GetHostingNamespace(hyd),
 	}
 
 	out[k] = workv1.ManifestConfigOption{
@@ -400,7 +400,7 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 			Group:     hyp.GroupVersion.Group,
 			Resource:  NodePoolResource,
 			Name:      np.Name,
-			Namespace: helper.GetTargetNamespace(hyd),
+			Namespace: helper.GetHostingNamespace(hyd),
 		}
 
 		out[k] = workv1.ManifestConfigOption{

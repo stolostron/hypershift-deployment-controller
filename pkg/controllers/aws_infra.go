@@ -201,9 +201,9 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) (string, string, error) {
 	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 
-		if len(hyd.Spec.TargetManagedCluster) == 0 {
-			err := errors.New("spec.targetManagedCluster value is missing")
-			r.Log.Error(err, "Spec.targetManagedCluster needs a ManagedCluster name")
+		if len(hyd.Spec.HostingManagedCluster) == 0 {
+			err := errors.New(helper.HostingManagedClusterMissing)
+			r.Log.Error(err, "Spec.HostingManagedCluster needs a ManagedCluster name")
 			return "", "", err
 		}
 
@@ -211,7 +211,7 @@ func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.Hype
 		// so there must exist a hypershift bucket secret in the management cluster namespace.
 		secret := &corev1.Secret{}
 		if err := r.Client.Get(context.Background(), types.NamespacedName{
-			Name: hypershiftBucketSecretName, Namespace: helper.GetTargetManagedCluster(hyd)}, secret); err != nil {
+			Name: hypershiftBucketSecretName, Namespace: helper.GetHostingManagedCluster(hyd)}, secret); err != nil {
 			return "", "", err
 		}
 
