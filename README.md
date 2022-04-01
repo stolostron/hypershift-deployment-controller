@@ -85,3 +85,4 @@ Spec.NodePool:
 * []NodePool.Spec.platform.aws.instanceProfile (When empty `""` it will be set)
 * []NodePool.Spec.platform.aws.securityGroups (When `nil` the security group from the infrastructure configuration is used)
 * []NodePool.Spec.aws.subnet (When `nil` the Private Subnet ID from the infrastructure configuration is used)
+
