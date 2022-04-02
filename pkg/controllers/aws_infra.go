@@ -133,18 +133,6 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			}
 			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 			log.Info("IAM configured")
-
-			if hyd.Spec.Override != hypdeployment.InfraConfigureWithManifest {
-				if iamErr = r.createPullSecret(hyd, *providerSecret); iamErr == nil {
-					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
-					return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
-				}
-				if iamErr = createOIDCSecrets(r, hyd); iamErr == nil {
-					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
-					return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
-				}
-				log.Info("Secrets configured")
-			}
 		}
 	}
 
@@ -199,28 +187,20 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 }
 
 func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) (string, string, error) {
-	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
 
-		if len(hyd.Spec.HostingCluster) == 0 {
-			err := errors.New(helper.HostingClusterMissing)
-			r.Log.Error(err, "Spec.HostingCluster needs a ManagedCluster name")
-			return "", "", err
-		}
-
-		// If the override is manifestwork that means we are using the hypershift created by mce hypershift-addon,
-		// so there must exist a hypershift bucket secret in the management cluster namespace.
-		secret := &corev1.Secret{}
-		if err := r.Client.Get(context.Background(), types.NamespacedName{
-			Name: hypershiftBucketSecretName, Namespace: helper.GetHostingCluster(hyd)}, secret); err != nil {
-			return "", "", err
-		}
-
-		return string(secret.Data["bucket"]), string(secret.Data["region"]), nil
-	}
-
-	cm := &corev1.ConfigMap{}
-	if err := r.Client.Get(context.Background(), types.NamespacedName{Name: oidcStorageProvider, Namespace: oidcSPNamespace}, cm); err != nil {
+	if len(hyd.Spec.HostingCluster) == 0 {
+		err := errors.New(helper.HostingClusterMissing)
+		r.Log.Error(err, "Spec.HostingCluster needs a ManagedCluster name")
 		return "", "", err
 	}
-	return cm.Data["name"], cm.Data["region"], nil
+
+	// If the override is manifestwork that means we are using the hypershift created by mce hypershift-addon,
+	// so there must exist a hypershift bucket secret in the management cluster namespace.
+	secret := &corev1.Secret{}
+	if err := r.Client.Get(context.Background(), types.NamespacedName{
+		Name: hypershiftBucketSecretName, Namespace: helper.GetHostingCluster(hyd)}, secret); err != nil {
+		return "", "", err
+	}
+
+	return string(secret.Data["bucket"]), string(secret.Data["region"]), nil
 }

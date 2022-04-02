@@ -161,7 +161,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
- 
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
 	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
@@ -171,10 +170,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		// using the helper.GetHostingNamespace function
 
 		// In Azure, the providerSecret is needed for Configure true or false
-		if len(hyd.Spec.Override) == 0 || hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
-			log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
-			return r.createOrUpdateMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
-		}
+		log.Info("Wrap hostedCluster, nodepool and secrets to manifestwork")
+		return r.createOrUpdateMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
 	}
 	return ctrl.Result{}, nil
 }
@@ -301,7 +298,9 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 	inHyd := hyd.DeepCopy()
 
-	if hyd.Spec.Override == hypdeployment.InfraConfigureWithManifest {
+	// TODO @philip, there should be an InfraOverrideDestroy
+	// Also an override option to delete the hostingNamespace on the hostingCluster (as an NEW override)
+	if hyd.Spec.Override != hypdeployment.InfraConfigureOnly {
 		log.Info("Removing Manifestwork and wait for hostedclsuter and nodepool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
 
