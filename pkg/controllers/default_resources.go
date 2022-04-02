@@ -136,6 +136,13 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 		KubeCloudControllerCreds:  corev1.LocalObjectReference{Name: hyd.Name + "-cloud-ctrl-creds"},
 		NodePoolManagementCreds:   corev1.LocalObjectReference{Name: hyd.Name + "-node-mgmt-creds"},
 		EndpointAccess:            hyp.Public,
+		ResourceTags: []hyp.AWSResourceTag{
+			//set the resource tags to prevent the work always updating the hostedcluster resource on the hosting cluster.
+			{
+				Key:   "kubernetes.io/cluster/" + hyd.Spec.HostedClusterSpec.InfraID,
+				Value: "owned",
+			},
+		},
 	}
 	hyd.Spec.HostedClusterSpec.Platform.AWS = ap
 	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scaffoldCloudProviderConfig(infraOut)

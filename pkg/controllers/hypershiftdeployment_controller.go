@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -166,6 +167,11 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 
+		// Set default value for the hostedCluster.Spec to prevent the work always updating the hostedcluster resource on the hosting cluster.
+		if err := r.setDefaultValueForHostedCluster(ctx, &hyd); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		// hyd.Spec.HostingNamespace is set by both createManifestwork and ScaffoldHostedCluster,
 		// using the helper.GetHostingNamespace function
 
@@ -174,6 +180,36 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.createOrUpdateMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *HypershiftDeploymentReconciler) setDefaultValueForHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) error {
+	if hyd.Spec.HostedClusterSpec == nil {
+		return nil
+	}
+
+	log := r.Log
+
+	oHyd := *hyd.DeepCopy()
+	spec := hyd.Spec.HostedClusterSpec
+	needsUpdate := false
+	if spec.ClusterID == "" {
+		hyd.Spec.HostedClusterSpec.ClusterID = uuid.NewString()
+		needsUpdate = true
+		log.Info("Setting clusterID", "clusterID", hyd.Spec.HostedClusterSpec.ClusterID)
+	}
+
+	if spec.OLMCatalogPlacement == "" {
+		hyd.Spec.HostedClusterSpec.OLMCatalogPlacement = hyp.ManagementOLMCatalogPlacement
+		needsUpdate = true
+		log.Info("Setting OLMCatalogPlacement", "OLMCatalogPlacement", hyd.Spec.HostedClusterSpec.OLMCatalogPlacement)
+	}
+	if needsUpdate {
+		if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
+			return fmt.Errorf("failed to update infra-id: \"%s\" and  olm-catalog-placement: \"%s\",error: %w",
+				hyd.Spec.HostedClusterSpec.ClusterID, hyd.Spec.HostedClusterSpec.OLMCatalogPlacement, err)
+		}
+	}
+	return nil
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.HypershiftDeployment, providerSecret corev1.Secret) *corev1.Secret {
@@ -193,22 +229,6 @@ func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.H
 			".dockerconfigjson": providerSecret.Data["pullSecret"],
 		},
 	}
-}
-func (r *HypershiftDeploymentReconciler) createPullSecret(hyd *hypdeployment.HypershiftDeployment, providerSecret corev1.Secret) error {
-	_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, r.scaffoldPullSecret(hyd, providerSecret), func() error { return nil })
-	return err
-}
-
-func createOIDCSecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
-
-	for _, secret := range ScaffoldAWSSecrets(hyd) {
-		if err := r.Create(r.ctx, secret); apierrors.IsAlreadyExists(err) {
-			if err := r.Update(r.ctx, secret); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func destroySecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
