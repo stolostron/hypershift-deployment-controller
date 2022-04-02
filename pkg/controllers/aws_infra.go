@@ -35,7 +35,6 @@ import (
 
 const (
 	oidcStorageProvider        = "oidc-storage-provider-s3-config"
-	oidcSPNamespace            = "kube-public"
 	hypershiftBucketSecretName = "hypershift-operator-oidc-provider-s3-credentials"
 )
 
