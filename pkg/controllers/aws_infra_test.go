@@ -64,87 +64,56 @@ func TestOidcDiscoveryURL(t *testing.T) {
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      hypershiftBucketSecretName,
-					Namespace: "test",
+					Namespace: "testcluster",
 				},
 				Data: map[string][]byte{
 					"bucket": []byte("bucket1"),
 					"region": []byte("region1"),
 				},
 			},
-			hyd:         GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraConfigureWithManifest),
+			hyd:         GetHypershiftDeployment("test", "hyd1", "", "mynamespace", ""),
 			expectedErr: helper.HostingClusterMissing,
 		},
 		{
-			name: "err no hostingNamespace configure true",
+			name: "get info from secret with specific hosting cluster",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      hypershiftBucketSecretName,
-					Namespace: "test",
+					Namespace: "testcluster",
 				},
 				Data: map[string][]byte{
 					"bucket": []byte("bucket1"),
 					"region": []byte("region1"),
 				},
 			},
-			hyd:         GetHypershiftDeployment("test", "hyd1", "test1", "", hydapi.InfraConfigureWithManifest),
-			expectedErr: "not found",
-		},
-		{
-			name: "get info from secret with specific management cluster",
-			existObj: &corev1.Secret{
-				ObjectMeta: v1.ObjectMeta{
-					Name:      hypershiftBucketSecretName,
-					Namespace: "test1",
-				},
-				Data: map[string][]byte{
-					"bucket": []byte("bucket1"),
-					"region": []byte("region1"),
-				},
-			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "test1", "mynamespace", hydapi.InfraConfigureWithManifest),
+			hyd:          GetHypershiftDeployment("test", "hyd1", "testcluster", "mynamespace", ""),
 			expectBucket: "bucket1",
 			expectRegion: "region1",
 		},
 		{
 			name: "get info from configmap infra config only",
-			existObj: &corev1.ConfigMap{
+			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
-					Name:      oidcStorageProvider,
-					Namespace: oidcSPNamespace,
+					Name:      hypershiftBucketSecretName,
+					Namespace: "testcluster",
 				},
-				Data: map[string]string{
-					"name":   "bucket1",
-					"region": "region1",
+				Data: map[string][]byte{
+					"bucket": []byte("bucket1"),
+					"region": []byte("region1"),
 				},
 			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraConfigureOnly),
-			expectBucket: "bucket1",
-			expectRegion: "region1",
-		},
-		{
-			name: "get info from configmap orphan",
-			existObj: &corev1.ConfigMap{
-				ObjectMeta: v1.ObjectMeta{
-					Name:      oidcStorageProvider,
-					Namespace: oidcSPNamespace,
-				},
-				Data: map[string]string{
-					"name":   "bucket1",
-					"region": "region1",
-				},
-			},
-			hyd:          GetHypershiftDeployment("test", "hyd1", "", "mynamespace", hydapi.InfraOverrideDestroy),
+			hyd:          GetHypershiftDeployment("test", "hyd1", "testcluster", "mynamespace", hydapi.InfraConfigureOnly),
 			expectBucket: "bucket1",
 			expectRegion: "region1",
 		},
 		{
 			name:        "get info from secret not found",
-			hyd:         GetHypershiftDeployment("test", "hyd1", "test1", "mynamespace", hydapi.InfraConfigureWithManifest),
+			hyd:         GetHypershiftDeployment("test", "hyd1", "testcluster", "mynamespace", ""),
 			expectedErr: "not found",
 		},
 		{
 			name:        "get info from configmap not found",
-			hyd:         GetHypershiftDeployment("test", "hyd1", "test1", "mynamespace", hydapi.InfraConfigureOnly),
+			hyd:         GetHypershiftDeployment("test", "hyd1", "testcluster", "mynamespace", ""),
 			expectedErr: "not found",
 		},
 	}
