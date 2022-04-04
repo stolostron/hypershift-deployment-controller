@@ -19,6 +19,7 @@ package controllers
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/openshift/hypershift/api/fixtures"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
@@ -149,6 +150,7 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 		hyd.Spec.HostedClusterSpec =
 			&hyp.HostedClusterSpec{
 				InfraID:                      hyd.Spec.InfraID,
+				ClusterID:                    uuid.NewString(),
 				ControllerAvailabilityPolicy: hyp.SingleReplica,
 				Etcd: hyp.EtcdSpec{
 					Managed: &hyp.ManagedEtcdSpec{
