@@ -298,8 +298,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 	inHyd := hyd.DeepCopy()
 
-	// TODO @philip, there should be an InfraOverrideDestroy
-	// Also an override option to delete the hostingNamespace on the hostingCluster (as an NEW override)
+	// TODO: Add an override option to delete the hostingNamespace on the hostingCluster (as an NEW override)
 	if hyd.Spec.Override != hypdeployment.InfraConfigureOnly {
 		log.Info("Removing Manifestwork and wait for hostedclsuter and nodepool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)

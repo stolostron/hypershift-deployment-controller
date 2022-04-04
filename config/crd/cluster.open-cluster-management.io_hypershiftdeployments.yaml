@@ -7208,12 +7208,10 @@ spec:
                 type: array
               override:
                 description: InfrastructureOverride allows support for special cases   OverrideDestroy
-                  = "ORPHAN"   InfraConfigureOnly = "INFRA-ONLY"   ConfigureWithManifest
-                  = "MANIFESTWORK"
+                  = "ORPHAN"   InfraConfigureOnly = "INFRA-ONLY"
                 enum:
                 - ORPHAN
                 - INFRA-ONLY
-                - MANIFESTWORK
                 type: string
             required:
             - infrastructure

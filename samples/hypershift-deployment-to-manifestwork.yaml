@@ -7,7 +7,6 @@ metadata:
 spec:
   hostingCluster: local-cluster
   hostingNamespace: default
-  override: MANIFESTWORK
   infrastructure:
     cloudProvider:
       name: aws

@@ -70,9 +70,8 @@ const (
 	// WorkConfigured indicates the status of applying the ManifestWork
 	WorkConfigured ConditionType = "ManifestWorkConfigured"
 
-	InfraOverrideDestroy       = "ORPHAN"
-	InfraConfigureOnly         = "INFRA-ONLY"
-	InfraConfigureWithManifest = "MANIFESTWORK"
+	InfraOverrideDestroy = "ORPHAN"
+	InfraConfigureOnly   = "INFRA-ONLY"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -94,8 +93,7 @@ type HypershiftDeploymentSpec struct {
 	// InfrastructureOverride allows support for special cases
 	//   OverrideDestroy = "ORPHAN"
 	//   InfraConfigureOnly = "INFRA-ONLY"
-	//   ConfigureWithManifest = "MANIFESTWORK"
-	// +kubebuilder:validation:Enum=ORPHAN;INFRA-ONLY;MANIFESTWORK
+	// +kubebuilder:validation:Enum=ORPHAN;INFRA-ONLY
 	Override InfraOverride `json:"override,omitempty"`
 
 	//HostingNamespace specify the where the children resouces(hostedcluster, nodepool)

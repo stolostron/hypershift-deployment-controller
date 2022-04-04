@@ -39,7 +39,6 @@ type kindAndKey struct {
 func getHDforManifestWork() *hyd.HypershiftDeployment {
 	infraOut := getAWSInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1")
-	testHD.Spec.Override = hyd.InfraConfigureWithManifest
 
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
