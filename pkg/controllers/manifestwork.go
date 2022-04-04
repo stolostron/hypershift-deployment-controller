@@ -100,8 +100,10 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 	return w, nil
 }
 
-func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hostingNamespace, hdName string, overrideOption hypdeployment.InfraOverride) {
-	if overrideOption == hypdeployment.InfraOverrideDestroy {
+func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) {
+	hostingNamespace := helper.GetHostingNamespace(hyd)
+
+	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
 		mw.Spec.DeleteOption = &workv1.DeleteOption{
 			PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
 			SelectivelyOrphan: &workv1.SelectivelyOrphan{
@@ -113,13 +115,13 @@ func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hostingName
 					{
 						Group:     "hypershift.openshift.io",
 						Resource:  "hostedclusters",
-						Name:      hdName,
+						Name:      hyd.Name,
 						Namespace: hostingNamespace,
 					},
 					{
 						Group:     "hypershift.openshift.io",
 						Resource:  "nodepools",
-						Name:      hdName,
+						Name:      hyd.Name,
 						Namespace: hostingNamespace,
 					},
 				},
@@ -269,7 +271,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 	if m.GetDeletionTimestamp().IsZero() {
 		patch := client.MergeFrom(m.DeepCopy())
-		setManifestWorkSelectivelyDeleteOption(m, helper.GetHostingNamespace(hyd), hyd.Name, hyd.Spec.Override)
+		setManifestWorkSelectivelyDeleteOption(m, hyd)
 		if err := r.Client.Patch(ctx, m, patch); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
 		}
