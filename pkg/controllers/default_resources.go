@@ -152,6 +152,7 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				InfraID:                      hyd.Spec.InfraID,
 				ClusterID:                    uuid.NewString(),
 				ControllerAvailabilityPolicy: hyp.SingleReplica,
+				OLMCatalogPlacement:          hyp.ManagementOLMCatalogPlacement,
 				Etcd: hyp.EtcdSpec{
 					Managed: &hyp.ManagedEtcdSpec{
 						Storage: hyp.ManagedEtcdStorageSpec{
