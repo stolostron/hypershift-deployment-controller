@@ -49,11 +49,18 @@ printf "Bucket region : ${BUCKET_REGION}\nTesting bucket\n"
 
 CMD="AWS_SHARED_CREDENTIALS_FILE=${S3_CREDS} aws --region ${BUCKET_REGION} s3 ls ${BUCKET_NAME}"
 which aws
-if [ $? -ne 0 ]; then
-  printf "**WARNING** AWS CLI is not present, so S3_CREDS can not be validated, continuing to test URL"
-  CMD="curl https://${BUCKET_NAME}.s3.${BUCKET_REGION}.amazonaws.com 2>&1 | grep \"Access Denied\""
+if [ $? -eq 0 ]; then
+  eval ${CMD}
+  if [ $? -ne 0 ]; then
+    printf "Bucket with details listed above does not exist\n"
+    exit 1
+  fi
+else
+  printf "**WARNING** AWS CLI is not present, so S3_CREDS can not be validated, continuing to test URL\n"
 fi
 
+printf "Testing the s3 URL: https://${BUCKET_NAME}.s3.${BUCKET_REGION}.amazonaws.com"
+CMD="curl https://${BUCKET_NAME}.s3.${BUCKET_REGION}.amazonaws.com 2>&1 | grep \"Access Denied\""
 eval ${CMD}
 if [ $? -ne 0 ]; then
   printf "Bucket with details listed above does not exist\n"
