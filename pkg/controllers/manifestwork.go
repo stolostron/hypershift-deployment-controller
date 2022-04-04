@@ -105,26 +105,13 @@ func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hyd *hypdep
 
 	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
 		mw.Spec.DeleteOption = &workv1.DeleteOption{
+			PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan,
+		}
+	} else if hyd.Spec.Override == hypdeployment.DeleteHostingNamespace {
+		mw.Spec.DeleteOption = &workv1.DeleteOption{
 			PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
 			SelectivelyOrphan: &workv1.SelectivelyOrphan{
-				OrphaningRules: []workv1.OrphaningRule{
-					{
-						Resource: "namespaces",
-						Name:     hostingNamespace,
-					},
-					{
-						Group:     "hypershift.openshift.io",
-						Resource:  "hostedclusters",
-						Name:      hyd.Name,
-						Namespace: hostingNamespace,
-					},
-					{
-						Group:     "hypershift.openshift.io",
-						Resource:  "nodepools",
-						Name:      hyd.Name,
-						Namespace: hostingNamespace,
-					},
-				},
+				OrphaningRules: []workv1.OrphaningRule{},
 			},
 		}
 	} else {

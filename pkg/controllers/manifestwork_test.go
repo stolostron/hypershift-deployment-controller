@@ -124,7 +124,7 @@ func (m *manifestworkChecker) shouldNotHave(res map[kindAndKey]bool) error {
 	return nil
 }
 
-// TestManifestWorkFlow tests when override is set to manifestwork, test if the manifestwork is created
+// TestManifestWorkFlow tests if the manifestwork is created
 // and reference secret is put into manifestwork payload
 func TestManifestWorkFlowBaseCase(t *testing.T) {
 	client := initClient()
@@ -195,8 +195,7 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 	assert.Nil(t, checker.shouldHave(requiredResource), "err nil when all requrie resource exist in manifestwork")
 }
 
-// TestManifestWorkFlowWithExtraConfigurations test
-// when override is set to manifestwork, test if the manifestwork is created
+// TestManifestWorkFlowWithExtraConfigurations tests if the manifestwork is created
 // and extra secret/configmap is put into manifestwork payload in addition to
 // the required resource of TestManifestWorkFlow
 func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
@@ -368,7 +367,7 @@ func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
 	assert.Equal(t, "Missing Spec.Crednetials.AWS.* platform IAM", c.Message, "is equal when spec.credentials is missing")
 }
 
-// TestManifestWorkFlow tests when override is set to manifestwork, test if the manifestwork is created
+// TestManifestWorkFlow tests if the manifestwork is created
 // and referenece secret is put into manifestwork payload
 func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 	client := initClient()
