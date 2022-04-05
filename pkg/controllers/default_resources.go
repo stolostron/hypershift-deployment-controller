@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"crypto/rand"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -193,6 +194,18 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 					spsMap(hyp.Ignition, hyp.Route),
 				},
 			}
+	}
+
+	if hyd.Spec.Infrastructure.Configure {
+		// Note: overwrite if hyd.Spec.HostedClusterSpec.SecretEncryption is specified
+		hyd.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
+			Type: hyp.AESCBC,
+			AESCBC: &hyp.AESCBCSpec{
+				ActiveKey: corev1.LocalObjectReference{
+					Name: hyd.Name + "-etcd-encryption-key",
+				},
+			},
+		}
 	}
 }
 
@@ -373,4 +386,30 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 			"AZURE_CLIENT_SECRET":   []byte(creds.ClientSecret),
 		},
 	}
+}
+
+func ScaffoldEtcdEncryptionKeySecret(hyd *hypdeployment.HypershiftDeployment, hostingNs string) (*corev1.Secret, error) {
+	generatedKey := make([]byte, 32)
+	_, err := rand.Read(generatedKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate random etcd key: %v", err)
+	}
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hyd.Name + "-etcd-encryption-key",
+			Namespace: hostingNs,
+			Labels: map[string]string{
+				AutoInfraLabelName: hyd.Spec.InfraID,
+			},
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		Data: map[string][]byte{
+			hyp.AESCBCKeySecretKey: generatedKey,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}, nil
 }

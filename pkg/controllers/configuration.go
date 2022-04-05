@@ -138,21 +138,32 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			}
 
 			if hcSpec.SecretEncryption != nil {
-				encr := hcSpec.SecretEncryption
-				if encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
-					secretRefs = append(secretRefs, encr.KMS.AWS.Auth.Credentials)
+				if hyd.Spec.Infrastructure.Configure {
+					// Generated and scaffolded the encryption secret
+					encryptionSecret, err := ScaffoldEtcdEncryptionKeySecret(hyd, helper.GetHostingNamespace(hyd))
+					if err != nil {
+						r.Log.Error(err, "failed to scaffold encryption secret")
+						allErr = append(allErr, err)
+					} else {
+						*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: encryptionSecret}})
+					}
+				} else {
+					// Pull in external encryption secret
+					encr := hcSpec.SecretEncryption
+					if encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
+						secretRefs = append(secretRefs, encr.KMS.AWS.Auth.Credentials)
 
-				}
+					}
 
-				if len(encr.AESCBC.ActiveKey.Name) != 0 {
-					secretRefs = append(secretRefs, encr.AESCBC.ActiveKey)
-				}
+					if len(encr.AESCBC.ActiveKey.Name) != 0 {
+						secretRefs = append(secretRefs, encr.AESCBC.ActiveKey)
+					}
 
-				if encr.AESCBC.BackupKey != nil {
-					secretRefs = append(secretRefs, *(encr.AESCBC.BackupKey))
+					if encr.AESCBC.BackupKey != nil {
+						secretRefs = append(secretRefs, *(encr.AESCBC.BackupKey))
+					}
 				}
 			}
-
 		}
 
 		for _, np := range hyd.Spec.NodePools {
