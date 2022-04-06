@@ -188,7 +188,6 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				Services: []hyp.ServicePublishingStrategyMapping{
 					spsMap(hyp.APIServer, hyp.LoadBalancer),
 					spsMap(hyp.OAuthServer, hyp.Route),
-					spsMap(hyp.OIDC, hyp.S3),
 					spsMap(hyp.Konnectivity, hyp.Route),
 					spsMap(hyp.Ignition, hyp.Route),
 				},
