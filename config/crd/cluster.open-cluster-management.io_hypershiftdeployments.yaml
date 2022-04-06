@@ -7208,12 +7208,12 @@ spec:
                 type: array
               override:
                 description: InfrastructureOverride allows support for special cases   OverrideDestroy
-                  = "ORPHAN"   InfraConfigureOnly = "INFRA-ONLY"   ConfigureWithManifest
-                  = "MANIFESTWORK"
+                  = "ORPHAN"   InfraConfigureOnly = "INFRA-ONLY"   DeleteHostingNamespace
+                  = "DELETE-HOSTING-NAMESPACE"
                 enum:
                 - ORPHAN
                 - INFRA-ONLY
-                - MANIFESTWORK
+                - DELETE-HOSTING-NAMESPACE
                 type: string
             required:
             - infrastructure

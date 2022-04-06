@@ -100,17 +100,32 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 	return w, nil
 }
 
-func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hostingNamespace string) {
-	mw.Spec.DeleteOption = &workv1.DeleteOption{
-		PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
-		SelectivelyOrphan: &workv1.SelectivelyOrphan{
-			OrphaningRules: []workv1.OrphaningRule{
-				{
-					Resource: "namespaces",
-					Name:     hostingNamespace,
+func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hyd *hypdeployment.HypershiftDeployment) {
+	hostingNamespace := helper.GetHostingNamespace(hyd)
+
+	if hyd.Spec.Override == hypdeployment.InfraOverrideDestroy {
+		mw.Spec.DeleteOption = &workv1.DeleteOption{
+			PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan,
+		}
+	} else if hyd.Spec.Override == hypdeployment.DeleteHostingNamespace {
+		mw.Spec.DeleteOption = &workv1.DeleteOption{
+			PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
+			SelectivelyOrphan: &workv1.SelectivelyOrphan{
+				OrphaningRules: []workv1.OrphaningRule{},
+			},
+		}
+	} else {
+		mw.Spec.DeleteOption = &workv1.DeleteOption{
+			PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
+			SelectivelyOrphan: &workv1.SelectivelyOrphan{
+				OrphaningRules: []workv1.OrphaningRule{
+					{
+						Resource: "namespaces",
+						Name:     hostingNamespace,
+					},
 				},
 			},
-		},
+		}
 	}
 }
 
@@ -243,7 +258,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 	if m.GetDeletionTimestamp().IsZero() {
 		patch := client.MergeFrom(m.DeepCopy())
-		setManifestWorkSelectivelyDeleteOption(m, helper.GetHostingNamespace(hyd))
+		setManifestWorkSelectivelyDeleteOption(m, hyd)
 		if err := r.Client.Patch(ctx, m, patch); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
 		}
@@ -267,7 +282,7 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 		var pullCreds *corev1.Secret
 		var err error
-		if hyd.Spec.Infrastructure.Configure == false {
+		if !hyd.Spec.Infrastructure.Configure {
 			pullCreds, err = r.generateSecret(ctx,
 				types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
 					Namespace: hyd.GetNamespace()})
