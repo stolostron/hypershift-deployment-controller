@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -37,9 +38,9 @@ const DEBUG = 1
 const INFO = 0
 const WARN = -1
 const ERROR = -2
-const FINALIZER = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"
 const createManagedClusterAnnotation = "cluster.open-cluster-management.io/createmanagedcluster"
 const provisionerAnnotation = "cluster.open-cluster-management.io/provisioner"
+const manifestWorkFinalizer = "managedcluster-import-controller.open-cluster-management.io/manifestwork-cleanup"
 
 const (
 	klusterletDeployMode = "import.open-cluster-management.io/klusterlet-deploy-mode"
@@ -93,11 +94,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	managedClusterName := helper.ManagedClusterName(&hyd)
 	// Delete the ManagedCluster
 	if hyd.DeletionTimestamp != nil {
-		if err := deleteManagedCluster(r, managedClusterName); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, removeFinalizer(r, &hyd)
+		return deleteManagedCluster(r, hyd, managedClusterName)
 	}
 
 	// Do not exit till this point when importmanagedcluster=false, so deletion will work properly if manually imported
@@ -117,7 +114,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Once we are sure there is a ManagedCluster, we set the finalizer
-	if !controllerutil.ContainsFinalizer(&hyd, FINALIZER) {
+	if !controllerutil.ContainsFinalizer(&hyd, constant.ManagedClusterCleanupFinalizer) {
 		return ctrl.Result{}, setFinalizer(r, &hyd)
 	}
 
@@ -280,47 +277,53 @@ func ensureCreateManagedClusterAnnotationFalse(r *Reconciler, hyd *hypdeployment
 
 func setFinalizer(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
 	patch := client.MergeFrom(hyd.DeepCopy())
-	controllerutil.AddFinalizer(hyd, FINALIZER)
+	controllerutil.AddFinalizer(hyd, constant.ManagedClusterCleanupFinalizer)
 	r.Log.V(INFO).Info("Added finalizer on hypershift deployment: " + hyd.Name)
 	return r.Client.Patch(context.TODO(), hyd, patch)
 }
 
 func removeFinalizer(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
-	if !controllerutil.ContainsFinalizer(hyd, FINALIZER) {
+	if !controllerutil.ContainsFinalizer(hyd, constant.ManagedClusterCleanupFinalizer) {
 		return nil
 	}
 
 	patch := client.MergeFrom(hyd.DeepCopy())
-	controllerutil.RemoveFinalizer(hyd, FINALIZER)
+	controllerutil.RemoveFinalizer(hyd, constant.ManagedClusterCleanupFinalizer)
 	r.Log.V(INFO).Info("Removed finalizer on hypershift deployment: " + hyd.Name)
 	return r.Client.Patch(context.TODO(), hyd, patch)
 }
 
-func deleteManagedCluster(r *Reconciler, name string) error {
+func deleteManagedCluster(r *Reconciler, hyd hypdeployment.HypershiftDeployment, name string) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("managedClusterName", name)
 
 	var mc mcv1.ManagedCluster
 	err := r.Get(ctx, types.NamespacedName{Name: name}, &mc)
 	if k8serrors.IsNotFound(err) {
-		log.V(INFO).Info("The ManagedCluster resource was not found, skipped")
-		return nil
+		// the managed cluster could be deleted, ensure the managed cluster finalizer is removed from the HypershiftDeployment
+		log.V(INFO).Info("The ManagedCluster resource was not found, the managed cluster could be deleted")
+		return ctrl.Result{}, removeFinalizer(r, &hyd)
 	}
 	if err != nil {
 		log.V(WARN).Info("Error when attempting to retreive the ManagedCluster resource", "error", err)
-		return err
+		return ctrl.Result{}, err
 	}
 
 	if mc.DeletionTimestamp != nil {
-		log.V(INFO).Info("The managedCluster resource is already being deleted")
-		return nil
+		if controllerutil.ContainsFinalizer(&mc, manifestWorkFinalizer) {
+			log.V(INFO).Info(fmt.Sprintf("Waiting the manifestworks of the managedCluster %s to be deleted", name))
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		// now the manifestworks of the managed cluster are deleted, the managed cluster finalizer can be removed safely
+		return ctrl.Result{}, removeFinalizer(r, &hyd)
 	}
 
 	err = r.Delete(ctx, &mc)
 	if err != nil {
 		log.V(WARN).Info("Error while deleting ManagedCluster resource", "error", err)
+		return ctrl.Result{}, err
 	}
 
-	log.V(INFO).Info("Deleted ManagedCluster resource")
-	return nil
+	log.V(INFO).Info(fmt.Sprintf("Waiting the managedCluster %s to be deleted", name))
+	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 }
