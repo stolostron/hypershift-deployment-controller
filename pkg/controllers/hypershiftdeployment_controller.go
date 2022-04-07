@@ -318,6 +318,12 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 
 	inHyd := hyd.DeepCopy()
 
+	// if the hostedcluster has a managed cluster, wait for its managed cluster to be cleaned up
+	if controllerutil.ContainsFinalizer(hyd, constant.ManagedClusterCleanupFinalizer) {
+		log.Info("Waiting for ManagedCluster " + helper.ManagedClusterName(hyd) + " to be cleaned up")
+		return ctrl.Result{}, nil
+	}
+
 	if hyd.Spec.Override != hypdeployment.InfraConfigureOnly {
 		log.Info("Removing Manifestwork and wait for hostedclsuter and nodepool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)

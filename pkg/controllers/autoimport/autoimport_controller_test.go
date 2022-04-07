@@ -62,7 +62,7 @@ func GetHypershiftDeployment(namespace string, name string, infraID string) *hyd
 		ObjectMeta: v1.ObjectMeta{
 			Name:       name,
 			Namespace:  namespace,
-			Finalizers: []string{FINALIZER},
+			Finalizers: []string{constant.ManagedClusterCleanupFinalizer},
 		},
 		Spec: hydapi.HypershiftDeploymentSpec{
 			InfraID: infraID,
@@ -138,7 +138,7 @@ func assertContainFinalizer(t *testing.T, ctx context.Context, client crclient.C
 	var hyd hydapi.HypershiftDeployment
 	err := client.Get(ctx, getNamespaceName(HYD_NAMESPACE, HYD_NAME), &hyd)
 	assert.Nil(t, err, "hypershift deployment resource is retrieved")
-	assert.Contains(t, hyd.Finalizers, FINALIZER, "finalizer should be contained")
+	assert.Contains(t, hyd.Finalizers, constant.ManagedClusterCleanupFinalizer, "finalizer should be contained")
 }
 
 func TestReconcileCreate(t *testing.T) {
