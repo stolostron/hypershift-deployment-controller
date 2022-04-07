@@ -203,6 +203,11 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		mc.Name = managedClusterName
 		mc.Spec.HubAcceptsClient = true
 
+		mc.ObjectMeta.Labels = map[string]string{
+			"vendor": "OpenShift",   // This is always true
+			"cloud":  "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
+		}
+
 		mc.ObjectMeta.Annotations = map[string]string{
 			klusterletDeployMode: "Hosted",
 			hostingClusterName:   managementClusterName,
