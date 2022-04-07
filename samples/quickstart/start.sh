@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2022.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,37 +68,66 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-oc get mce multiclusterengine-sample
+mce_name="multiclusterengine-sample"
+oc get mch -n open-cluster-management multiclusterhub
+if [ $? -eq 0 ]; then
+  echo "multiclusterhub installed, set mce name to multiclusterengine"
+  mce_name="multiclusterengine"
+fi
+echo "mce name: ${mce_name}"
+
+oc get mce ${mce_name}
 if [ $? -ne 0 ]; then
-  echo "multiclusterengine-sample is not available, please install the multi-cluster engine"
+  echo "${mce_name} is not available, please install the multi-cluster engine"
   exit 1
 fi
 
-oc patch multiclusterengine multiclusterengine-sample --type=merge -p '{"spec":{"overrides":{"components":[{"name":"hypershift-preview","enabled": true}]}}}'
+oc patch multiclusterengine ${mce_name} --type=merge -p '{"spec":{"overrides":{"components":[{"name":"hypershift-preview","enabled": true}]}}}'
 
-oc apply -f - <<EOF
+# import local cluster
+oc get managedcluster local-cluster
+if [ $? -ne 0 ]; then
+  echo "local-cluster is not imported to hub, try to import it"
+  oc apply -f - <<EOF
 apiVersion: cluster.open-cluster-management.io/v1
 kind: ManagedCluster
 metadata:
+  labels:
+    local-cluster: "true"
   name: local-cluster
 spec:
   hubAcceptsClient: true
   leaseDurationSeconds: 60
 EOF
+fi
 
-oc get secret -n local-cluster local-cluster-import > /dev/null 2>&1
-while [ $? -ne 0 ]; do
-  sleep 2
-  oc get secret -n local-cluster local-cluster-import > /dev/null 2>&1
-done
+echo "wait for managed cluster local-cluster to be available ..."
+oc wait --for=condition=ManagedClusterConditionAvailable managedcluster/local-cluster --timeout=600s
+if [ $? -ne 0 ]; then
+  printf "timeout for waiting local cluster to be available"
+  exit 1
+fi
 
-sleep 10
-
-oc get secret -n local-cluster local-cluster-import -o yaml > sOut1
-oc get secret -n local-cluster local-cluster-import -ojsonpath={.data.crds\\.yaml} | base64 -d | oc apply -f -
-
-oc get secret -n local-cluster local-cluster-import -ojsonpath={.data.import\\.yaml} | base64 -d | oc apply -f -
-
-oc apply -f https://raw.githubusercontent.com/stolostron/hypershift-addon-operator/main/example/managedclusteraddon-hypershift-addon.yaml
+# install hypershift addon
+echo "start to install hypershift addon on the local cluster"
+oc apply -f - <<EOF
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ManagedClusterAddOn
+metadata:
+  name: hypershift-addon
+  namespace: local-cluster
+spec:
+  installNamespace: open-cluster-management-agent-addon
+EOF
 
 oc -n local-cluster create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=${S3_CREDS} --from-literal=bucket=${BUCKET_NAME} --from-literal=region=${BUCKET_REGION} -n local-cluster
+
+echo "wait for managed cluster addon hypershift addon to be available ..."
+oc wait --for=condition=Available managedclusteraddon/hypershift-addon -n local-cluster --timeout=600s
+if [ $? -ne 0 ]
+then
+  echo "hypershift addon installation failed"
+  exit 1
+else
+  echo "hypershift addon installed successfully, now you can provision a hosted control plane cluster by HypershiftDeployment"
+fi

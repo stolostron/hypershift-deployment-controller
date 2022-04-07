@@ -4,6 +4,17 @@ REPO ?= "quay.io/stolostron/"
 # Image URL to use all building/pushing image targets
 IMG ?= $(REPO)hypershift-deployment-controller:latest
 
+KUBECONFIG ?= ${HOME}/.kube/config
+S3_CREDS ?= ${HOME}/.aws/credentials
+BUCKET_REGION ?= ""
+BUCKET_NAME ?= ""
+CLOUD_PROVIDER_SECRET_NAME ?= ""
+CLOUD_PROVIDER_SECRET_NAMESPACE ?= "default"
+INFRA_REGION ?= "us-east-1"
+HYPERSHIFT_DEPLOYMENT_NAME ?= "hypershift-test"
+
+KUBECTL ?= kubectl --kubeconfig=$(KUBECONFIG)
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.22
 
@@ -135,3 +146,18 @@ GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
+
+.PHONY: install-hypershift-addon
+install-hypershift-addon:
+	S3_CREDS=${S3_CREDS} BUCKET_REGION=${BUCKET_REGION} BUCKET_NAME=${BUCKET_NAME} samples/quickstart/start.sh
+
+.PHONY: create-a-hosted-cluster
+create-a-hosted-cluster:
+	CLOUD_PROVIDER_SECRET_NAMESPACE=${CLOUD_PROVIDER_SECRET_NAMESPACE} CLOUD_PROVIDER_SECRET_NAME=${CLOUD_PROVIDER_SECRET_NAME} INFRA_REGION=${INFRA_REGION} HYPERSHIFT_DEPLOYMENT_NAME=${HYPERSHIFT_DEPLOYMENT_NAME} samples/quickstart/create-aws-hosted-cluster.sh
+
+.PHONY: create-a-policy
+create-a-policy:
+	HYPERSHIFT_DEPLOYMENT_NAME=${HYPERSHIFT_DEPLOYMENT_NAME} samples/quickstart/create-policy.sh
+
+.PHONY: test-sd
+test-sd: install-hypershift-addon create-a-hosted-cluster create-a-policy
