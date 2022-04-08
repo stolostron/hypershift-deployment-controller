@@ -109,10 +109,7 @@ func setManifestWorkSelectivelyDeleteOption(mw *workv1.ManifestWork, hyd *hypdep
 		}
 	} else if hyd.Spec.Override == hypdeployment.DeleteHostingNamespace {
 		mw.Spec.DeleteOption = &workv1.DeleteOption{
-			PropagationPolicy: workv1.DeletePropagationPolicyTypeSelectivelyOrphan,
-			SelectivelyOrphan: &workv1.SelectivelyOrphan{
-				OrphaningRules: []workv1.OrphaningRule{},
-			},
+			PropagationPolicy: workv1.DeletePropagationPolicyTypeForeground,
 		}
 	} else {
 		mw.Spec.DeleteOption = &workv1.DeleteOption{
