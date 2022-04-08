@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/openshift/hypershift v0.0.0-20220322145644-fe045fd56f45
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1
@@ -44,7 +45,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
