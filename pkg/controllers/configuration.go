@@ -111,6 +111,7 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 
 		//source:
 		// hyd.Spec.HostedClusterSpec.Configuration.ConfigMapRefs
+		// hyd.Spec.HostedClsuterSpec.AdditionalTrustBundle
 		// hyd.Spec.NodePoolSpec.Config
 		configMapRefs := []corev1.LocalObjectReference{}
 
@@ -153,6 +154,10 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 				}
 			}
 
+		}
+
+		if hcSpec.AdditionalTrustBundle != nil && len(hcSpec.AdditionalTrustBundle.Name) != 0 {
+			configMapRefs = append(configMapRefs, *hcSpec.AdditionalTrustBundle)
 		}
 
 		for _, np := range hyd.Spec.NodePools {

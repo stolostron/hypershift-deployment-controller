@@ -208,6 +208,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	cfgSecretName := "hostedcluster-config-secret-1"
 	cfgConfigName := "hostedcluster-config-configmap-1"
 	cfgItemSecretName := "hostedcluster-config-item-1"
+	cfgAdditionalTrustBundle := "hostedcluster-additionaltrustbundle"
 
 	insertConfigSecretAndConfigMap := func() {
 		testHD.Spec.HostedClusterSpec.Configuration = &hyp.ClusterConfiguration{}
@@ -216,6 +217,10 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 		testHD.Spec.HostedClusterSpec.Configuration.ConfigMapRefs = []corev1.LocalObjectReference{
 			corev1.LocalObjectReference{Name: cfgConfigName}}
+
+		testHD.Spec.HostedClusterSpec.AdditionalTrustBundle = &corev1.LocalObjectReference{
+			Name: cfgAdditionalTrustBundle,
+		}
 
 		testHD.Spec.HostedClusterSpec.Configuration.Items = []runtime.RawExtension{runtime.RawExtension{Object: &corev1.Secret{
 			TypeMeta: metav1.TypeMeta{
@@ -265,8 +270,21 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 		},
 	}
 
+	cb := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfgAdditionalTrustBundle,
+			Namespace: testHD.GetNamespace(),
+		},
+		Data: map[string]string{
+			"certs": "something special ABC XYZ",
+		},
+	}
+
 	client.Create(ctx, cm)
 	defer client.Delete(ctx, cm)
+
+	client.Create(ctx, cb)
+	defer client.Delete(ctx, cb)
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
@@ -297,6 +315,12 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 				Group: "", Version: "v1", Kind: "ConfigMap"},
 			NamespacedName: types.NamespacedName{
 				Name: cfgConfigName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
+
+		kindAndKey{
+			GroupVersionKind: schema.GroupVersionKind{
+				Group: "", Version: "v1", Kind: "ConfigMap"},
+			NamespacedName: types.NamespacedName{
+				Name: cfgAdditionalTrustBundle, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 
 	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
