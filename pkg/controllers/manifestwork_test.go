@@ -796,7 +796,7 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	updatedHD := &hyd.HypershiftDeployment{}
 	assert.Nil(t, clt.Get(ctx, getNN, updatedHD), "err nil Get updated hypershiftDeployment")
 
-	hcAvaCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedClusterAvaliable))
+	hcAvaCond := condmeta.FindStatusCondition(updatedHD.Status.Conditions, string(hypdeployment.HostedClusterAvailable))
 
 	assert.NotNil(t, hcAvaCond, "not nil, should find a hostedcluster condition")
 	assert.NotEmpty(t, hcAvaCond.Reason, "condition reason should be nil")

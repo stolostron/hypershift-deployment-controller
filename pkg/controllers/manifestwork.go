@@ -530,7 +530,7 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 		}
 
 		if id.Resource == HostedClusterResource {
-			hcAvaCond, ok := feedbackToCondition(hypdeployment.HostedClusterAvaliable, obj.StatusFeedbacks.Values)
+			hcAvaCond, ok := feedbackToCondition(hypdeployment.HostedClusterAvailable, obj.StatusFeedbacks.Values)
 			if ok {
 				out = append(out, hcAvaCond)
 			}
