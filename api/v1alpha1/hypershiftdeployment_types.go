@@ -46,7 +46,7 @@ const (
 	ProviderSecretConfigured ConditionType = "ProviderSecretConfigured"
 
 	// HostedCluster indicates the state of the hostedcluster
-	HostedClusterAvaliable ConditionType = "HostedClusterAvaliable"
+	HostedClusterAvailable ConditionType = "HostedClusterAvailable"
 
 	// HostedCluster indicates the state of the hostedcluster
 	HostedClusterProgress ConditionType = "HostedClusterProgress"
@@ -206,7 +206,8 @@ type HypershiftDeploymentStatus struct {
 // +kubebuilder:printcolumn:name="MANIFESTWORK",type="string",JSONPath=".status.conditions[?(@.type==\"ManifestWorkConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="PROVIDER REF",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="Found",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].status",description="Found"
-// +kubebuilder:printcolumn:name="HOSTING",type="string",JSONPath=".status.conditions[?(@.type==\"HostedClusterProgress\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="PROGRESS",type="string",JSONPath=".status.conditions[?(@.type==\"HostedClusterProgress\")].reason",description="Reason"
+// +kubebuilder:printcolumn:name="AVAILABLE",type="string",JSONPath=".status.conditions[?(@.type==\"HostedClusterAvailable\")].status",description="Available"
 
 // HypershiftDeployment is the Schema for the hypershiftDeployments API
 type HypershiftDeployment struct {
