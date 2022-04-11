@@ -161,3 +161,5 @@ create-a-policy:
 
 .PHONY: test-sd
 test-sd: install-hypershift-addon create-a-hosted-cluster create-a-policy
+
+include ./test/integration-test.mk
