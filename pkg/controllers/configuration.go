@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	apifixtures "github.com/openshift/hypershift/api/fixtures"
+
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	corev1 "k8s.io/api/core/v1"
@@ -98,7 +100,7 @@ func (r *HypershiftDeploymentReconciler) generateConfigMap(ctx context.Context, 
 
 // make sure all configuration resources listed at https://github.com/stolostron/backlog/issues/20243
 // are loaded to manifestwork
-func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context) loadManifest {
+func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context, oManifestwork *workv1.ManifestWork) loadManifest {
 	var allErr []error
 	return func(hyd *hypdeployment.HypershiftDeployment,
 		payload *[]workv1.Manifest) error {
@@ -139,18 +141,45 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			}
 
 			if hcSpec.SecretEncryption != nil {
-				encr := hcSpec.SecretEncryption
-				if encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
-					secretRefs = append(secretRefs, encr.KMS.AWS.Auth.Credentials)
+				if hyd.Spec.Infrastructure.Configure {
+					var oSecret *workv1.Manifest
+					if oManifestwork != nil {
+						// Extract from old manifest if exists to prevent generating a new key
+						var err error
+						oSecret, err = getManifestPayloadSecretByName(&oManifestwork.Spec.Workload.Manifests, hyd.Name+"-etcd-encryption-key")
+						if err != nil {
+							r.Log.Error(err, "failed to get etcd encryption key from old manifestwork")
+						}
+					}
 
-				}
+					if oSecret != nil {
+						*payload = append(*payload, *oSecret)
+					} else {
+						// Generate and scaffold the encryption secret
+						exampleOptions := &apifixtures.ExampleOptions{
+							Name:      hyd.Name,
+							Namespace: helper.GetHostingNamespace(hyd),
+						}
+						encryptionSecret := exampleOptions.EtcdEncryptionKeySecret()
 
-				if len(encr.AESCBC.ActiveKey.Name) != 0 {
-					secretRefs = append(secretRefs, encr.AESCBC.ActiveKey)
-				}
+						r.Log.Info(fmt.Sprintf("Generate etcd encryption secret: %v/%v", encryptionSecret.GetNamespace(), encryptionSecret.GetName()))
+						*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: encryptionSecret}})
+					}
+				} else {
+					// Pull in external encryption secret
+					encr := hcSpec.SecretEncryption
+					if encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
+						secretRefs = append(secretRefs, encr.KMS.AWS.Auth.Credentials)
 
-				if encr.AESCBC.BackupKey != nil {
-					secretRefs = append(secretRefs, *(encr.AESCBC.BackupKey))
+					}
+
+					if len(encr.AESCBC.ActiveKey.Name) != 0 {
+						secretRefs = append(secretRefs, encr.AESCBC.ActiveKey)
+					}
+
+					if encr.AESCBC.BackupKey != nil {
+						secretRefs = append(secretRefs, *(encr.AESCBC.BackupKey))
+					}
 				}
 			}
 

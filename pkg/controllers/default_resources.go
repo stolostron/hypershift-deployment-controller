@@ -193,6 +193,18 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				},
 			}
 	}
+
+	if hyd.Spec.Infrastructure.Configure {
+		// Note: overwrite if hyd.Spec.HostedClusterSpec.SecretEncryption is specified
+		hyd.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
+			Type: hyp.AESCBC,
+			AESCBC: &hyp.AESCBCSpec{
+				ActiveKey: corev1.LocalObjectReference{
+					Name: hyd.Name + "-etcd-encryption-key",
+				},
+			},
+		}
+	}
 }
 
 func scaffoldDnsSpec(baseDomain string, privateZoneID string, publicZoneID string) *hyp.DNSSpec {
