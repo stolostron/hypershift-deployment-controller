@@ -6,6 +6,7 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -53,14 +54,14 @@ func startCtrlManager(ctx context.Context, mgr ctrl.Manager) {
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
-var _ = ginkgo.Describe("Manifest Work", func() {
+var _ = ginkgo.Describe("Manifest Work", ginkgo.Ordered, func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
 		mgr    ctrl.Manager
 	)
 
-	ginkgo.BeforeEach(func() {
+	ginkgo.BeforeAll(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		var err error
 		mgr, err = ctrl.NewManager(restConfig, ctrl.Options{
@@ -76,7 +77,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		go startCtrlManager(ctx, mgr)
 	})
 
-	ginkgo.AfterEach(func() {
+	ginkgo.AfterAll(func() {
 		if cancel != nil {
 			cancel()
 		}
@@ -84,10 +85,11 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 
 	ginkgo.Context("test infra config false", func() {
 		var (
-			hydName      string
-			hydNamespace string
-			hyd          *hypdeployment.HypershiftDeployment
-			infraID      string
+			hydName             string
+			hydNamespace        string
+			hyd                 *hypdeployment.HypershiftDeployment
+			infraID             string
+			cloudProviderSecret *corev1.Secret
 		)
 
 		ginkgo.BeforeEach(func() {
@@ -99,13 +101,29 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					Name:      hydName,
 					Namespace: hydNamespace,
 				}}
+
+			cloudProviderSecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-aws",
+					Namespace: hydNamespace,
+				},
+				Data: map[string][]byte{
+					"pullSecret": []byte("test-pull-secret"),
+				},
+			}
+
+			err := mgr.GetClient().Create(ctx, cloudProviderSecret)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 		ginkgo.AfterEach(func() {
 			err := mgr.GetClient().Delete(ctx, hyd)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			err = mgr.GetClient().Delete(ctx, cloudProviderSecret)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 
-		ginkgo.It("aws", func() {
+		ginkgo.It("aws without pull secret", func() {
 			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
 				InfraID:          infraID,
 				Override:         hypdeployment.DeleteHostingNamespace,
@@ -135,15 +153,66 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			gomega.Eventually(func() bool {
-				manifestworks := workv1.ManifestWorkList{}
-				err = mgr.GetClient().List(ctx, &manifestworks)
+				manifestwork := workv1.ManifestWork{}
+				err = mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hyd.Spec.HostingCluster, Name: infraID}, &manifestwork)
 				if err != nil {
 					return false
 				}
-				if len(manifestworks.Items) > 0 {
-					return true
+
+				// HostedCluster + NodePool
+				if len(manifestwork.Spec.Workload.Manifests) != 2 {
+					return false
 				}
-				return false
+
+				return true
+			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
+		})
+
+		ginkgo.It("aws with pull secret", func() {
+			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
+				InfraID:          infraID,
+				Override:         hypdeployment.DeleteHostingNamespace,
+				HostingNamespace: "clusters",
+				HostingCluster:   "default",
+				Infrastructure: hypdeployment.InfraSpec{
+					Configure: false,
+				},
+				HostedClusterSpec: &hyp.HostedClusterSpec{
+					Platform: hyp.PlatformSpec{
+						Type: hyp.AWSPlatform,
+					},
+					Networking: hyp.ClusterNetworking{
+						NetworkType: hyp.OpenShiftSDN,
+					},
+					Services: []hyp.ServicePublishingStrategyMapping{},
+					Release: hyp.Release{
+						Image: constant.ReleaseImage,
+					},
+					Etcd: hyp.EtcdSpec{
+						ManagementType: hyp.Managed,
+					},
+					PullSecret: corev1.LocalObjectReference{
+						Name: cloudProviderSecret.Name,
+					},
+				},
+			}
+
+			err := mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			gomega.Eventually(func() bool {
+				manifestwork := workv1.ManifestWork{}
+				err = mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hyd.Spec.HostingCluster, Name: infraID}, &manifestwork)
+				if err != nil {
+					return false
+				}
+
+				// HostedCluster + NodePool + pullSecret
+				if len(manifestwork.Spec.Workload.Manifests) != 3 {
+					return false
+				}
+
+				return true
 			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
 		})
 	})

@@ -29,12 +29,7 @@ var restConfig *rest.Config
 
 var _ = ginkgo.BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true)))
-
 	ginkgo.By("bootstrapping test environment")
-
-	// // crank up the sync speed
-	// bootstrapcontroller.BootstrapControllerSyncInterval = 2 * time.Second
-	// ssarcontroller.SSARReSyncTime = 1 * time.Second
 
 	var err error
 
@@ -42,8 +37,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		ErrorIfCRDPathMissing: true,
 		CRDDirectoryPaths: []string{
-			filepath.Join(".", "config", "crd"),
-			filepath.Join(".", "test", "integration", "externalcrds"),
+			filepath.Join(".", "..", "..", "config", "crd"),
+			filepath.Join(".", "externalcrds"),
 		},
 	}
 	cfg, err := testEnv.Start()
