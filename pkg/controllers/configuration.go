@@ -160,6 +160,10 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			configMapRefs = append(configMapRefs, *hcSpec.AdditionalTrustBundle)
 		}
 
+		if hcSpec.ServiceAccountSigningKey != nil && len(hcSpec.ServiceAccountSigningKey.Name) != 0 {
+			secretRefs = append(secretRefs, *hcSpec.ServiceAccountSigningKey)
+		}
+
 		for _, np := range hyd.Spec.NodePools {
 			if len(np.Spec.Config) != 0 {
 				configMapRefs = append(configMapRefs, np.Spec.Config...)

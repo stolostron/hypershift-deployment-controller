@@ -1016,8 +1016,8 @@ github.com/openshift/cluster-api-provider-kubevirt v0.0.0-20211223062810-ef64d5f
 github.com/openshift/cluster-api-provider-kubevirt v0.0.0-20211223062810-ef64d5ff1cde/go.mod h1:Z4fR4Cg8/z9GEys79MU+8CpX98aZQqI+tl9YIao0KxQ=
 github.com/openshift/custom-resource-status v0.0.0-20200602122900-c002fd1547ca h1:F1MEnOMwSrTA0YAkO0he9ip9w0JhYzI/iCB2mXmaSPg=
 github.com/openshift/custom-resource-status v0.0.0-20200602122900-c002fd1547ca/go.mod h1:GDjWl0tX6FNIj82vIxeudWeSx2Ff6nDZ8uJn0ohUFvo=
-github.com/openshift/hypershift v0.0.0-20220406072049-c6ce37a46f61 h1:GG3SiEhmDxVJtVyJ7Dq3QRmKBX/X1hWWrOpOKoFjres=
-github.com/openshift/hypershift v0.0.0-20220406072049-c6ce37a46f61/go.mod h1:BkAbwlIcY1HCqd0RYNOHeV03QQybApOSIlkEGIguB+Y=
+github.com/openshift/hypershift v0.0.0-20220413171154-1967de8f7854 h1:QKxTxrDzVPkDR28jvSIwWWWjPfoAnmOx6upV5p0B5oA=
+github.com/openshift/hypershift v0.0.0-20220413171154-1967de8f7854/go.mod h1:BkAbwlIcY1HCqd0RYNOHeV03QQybApOSIlkEGIguB+Y=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/opentracing/opentracing-go v1.2.0/go.mod h1:GxEUsuufX4nBwe+T+Wl9TAgYrxe9dPLANfrWvHYVTgc=
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
