@@ -55,6 +55,8 @@ type HypershiftDeploymentReconciler struct {
 	Scheme *runtime.Scheme
 	ctx    context.Context
 	Log    logr.Logger
+
+	InfraHandler InfraHandler
 }
 
 const (

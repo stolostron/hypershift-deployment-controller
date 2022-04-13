@@ -56,16 +56,14 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 		!meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
 
 		log.Info("Creating infrastructure on the provider that will be used by the HypershiftDeployment, HostedClusters & NodePools")
-		o := aws.CreateInfraOptions{
-			AWSKey:       string(providerSecret.Data["aws_access_key_id"]),
-			AWSSecretKey: string(providerSecret.Data["aws_secret_access_key"]),
-			Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
-			InfraID:      hyd.Spec.InfraID,
-			Name:         hyd.GetName(),
-			BaseDomain:   string(providerSecret.Data["baseDomain"]),
-		}
-
-		infraOut, err := o.CreateInfra(r.ctx)
+		infraOut, err := r.InfraHandler.AwsInfraCreator(
+			string(providerSecret.Data["aws_access_key_id"]),
+			string(providerSecret.Data["aws_secret_access_key"]),
+			hyd.Spec.Infrastructure.Platform.AWS.Region,
+			hyd.Spec.InfraID,
+			hyd.GetName(),
+			string(providerSecret.Data["baseDomain"]),
+		)(r.ctx)
 		if err != nil {
 			log.Error(err, "Could not create infrastructure")
 
@@ -99,21 +97,17 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 
 		oidcSPName, oidcSPRegion, iamErr := oidcDiscoveryURL(r, hyd)
 		if iamErr == nil {
-			iamOpt := aws.CreateIAMOptions{
-				Region:                          hyd.Spec.Infrastructure.Platform.AWS.Region,
-				AWSKey:                          string(providerSecret.Data["aws_access_key_id"]),
-				AWSSecretKey:                    string(providerSecret.Data["aws_secret_access_key"]),
-				InfraID:                         hyd.Spec.InfraID,
-				IssuerURL:                       "", //This is generated on the fly by CreateIAMOutput
-				AdditionalTags:                  []string{},
-				OIDCStorageProviderS3BucketName: oidcSPName,
-				OIDCStorageProviderS3Region:     oidcSPRegion,
-				PrivateZoneID:                   infraOut.PrivateZoneID,
-				PublicZoneID:                    infraOut.PublicZoneID,
-				LocalZoneID:                     infraOut.LocalZoneID,
-			}
-
-			iamOut, iamErr = iamOpt.CreateIAM(r.ctx, r.Client)
+			iamOut, iamErr = r.InfraHandler.AwsIAMCreator(
+				string(providerSecret.Data["aws_access_key_id"]),
+				string(providerSecret.Data["aws_secret_access_key"]),
+				hyd.Spec.Infrastructure.Platform.AWS.Region,
+				hyd.Spec.InfraID,
+				oidcSPName,
+				oidcSPRegion,
+				infraOut.PrivateZoneID,
+				infraOut.PublicZoneID,
+				infraOut.LocalZoneID,
+			)(r.ctx, r.Client)
 			if iamErr != nil {
 				_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
 				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
@@ -144,35 +138,34 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (reconcile.Result, error) {
 	log := r.Log
 	ctx := r.ctx
-
-	dOpts := aws.DestroyInfraOptions{
-		AWSCredentialsFile: "",
-		AWSKey:             string(providerSecret.Data["aws_access_key_id"]),
-		AWSSecretKey:       string(providerSecret.Data["aws_secret_access_key"]),
-		Region:             hyd.Spec.Infrastructure.Platform.AWS.Region,
-		BaseDomain:         string(providerSecret.Data["baseDomain"]),
-		InfraID:            hyd.Spec.InfraID,
-		Name:               hyd.GetName(),
-	}
+	awsKey := string(providerSecret.Data["aws_access_key_id"])
+	awsSecretKey := string(providerSecret.Data["aws_secret_access_key"])
 
 	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing AWS infrastructure with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroyReason)
 
 	log.Info("Deleting Infrastructure on provider")
-	if err := dOpts.DestroyInfra(ctx); err != nil {
+
+	if err := r.InfraHandler.AwsInfraDestroyer(
+		awsKey,
+		awsSecretKey,
+		hyd.Spec.Infrastructure.Platform.AWS.Region,
+		hyd.Spec.InfraID,
+		hyd.GetName(),
+		string(providerSecret.Data["baseDomain"]),
+	)(ctx); err != nil {
 		log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
 	log.Info("Deleting Infrastructure IAM on provider")
-	iamOpt := aws.DestroyIAMOptions{
-		Region:       hyd.Spec.Infrastructure.Platform.AWS.Region,
-		AWSKey:       dOpts.AWSKey,
-		AWSSecretKey: dOpts.AWSSecretKey,
-		InfraID:      dOpts.InfraID,
-	}
 	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing AWS IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.RemovingReason)
 
-	if err := iamOpt.DestroyIAM(ctx); err != nil {
+	if err := r.InfraHandler.AwsIAMDestroyer(
+		awsKey,
+		awsSecretKey,
+		hyd.Spec.Infrastructure.Platform.AWS.Region,
+		hyd.Spec.InfraID,
+	)(ctx); err != nil {
 		log.Error(err, "failed to delete IAM on provider")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}

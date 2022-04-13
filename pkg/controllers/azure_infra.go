@@ -24,11 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/hypershift/api/fixtures"
-	"github.com/openshift/hypershift/cmd/infra/azure"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 )
 
@@ -39,29 +37,25 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 	log := r.Log
 
 	if hyd.Spec.Infrastructure.Platform.Azure.Location == "" {
-		return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform.Azure.Region")
+		return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform.Azure.Location")
 	}
 
 	// Skip reconcile based on condition
 	// Does both INFRA
-	var o azure.CreateInfraOptions
 	credentials, err := getAzureCloudProviderCreds(providerSecret)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
-
 		log.Info("Creating infrastructure in Azure that will be used by the HypershiftDeployment, HostedClusters & NodePools")
-		o = azure.CreateInfraOptions{
 
-			Location:    hyd.Spec.Infrastructure.Platform.Azure.Location,
-			InfraID:     hyd.Spec.InfraID,
-			Name:        hyd.GetName(),
-			BaseDomain:  string(providerSecret.Data["baseDomain"]),
-			Credentials: credentials,
-		}
-
-		infraOut, err := o.Run(r.ctx)
+		infraOut, err := r.InfraHandler.AzureInfraCreator(
+			hyd.GetName(),
+			string(providerSecret.Data["baseDomain"]),
+			hyd.Spec.Infrastructure.Platform.Azure.Location,
+			hyd.Spec.InfraID,
+			credentials,
+		)(r.ctx)
 		if err != nil {
 			log.Error(err, "Could not create infrastructure")
 
@@ -75,7 +69,7 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 
 		// This creates the required HostedClusterSpec and NodePoolSpec(s), from scratch or if supplied
 		ScaffoldAzureHostedClusterSpec(hyd, infraOut)
-		hyd.Spec.HostedClusterSpec.Platform.Azure.SubscriptionID = o.Credentials.SubscriptionID
+		hyd.Spec.HostedClusterSpec.Platform.Azure.SubscriptionID = credentials.SubscriptionID
 		ScaffoldAzureNodePoolSpec(hyd, infraOut)
 
 		if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
@@ -89,11 +83,7 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 		log.Info("Infrastructure configured")
 	}
 	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
-		r.Log.Info("Creating cloud credential secret")
-		cloudCredSecret := ScaffoldAzureCloudCredential(hyd, credentials)
-		if _, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, cloudCredSecret, func() error { return nil }); err != nil {
-			return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Could not create or update the cloud credential secret", hypdeployment.MisConfiguredReason)
-		}
+		// If it can run to here, the credential is legal. we will copy the credential by manifestwork to the hosting cluster.
 		log.Info("IAM configured")
 		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 	}
@@ -104,20 +94,19 @@ func (r *HypershiftDeploymentReconciler) destroyAzureInfrastructure(hyd *hypdepl
 	log := r.Log
 	ctx := r.ctx
 
-	dOpts := azure.DestroyInfraOptions{
-		Location:    hyd.Spec.Infrastructure.Platform.Azure.Location,
-		Credentials: &fixtures.AzureCreds{},
-		Name:        hyd.Name,
-		InfraID:     hyd.Spec.InfraID,
-	}
-
-	if err := json.Unmarshal(providerSecret.Data["osServicePrincipal.json"], &dOpts.Credentials); err != nil {
+	credentials := &fixtures.AzureCreds{}
+	if err := json.Unmarshal(providerSecret.Data["osServicePrincipal.json"], credentials); err != nil {
 		return ctrl.Result{}, err
 	}
 	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing Azure infrastructure with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroyReason)
 
 	log.Info("Deleting Infrastructure on provider")
-	if err := dOpts.Run(ctx); err != nil {
+	if err := r.InfraHandler.AzureInfraDestroyer(
+		hyd.Name,
+		hyd.Spec.Infrastructure.Platform.Azure.Location,
+		hyd.Spec.InfraID,
+		credentials,
+	)(ctx); err != nil {
 		log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
