@@ -209,6 +209,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	cfgConfigName := "hostedcluster-config-configmap-1"
 	cfgItemSecretName := "hostedcluster-config-item-1"
 	cfgAdditionalTrustBundle := "hostedcluster-additionaltrustbundle"
+	serviceAccountSigningKey := "hostedcluster-sask"
 
 	insertConfigSecretAndConfigMap := func() {
 		testHD.Spec.HostedClusterSpec.Configuration = &hyp.ClusterConfiguration{}
@@ -220,6 +221,10 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 		testHD.Spec.HostedClusterSpec.AdditionalTrustBundle = &corev1.LocalObjectReference{
 			Name: cfgAdditionalTrustBundle,
+		}
+
+		testHD.Spec.HostedClusterSpec.ServiceAccountSigningKey = &corev1.LocalObjectReference{
+			Name: serviceAccountSigningKey,
 		}
 
 		testHD.Spec.HostedClusterSpec.Configuration.Items = []runtime.RawExtension{runtime.RawExtension{Object: &corev1.Secret{
@@ -280,6 +285,16 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 		},
 	}
 
+	sask := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceAccountSigningKey,
+			Namespace: testHD.GetNamespace(),
+		},
+		Data: map[string][]byte{
+			"signingKey": []byte(`something special ABC XYZ`),
+		},
+	}
+
 	client.Create(ctx, cm)
 	defer client.Delete(ctx, cm)
 
@@ -288,6 +303,9 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
+
+	client.Create(ctx, sask)
+	defer client.Delete(ctx, sask)
 
 	hdr := &HypershiftDeploymentReconciler{
 		Client: client,
@@ -321,6 +339,11 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 				Group: "", Version: "v1", Kind: "ConfigMap"},
 			NamespacedName: types.NamespacedName{
 				Name: cfgAdditionalTrustBundle, Namespace: helper.GetHostingNamespace(testHD)}}: true,
+		kindAndKey{
+			GroupVersionKind: schema.GroupVersionKind{
+				Group: "", Version: "v1", Kind: "Secret"},
+			NamespacedName: types.NamespacedName{
+				Name: serviceAccountSigningKey, Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 
 	checker, err := newManifestResourceChecker(ctx, client, getManifestWorkKey(testHD))
