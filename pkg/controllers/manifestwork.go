@@ -277,21 +277,26 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-		var pullCreds *corev1.Secret
 		var err error
-		if !hyd.Spec.Infrastructure.Configure {
-			pullCreds, err = r.generateSecret(ctx,
-				types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
-					Namespace: hyd.GetNamespace()})
+		refSecrets := []*corev1.Secret{}
 
-			if err != nil {
-				return fmt.Errorf("failed to duplicateSecret, err %w", err)
+		if len(hyd.Spec.HostedClusterSpec.PullSecret.Name) != 0 {
+			var pullCreds *corev1.Secret
+			if !hyd.Spec.Infrastructure.Configure {
+				pullCreds, err = r.generateSecret(ctx,
+					types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
+						Namespace: hyd.GetNamespace()})
+
+				if err != nil {
+					return fmt.Errorf("failed to duplicate pull secret, err %w", err)
+				}
+			} else {
+				pullCreds = r.scaffoldPullSecret(hyd, *providerSecret)
 			}
-		} else {
-			pullCreds = r.scaffoldPullSecret(hyd, *providerSecret)
+
+			refSecrets = append(refSecrets, pullCreds)
 		}
 
-		refSecrets := []*corev1.Secret{pullCreds}
 		if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {
 			refSecrets = append(refSecrets, ScaffoldAWSSecrets(hyd)...)
 		} else if hyd.Spec.HostedClusterSpec.Platform.Azure != nil {
@@ -309,7 +314,7 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 					Namespace: hyd.GetNamespace()})
 
 			if err != nil {
-				return fmt.Errorf("failed to duplicateSecret, err %w", err)
+				return fmt.Errorf("failed to duplicate ssh secret, err %w", err)
 			}
 
 			refSecrets = append(refSecrets, s)

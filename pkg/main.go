@@ -101,8 +101,9 @@ func main() {
 	}
 
 	if err = (&controllers.HypershiftDeploymentReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		InfraHandler: &controllers.DefaultInfraHandler{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "HypershiftDeployment")
 		os.Exit(1)
