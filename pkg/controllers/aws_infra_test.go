@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	hydapi "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
-	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 )
 
 var s = clientgoscheme.Scheme
@@ -63,7 +63,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 			name: "err no hostingCluster",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
-					Name:      hypershiftBucketSecretName,
+					Name:      constant.HypershiftBucketSecretName,
 					Namespace: "testcluster",
 				},
 				Data: map[string][]byte{
@@ -72,13 +72,13 @@ func TestOidcDiscoveryURL(t *testing.T) {
 				},
 			},
 			hyd:         GetHypershiftDeployment("test", "hyd1", "", "mynamespace", ""),
-			expectedErr: helper.HostingClusterMissing,
+			expectedErr: constant.HostingClusterMissing,
 		},
 		{
 			name: "get info from secret with specific hosting cluster",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
-					Name:      hypershiftBucketSecretName,
+					Name:      constant.HypershiftBucketSecretName,
 					Namespace: "testcluster",
 				},
 				Data: map[string][]byte{
@@ -94,7 +94,7 @@ func TestOidcDiscoveryURL(t *testing.T) {
 			name: "get info from configmap infra config only",
 			existObj: &corev1.Secret{
 				ObjectMeta: v1.ObjectMeta{
-					Name:      hypershiftBucketSecretName,
+					Name:      constant.HypershiftBucketSecretName,
 					Namespace: "testcluster",
 				},
 				Data: map[string][]byte{

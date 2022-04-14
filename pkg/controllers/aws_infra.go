@@ -30,12 +30,8 @@ import (
 
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
-)
-
-const (
-	oidcStorageProvider        = "oidc-storage-provider-s3-config"
-	hypershiftBucketSecretName = "hypershift-operator-oidc-provider-s3-credentials"
 )
 
 func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
@@ -176,7 +172,7 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) (string, string, error) {
 
 	if len(hyd.Spec.HostingCluster) == 0 {
-		err := errors.New(helper.HostingClusterMissing)
+		err := errors.New(constant.HostingClusterMissing)
 		r.Log.Error(err, "Spec.HostingCluster needs a ManagedCluster name")
 		return "", "", err
 	}
@@ -185,7 +181,7 @@ func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.Hype
 	// so there must exist a hypershift bucket secret in the management cluster namespace.
 	secret := &corev1.Secret{}
 	if err := r.Client.Get(context.Background(), types.NamespacedName{
-		Name: hypershiftBucketSecretName, Namespace: helper.GetHostingCluster(hyd)}, secret); err != nil {
+		Name: constant.HypershiftBucketSecretName, Namespace: helper.GetHostingCluster(hyd)}, secret); err != nil {
 		return "", "", err
 	}
 

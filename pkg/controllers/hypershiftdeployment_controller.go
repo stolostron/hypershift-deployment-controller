@@ -58,13 +58,6 @@ type HypershiftDeploymentReconciler struct {
 	InfraHandler InfraHandler
 }
 
-const (
-	destroyFinalizer       = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
-	HostedClusterFinalizer = "hypershift.openshift.io/used-by-hostedcluster"
-	AutoInfraLabelName     = "hypershift.openshift.io/auto-created-for-infra"
-	InfraLabelName         = "hypershift.openshift.io/infra-id"
-)
-
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments/finalizers,verbs=update
@@ -121,8 +114,15 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		log.Info("Using INFRA-ID: " + hyd.Spec.InfraID)
 	}
 
-	if !controllerutil.ContainsFinalizer(&hyd, destroyFinalizer) {
-		controllerutil.AddFinalizer(&hyd, destroyFinalizer)
+	if !controllerutil.ContainsFinalizer(&hyd, constant.DestroyFinalizer) {
+		controllerutil.AddFinalizer(&hyd, constant.DestroyFinalizer)
+
+		if hyd.Labels == nil {
+			hyd.Labels = map[string]string{}
+		}
+		if _, found := hyd.Labels[constant.InfraLabelName]; !found {
+			hyd.Labels[constant.InfraLabelName] = hyd.Spec.InfraID
+		}
 
 		if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil || hyd.Spec.InfraID == "" {
 			return ctrl.Result{}, fmt.Errorf("failed to update infra-id: \"%s\" and error: %w", hyd.Spec.InfraID, err)
@@ -236,7 +236,7 @@ func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.H
 			Namespace: helper.GetHostingNamespace(hyd),
 			Name:      hyd.Spec.HostedClusterSpec.PullSecret.Name,
 			Labels: map[string]string{
-				AutoInfraLabelName: hyd.Spec.InfraID,
+				constant.AutoInfraLabelName: hyd.Spec.InfraID,
 			},
 		},
 		Data: map[string][]byte{
@@ -366,7 +366,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	}
 
 	log.Info("Removing finalizer")
-	controllerutil.RemoveFinalizer(hyd, destroyFinalizer)
+	controllerutil.RemoveFinalizer(hyd, constant.DestroyFinalizer)
 
 	if err := r.Client.Update(ctx, hyd); err != nil {
 		//if apierrors.IsConflict(err) {
@@ -385,11 +385,11 @@ func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) erro
 			handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
 				an := obj.GetAnnotations()
 
-				if len(an) == 0 || len(an[CreatedByHypershiftDeployment]) == 0 {
+				if len(an) == 0 || len(an[constant.CreatedByHypershiftDeployment]) == 0 {
 					return []reconcile.Request{}
 				}
 
-				res := strings.Split(an[CreatedByHypershiftDeployment], constant.NamespaceNameSeperator)
+				res := strings.Split(an[constant.CreatedByHypershiftDeployment], constant.NamespaceNameSeperator)
 
 				if len(res) != 2 {
 					r.Log.Error(fmt.Errorf("failed to get manifestwork's hypershiftDeployment"), "")
