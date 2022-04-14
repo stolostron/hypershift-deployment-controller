@@ -6,10 +6,6 @@ import (
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 )
 
-const (
-	HostingClusterMissing = "spec.hostingCluster value is missing"
-)
-
 //TODO @ianzhang366 integrate with the clusterSet logic
 func GetHostingCluster(hyd *hypdeployment.HypershiftDeployment) string {
 	if len(hyd.Spec.HostingCluster) == 0 {

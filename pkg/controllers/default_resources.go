@@ -24,7 +24,6 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
-	"github.com/openshift/hypershift/cmd/util"
 	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
@@ -118,7 +117,7 @@ func ScaffoldAzureHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, inf
 	ap.SubnetName = infraOut.SubnetName
 	ap.VnetID = infraOut.VNetID
 	ap.VnetName = infraOut.VnetName
-	ap.Credentials.Name = hyd.Name + CCredsSuffix //This is generated and the secret is created below
+	ap.Credentials.Name = hyd.Name + constant.CCredsSuffix //This is generated and the secret is created below
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.Platform.Azure = ap
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AzurePlatform
@@ -322,7 +321,7 @@ func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment
 			Name:      np.Name,
 			Namespace: helper.GetHostingNamespace(hyd),
 			Labels: map[string]string{
-				AutoInfraLabelName: hyd.Spec.InfraID,
+				constant.AutoInfraLabelName: hyd.Spec.InfraID,
 			},
 		},
 		Spec: np.Spec,
@@ -342,7 +341,7 @@ func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secre
 				Namespace: helper.GetHostingNamespace(hyd),
 				Name:      name,
 				Labels: map[string]string{
-					AutoInfraLabelName: hyd.Spec.InfraID,
+					constant.AutoInfraLabelName: hyd.Spec.InfraID,
 				},
 			},
 			Data: map[string][]byte{
@@ -372,7 +371,7 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 			Name:      hyd.Spec.HostedClusterSpec.Platform.Azure.Credentials.Name,
 			Namespace: helper.GetHostingNamespace(hyd),
 			Labels: map[string]string{
-				util.AutoInfraLabelName: hyd.Spec.InfraID,
+				constant.AutoInfraLabelName: hyd.Spec.InfraID,
 			},
 		},
 		Data: map[string][]byte{

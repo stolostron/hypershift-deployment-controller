@@ -12,6 +12,7 @@ import (
 
 	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	"github.com/stretchr/testify/assert"
 
@@ -379,7 +380,7 @@ func TestManifestWorkFlowNoHostingCluster(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, helper.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
+	assert.Equal(t, constant.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
 }
 
 func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
