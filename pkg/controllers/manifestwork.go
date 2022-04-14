@@ -40,10 +40,6 @@ import (
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
 
-const (
-	CreatedByHypershiftDeployment = "hypershift-deployment.open-cluster-management.io/created-by"
-)
-
 // variables defined for manifestwork status sync
 var (
 	HostedClusterResource = "hostedclusters"
@@ -78,7 +74,7 @@ func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.Mani
 			Name:      k.Name,
 			Namespace: k.Namespace,
 			Annotations: map[string]string{
-				CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
+				constant.CreatedByHypershiftDeployment: fmt.Sprintf("%s%s%s",
 					hyd.GetNamespace(),
 					constant.NamespaceNameSeperator,
 					hyd.GetName()),
@@ -160,8 +156,8 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	// We need a HostingCluster if we use ManifestWork
 	if len(hyd.Spec.HostingCluster) == 0 {
-		r.Log.Error(errors.New(helper.HostingClusterMissing), "Spec.HostingCluster needs a ManagedCluster name")
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, helper.HostingClusterMissing, hypdeployment.MisConfiguredReason)
+		r.Log.Error(errors.New(constant.HostingClusterMissing), "Spec.HostingCluster needs a ManagedCluster name")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, constant.HostingClusterMissing, hypdeployment.MisConfiguredReason)
 	}
 
 	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
