@@ -39,13 +39,11 @@ import (
 
 var resLog = ctrl.Log.WithName("resource-render")
 
-const ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.10.6-x86_64"
-
 func getReleaseImagePullSpec() string {
 
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
-		return ReleaseImage
+		return constant.ReleaseImage
 	}
 	return defaultVersion.PullSpec
 

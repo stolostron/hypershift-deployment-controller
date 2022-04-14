@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
-	"github.com/openshift/hypershift/cmd/util"
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
@@ -55,6 +54,8 @@ type HypershiftDeploymentReconciler struct {
 	Scheme *runtime.Scheme
 	ctx    context.Context
 	Log    logr.Logger
+
+	InfraHandler InfraHandler
 }
 
 const (
@@ -131,8 +132,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 		// Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
 		setStatusCondition(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
-		setStatusCondition(&hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Configuring ManifestWork: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
-		r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
+		if hyd.Spec.Infrastructure.Platform != nil && hyd.Spec.Infrastructure.Platform.AWS != nil {
+			setStatusCondition(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
+		}
+		_ = r.updateStatusConditionsOnChange(&hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Configuring ManifestWork: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 	}
 
 	// Destroying Platform infrastructure used by the HypershiftDeployment scheduled for deletion
@@ -162,8 +165,19 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
+	// isStatusConditionPresent returns true when conditionType is present.
+	isStatusConditionPresent := func(conditions []metav1.Condition, conditionType string) bool {
+		for _, condition := range conditions {
+			if condition.Type == conditionType {
+				return true
+			}
+		}
+		return false
+	}
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
-	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
+	// ((IamConfiguredNotPresent || IamConfigredTrue) && PlatformConfiguredTrue) || !configureInfra
+	if ((meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) ||
+		!isStatusConditionPresent(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured))) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 
@@ -229,12 +243,6 @@ func (r *HypershiftDeploymentReconciler) scaffoldPullSecret(hyd *hypdeployment.H
 			".dockerconfigjson": providerSecret.Data["pullSecret"],
 		},
 	}
-}
-
-func destroySecrets(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) error {
-	//clean up CLI generated secrets
-	return r.DeleteAllOf(r.ctx, &corev1.Secret{}, client.InNamespace(hyd.GetNamespace()), client.MatchingLabels{util.AutoInfraLabelName: hyd.Spec.InfraID})
-
 }
 
 func setStatusCondition(hyd *hypdeployment.HypershiftDeployment, conditionType hypdeployment.ConditionType, status metav1.ConditionStatus, message string, reason string) metav1.Condition {
