@@ -170,11 +170,6 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
-	log.Info("Deleting OIDC secrets")
-	if err := destroySecrets(r, hyd); err != nil {
-		log.Error(err, "Encountered an issue while deleting OIDC secrets")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
-	}
 	return ctrl.Result{}, nil
 }
 

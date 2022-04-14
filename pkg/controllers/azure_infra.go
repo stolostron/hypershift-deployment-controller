@@ -82,11 +82,7 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 		}
 		log.Info("Infrastructure configured")
 	}
-	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
-		// If it can run to here, the credential is legal. we will copy the credential by manifestwork to the hosting cluster.
-		log.Info("IAM configured")
-		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
-	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -111,12 +107,6 @@ func (r *HypershiftDeploymentReconciler) destroyAzureInfrastructure(hyd *hypdepl
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
-	log.Info("Deleting Azure cloud credentials  secrets")
-	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Removing Azure cloud credentials", hypdeployment.RemovingReason)
-	if err := destroySecrets(r, hyd); err != nil {
-		log.Error(err, "Encountered an issue while deleting OIDC secrets")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
-	}
 	return ctrl.Result{}, nil
 }
 
