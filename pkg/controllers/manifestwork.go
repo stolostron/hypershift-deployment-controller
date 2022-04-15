@@ -201,7 +201,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 	for _, f := range manifestFuncs {
 		err := f(hyd, &payload)
 		if err != nil {
-			r.Log.Error(err, "failed to load paylaod to manifestwork")
+			r.Log.Error(err, "failed to load payload to manifestwork")
 			return ctrl.Result{}, err
 		}
 	}
