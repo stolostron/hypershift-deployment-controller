@@ -272,6 +272,8 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 }
 
 func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
+	log := r.Log
+
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 		var err error
 		refSecrets := []*corev1.Secret{}
@@ -284,7 +286,8 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 						Namespace: hyd.GetNamespace()})
 
 				if err != nil {
-					return fmt.Errorf("failed to duplicate pull secret, err %w", err)
+					log.Error(err, "failed to duplicate pull secret")
+					return err
 				}
 			} else {
 				pullCreds = r.scaffoldPullSecret(hyd, *providerSecret)
@@ -310,7 +313,8 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 					Namespace: hyd.GetNamespace()})
 
 			if err != nil {
-				return fmt.Errorf("failed to duplicate ssh secret, err %w", err)
+				log.Error(err, "failed to duplicate ssh secret")
+				return err
 			}
 
 			refSecrets = append(refSecrets, s)
