@@ -246,10 +246,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 				}}
 
 			credentials := &fixtures.AzureCreds{
-				SubscriptionID: "subscription-id",
-				ClientID:       "cluster-id",
-				ClientSecret:   "secret",
-				TenantID:       "tenant-id",
+				SubscriptionID: "abcd1234-5678-123a-ab1c-asdfgh098765",
+				TenantID:       "qazwsx12-1234-5678-9100-qazwsxedc123",
+				ClientID:       "asdfg987-qwer-1234-asdf-mnbvcx123456",
+				ClientSecret:   "test-foobar",
 			}
 			credentialsBytes, err := json.Marshal(credentials)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())

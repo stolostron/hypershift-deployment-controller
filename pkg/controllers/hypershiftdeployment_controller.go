@@ -132,8 +132,12 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 		// Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
 		setStatusCondition(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
-		if hyd.Spec.Infrastructure.Platform != nil && hyd.Spec.Infrastructure.Platform.AWS != nil {
-			setStatusCondition(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
+		if hyd.Spec.Infrastructure.Platform != nil {
+			if hyd.Spec.Infrastructure.Platform.AWS != nil {
+				setStatusCondition(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
+			} else if hyd.Spec.Infrastructure.Platform.Azure != nil {
+				setStatusCondition(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.NotApplicableReason)
+			}
 		}
 		_ = r.updateStatusConditionsOnChange(&hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Configuring ManifestWork: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 	}
@@ -165,19 +169,8 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// isStatusConditionPresent returns true when conditionType is present.
-	isStatusConditionPresent := func(conditions []metav1.Condition, conditionType string) bool {
-		for _, condition := range conditions {
-			if condition.Type == conditionType {
-				return true
-			}
-		}
-		return false
-	}
 	// Apply the HostedCluster if Infrastructure is AsExpected or configureInfra: false (user brings their own)
-	// ((IamConfiguredNotPresent || IamConfigredTrue) && PlatformConfiguredTrue) || !configureInfra
-	if ((meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) ||
-		!isStatusConditionPresent(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured))) &&
+	if (meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) &&
 		meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))) ||
 		!configureInfra {
 
@@ -404,12 +397,4 @@ func (r *HypershiftDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) erro
 			})).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
-}
-
-func (r *HypershiftDeploymentReconciler) spawnDelete(ctx context.Context, hc hyp.HostedCluster) {
-	if err := r.Delete(ctx, &hc); err != nil {
-		r.Log.Error(err, "Failed to delete "+hc.Kind+" resource")
-	} else {
-		r.Log.Info("Resource " + hc.Kind + " deleted")
-	}
 }

@@ -33,6 +33,7 @@ const (
 	PlatfromDestroyReason      = "Destroying"
 	MisConfiguredReason        = "MisConfigured"
 	BeingConfiguredReason      = "BeingConfigured"
+	NotApplicableReason        = "NA"
 	RemovingReason             = "Removing"
 	AsExpectedReason           = "AsExpected"
 	NodePoolProvision          = "NodePoolsProvisioned"
