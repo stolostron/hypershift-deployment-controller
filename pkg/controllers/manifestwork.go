@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -195,7 +197,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		appendHostedCluster,
 		appendNodePool,
 		r.appendHostedClusterReferenceSecrets(ctx, providerSecret),
-		r.ensureConfiguration(ctx),
+		r.ensureConfiguration(ctx, m),
 	}
 
 	for _, f := range manifestFuncs {
@@ -576,4 +578,23 @@ func (r resourceMeta) ToIdentifier() workv1.ResourceIdentifier {
 		Name:      r.Name,
 		Namespace: r.Namespace,
 	}
+}
+
+func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName string) (*corev1.Secret, error) {
+	for _, v := range *manifests {
+		u := &unstructured.Unstructured{}
+		if err := json.Unmarshal(v.Raw, u); err != nil {
+			return nil, err
+		}
+
+		if u.GetKind() == "Secret" && u.GetName() == secretName {
+			secret := &corev1.Secret{}
+			if err := json.Unmarshal(v.Raw, secret); err != nil {
+				return nil, err
+			}
+			return secret, nil
+		}
+	}
+
+	return nil, nil
 }
