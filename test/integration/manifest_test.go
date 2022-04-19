@@ -222,8 +222,8 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					return false
 				}
 
-				// Namespace + HostedCluster + NodePool + pullSecret + 3 awsArnSecrets
-				if len(manifestwork.Spec.Workload.Manifests) != 7 {
+				// Namespace + HostedCluster + NodePool + pullSecret + 3 awsArnSecrets + etcd encryption secret
+				if len(manifestwork.Spec.Workload.Manifests) != 8 {
 					return false
 				}
 
@@ -407,8 +407,8 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					return false
 				}
 
-				// Namespace + HostedCluster + NodePool + pullSecret + 1 azureCloudCredential
-				if len(manifestwork.Spec.Workload.Manifests) != 5 {
+				// Namespace + HostedCluster + NodePool + pullSecret + 1 azureCloudCredential + etcd encryption secret
+				if len(manifestwork.Spec.Workload.Manifests) != 6 {
 					return false
 				}
 
