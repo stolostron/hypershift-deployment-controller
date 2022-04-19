@@ -836,7 +836,6 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	assert.True(t, nodepoolCond.Reason == resStr1, "true, only contain a failed reason")
 }
 
-/*
 func TestGetManifestPayloadByName(t *testing.T) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -849,7 +848,8 @@ func TestGetManifestPayloadByName(t *testing.T) {
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
-	secretManifest := workv1.Manifest{RawExtension: runtime.RawExtension{Object: secret}}
+	secretRaw, _ := json.Marshal(secret)
+	secretManifest := workv1.Manifest{RawExtension: runtime.RawExtension{Object: secret, Raw: secretRaw}}
 
 	secret2 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -862,13 +862,13 @@ func TestGetManifestPayloadByName(t *testing.T) {
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
-	secret2Manifest := workv1.Manifest{RawExtension: runtime.RawExtension{Object: secret2}}
+	secret2Raw, _ := json.Marshal(secret2)
+	secret2Manifest := workv1.Manifest{RawExtension: runtime.RawExtension{Object: secret2, Raw: secret2Raw}}
 
 	payload := []workv1.Manifest{secretManifest, secret2Manifest}
-	found := getManifestPayloadSecretByName(&payload, "test1-etcd-encryption-key")
-	assert.Equal(t, &secretManifest, found, "found secret test1-etcd-encryption-key")
+	found, _ := getManifestPayloadSecretByName(&payload, "test1-etcd-encryption-key")
+	assert.Equal(t, secret, found, "found secret test1-etcd-encryption-key")
 
-	found = getManifestPayloadSecretByName(&payload, "test2-etcd-encryption-key")
-	assert.Equal(t, &secretManifest, found, "found secret test2-etcd-encryption-key")
+	found, _ = getManifestPayloadSecretByName(&payload, "test2-etcd-encryption-key")
+	assert.Equal(t, secret2, found, "found secret test2-etcd-encryption-key")
 }
-*/

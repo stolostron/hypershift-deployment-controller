@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	apifixtures "github.com/openshift/hypershift/api/fixtures"
+	hyp "github.com/openshift/hypershift/api/v1alpha1"
+	"github.com/pkg/errors"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -100,16 +102,22 @@ func (r *HypershiftDeploymentReconciler) generateConfigMap(ctx context.Context, 
 
 // make sure all configuration resources listed at https://github.com/stolostron/backlog/issues/20243
 // are loaded to manifestwork
-func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context, oManifestwork *workv1.ManifestWork) loadManifest {
+func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context, manifestwork *workv1.ManifestWork) loadManifest {
 	var allErr []error
 	return func(hyd *hypdeployment.HypershiftDeployment,
 		payload *[]workv1.Manifest) error {
+
+		type secretResource struct {
+			secretRef        corev1.LocalObjectReference
+			createSecretFunc func() (*corev1.Secret, error)
+		}
+
 		//source:
 		// hyd.Spec.HostedClusterSpec.Configuration.SecretRefs
 		// hyd.Spec.HostedClusterSpec.SecretEncryption.KMS.AWS.Auth
 		// hyd.Spec.HostedClusterSpec.SecretEncryption.AESCBC.ActiveKey
 		// hyd.Spec.HostedClusterSpec.SecretEncryption.AESCBC.BackupKey
-		secretRefs := []corev1.LocalObjectReference{}
+		secretRefs := []secretResource{}
 
 		//source:
 		// hyd.Spec.HostedClusterSpec.Configuration.ConfigMapRefs
@@ -127,7 +135,9 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			hcSpecCfg := hcSpec.Configuration
 			if hcSpecCfg != nil {
 				if len(hcSpecCfg.SecretRefs) != 0 {
-					secretRefs = append(secretRefs, hcSpecCfg.SecretRefs...)
+					for _, sref := range hcSpecCfg.SecretRefs {
+						secretRefs = append(secretRefs, secretResource{secretRef: sref})
+					}
 				}
 
 				if len(hcSpecCfg.ConfigMapRefs) != 0 {
@@ -141,48 +151,41 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			}
 
 			if hcSpec.SecretEncryption != nil {
-				if hyd.Spec.Infrastructure.Configure {
-					var oSecret *workv1.Manifest
-					if oManifestwork != nil {
-						// Extract from old manifest if exists to prevent generating a new key
-						var err error
-						oSecret, err = getManifestPayloadSecretByName(&oManifestwork.Spec.Workload.Manifests, hyd.Name+"-etcd-encryption-key")
-						if err != nil {
-							r.Log.Error(err, "failed to get etcd encryption key from old manifestwork")
-						}
-					}
+				encr := hcSpec.SecretEncryption
 
-					if oSecret != nil {
-						*payload = append(*payload, *oSecret)
-					} else {
-						// Generate and scaffold the encryption secret
-						exampleOptions := &apifixtures.ExampleOptions{
-							Name:      hyd.Name,
-							Namespace: helper.GetHostingNamespace(hyd),
-						}
-						encryptionSecret := exampleOptions.EtcdEncryptionKeySecret()
-
-						r.Log.Info(fmt.Sprintf("Generate etcd encryption secret: %v/%v", encryptionSecret.GetNamespace(), encryptionSecret.GetName()))
-						*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: encryptionSecret}})
-					}
-				} else {
-					// Pull in external encryption secret
-					encr := hcSpec.SecretEncryption
-					if encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
-						secretRefs = append(secretRefs, encr.KMS.AWS.Auth.Credentials)
-
-					}
-
+				if encr.Type == hyp.AESCBC && encr.AESCBC != nil {
 					if len(encr.AESCBC.ActiveKey.Name) != 0 {
-						secretRefs = append(secretRefs, encr.AESCBC.ActiveKey)
+						aesAKRef := secretResource{
+							secretRef: encr.AESCBC.ActiveKey,
+							createSecretFunc: func() (*corev1.Secret, error) {
+								// Generate and scaffold the encryption secret
+								exampleOptions := &apifixtures.ExampleOptions{
+									Name:      hyd.Name,
+									Namespace: helper.GetHostingNamespace(hyd),
+								}
+								encryptionSecret := exampleOptions.EtcdEncryptionKeySecret()
+								if encryptionSecret != nil {
+									encryptionSecret.Name = encr.AESCBC.ActiveKey.Name
+									r.Log.Info(fmt.Sprintf("Generate etcd encryption secret: %v/%v", encryptionSecret.GetNamespace(), encryptionSecret.GetName()))
+								}
+
+								return encryptionSecret, nil
+							},
+						}
+
+						secretRefs = append(secretRefs, aesAKRef)
 					}
 
-					if encr.AESCBC.BackupKey != nil {
-						secretRefs = append(secretRefs, *(encr.AESCBC.BackupKey))
+					if encr.AESCBC.BackupKey != nil && len(encr.AESCBC.BackupKey.Name) != 0 {
+						secretRefs = append(secretRefs, secretResource{secretRef: *(encr.AESCBC.BackupKey)})
 					}
 				}
-			}
 
+				// Pull in external KMS encryption secret
+				if encr.Type == hyp.KMS && encr.KMS != nil && encr.KMS.AWS != nil && len(encr.KMS.AWS.Auth.Credentials.Name) != 0 {
+					secretRefs = append(secretRefs, secretResource{secretRef: encr.KMS.AWS.Auth.Credentials})
+				}
+			}
 		}
 
 		if hcSpec.AdditionalTrustBundle != nil && len(hcSpec.AdditionalTrustBundle.Name) != 0 {
@@ -190,7 +193,7 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 		}
 
 		if hcSpec.ServiceAccountSigningKey != nil && len(hcSpec.ServiceAccountSigningKey.Name) != 0 {
-			secretRefs = append(secretRefs, *hcSpec.ServiceAccountSigningKey)
+			secretRefs = append(secretRefs, secretResource{secretRef: *hcSpec.ServiceAccountSigningKey})
 		}
 
 		for _, np := range hyd.Spec.NodePools {
@@ -200,15 +203,38 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 		}
 
 		for _, se := range secretRefs {
-			k := genKey(se, hyd)
-			t, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetHostingNamespace(hyd)))
+			// 1. Use user provided secret
+			k := genKey(se.secretRef, hyd)
+			secret, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetHostingNamespace(hyd)))
 			if err != nil {
-				r.Log.Error(err, fmt.Sprintf("failed to copy secret %s", k))
+				r.Log.Info(fmt.Sprintf("failed to find and copy secret %s: %s", k, err.Error()))
+			}
+
+			if secret == nil {
+				// 2. Use existing secret in manifestwork payload
+				secret, err = getManifestPayloadSecretByName(&manifestwork.Spec.Workload.Manifests, se.secretRef.Name)
+				if err != nil {
+					r.Log.Info(fmt.Sprintf("failed to get etcd encryption key from manifestwork: %s", err.Error()))
+				}
+
+				if secret == nil &&
+					hyd.Spec.Infrastructure.Configure &&
+					se.createSecretFunc != nil {
+					// 3. For configure=T - Generate secret
+					secret, err = se.createSecretFunc()
+					if err != nil {
+						r.Log.Error(err, fmt.Sprintf("failed to create secret %s", se.secretRef.Name))
+					}
+				}
+			}
+
+			if secret == nil {
+				// 4. Fail if secret is not found/created
+				err = errors.Errorf("failed to find/create secret %s", se.secretRef.Name)
 				allErr = append(allErr, err)
 				continue
 			}
-
-			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: t}})
+			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: secret}})
 		}
 
 		for _, cm := range configMapRefs {

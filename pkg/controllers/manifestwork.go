@@ -579,7 +579,7 @@ func (r resourceMeta) ToIdentifier() workv1.ResourceIdentifier {
 	}
 }
 
-func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName string) (*workv1.Manifest, error) {
+func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName string) (*corev1.Secret, error) {
 	for _, v := range *manifests {
 		u := &unstructured.Unstructured{}
 		if err := json.Unmarshal(v.Raw, u); err != nil {
@@ -587,7 +587,11 @@ func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName str
 		}
 
 		if u.GetKind() == "Secret" && u.GetName() == secretName {
-			return &v, nil
+			secret := &corev1.Secret{}
+			if err := json.Unmarshal(v.Raw, secret); err != nil {
+				return nil, err
+			}
+			return secret, nil
 		}
 	}
 
