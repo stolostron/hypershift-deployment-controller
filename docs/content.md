@@ -70,7 +70,7 @@ When deploying to AWS or Azure, it is possible to have the ACM Hub to create the
 | ---------------- | ----------------------------------------------- | ----- | ------ |
 | `hostingNamespace` | This is the namespace on the Hosting Service Cluster where the ManifestWork will create the HostedCluster, NodePools, configMaps and Secrets | If not provided, the namespace of the HypershiftDeployment custom resource is used | X |
 | `hostingCluster`   | The name of the Hosting Service Cluster where an instance of OpenShift will be deployed | None | X|
-| `override`         | This allows for special cases: `ORPHAN` The ManifestWork items are left behind. `INFRA-ONLY` configures infrastructure, but does not create a ManifestWork | None | |
+| `override`         | This allows for special cases:<br>`ORPHAN` the ManifestWork items are left behind.<br><br>`INFRA-ONLY` configures infrastructure, but does not create a ManifestWork<br><br>`DELETE-HOSTING-NAMESPACE` deletes the hostingNamespace on the hostingCluster when deleting the HypershiftDeployment resource | None | |
 |`infrastructure.cloudProvider.name` | This is the ACM Cloud Provider secret name, this is used when `configure: True` is chosen. It is a credential composed by ACM for AWS or Azure | None | X * |
 | `infrastructure.configure` | When `True` ACM will configure the AWS or Azure infrastructure to prepare for an OpenShift provisioning. When `False` the user must provide the infrastructure details to ACM via the `HosteClusterSpec` and `NodePoolSpec`. When `False` the `infrastructure.cloudProvider.name` is not required unless using Azure | None | x |
 | `platform.aws.region` | When using AWS, this is the region where the infrastructure for the control plane exists or will be created | None | X |
