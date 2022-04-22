@@ -200,6 +200,18 @@ func (h *FakeInfraHandler) AzureInfraDestroyer(name, location, infraID string, c
 
 func (h *FakeInfraHandler) AzureInfraCreator(name, baseDomain, location, infraID string, credentials *fixtures.AzureCreds) AzureCreateInfra {
 	return func(ctx context.Context) (*azure.CreateInfraOutput, error) {
-		return &azure.CreateInfraOutput{}, nil
+		return &azure.CreateInfraOutput{
+			Location:          "centralus",
+			MachineIdentityID: "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourcegroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hypershift-test-hypershift-test-abcde",
+			ResourceGroupName: "hypershift-test-hypershift-test-abcde",
+			SecurityGroupName: "hypershift-test-hypershift-test-abcde-abc",
+			SubnetName:        "default",
+			VNetID:            "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourceGroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.Network/virtualNetworks/hypershift-test-hypershift-test-abcde",
+			VnetName:          "hypershift-test-hypershift-test-abcde",
+			BaseDomain:        "a.b.c",
+			PublicZoneID:      "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourceGroups/os4-common/providers/Microsoft.Network/dnszones/a.b.c",
+			PrivateZoneID:     "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourceGroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.Network/privateDnsZones/hypershift-test-azurecluster.a.b.c",
+			BootImageID:       "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourceGroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.Compute/images/rhcos.x86_64.vhd",
+		}, nil
 	}
 }

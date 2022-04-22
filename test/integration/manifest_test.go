@@ -222,8 +222,8 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					return false
 				}
 
-				// Namespace + HostedCluster + NodePool + pullSecret + 3 awsArnSecrets
-				if len(manifestwork.Spec.Workload.Manifests) != 7 {
+				// Namespace + HostedCluster + NodePool + pullSecret + 3 awsArnSecrets + etcd encryption secret
+				if len(manifestwork.Spec.Workload.Manifests) != 8 {
 					return false
 				}
 
@@ -246,10 +246,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 				}}
 
 			credentials := &fixtures.AzureCreds{
-				SubscriptionID: "subscription-id",
-				ClientID:       "cluster-id",
-				ClientSecret:   "secret",
-				TenantID:       "tenant-id",
+				SubscriptionID: "abcd1234-5678-123a-ab1c-asdfgh098765",
+				TenantID:       "qazwsx12-1234-5678-9100-qazwsxedc123",
+				ClientID:       "asdfg987-qwer-1234-asdf-mnbvcx123456",
+				ClientSecret:   "test-foobar",
 			}
 			credentialsBytes, err := json.Marshal(credentials)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
@@ -407,8 +407,8 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					return false
 				}
 
-				// Namespace + HostedCluster + NodePool + pullSecret + 1 azureCloudCredential
-				if len(manifestwork.Spec.Workload.Manifests) != 5 {
+				// Namespace + HostedCluster + NodePool + pullSecret + 1 azureCloudCredential + etcd encryption secret
+				if len(manifestwork.Spec.Workload.Manifests) != 6 {
 					return false
 				}
 

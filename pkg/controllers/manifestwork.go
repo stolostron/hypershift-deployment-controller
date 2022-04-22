@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -195,13 +197,13 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		appendHostedCluster,
 		appendNodePool,
 		r.appendHostedClusterReferenceSecrets(ctx, providerSecret),
-		r.ensureConfiguration(ctx),
+		r.ensureConfiguration(ctx, m),
 	}
 
 	for _, f := range manifestFuncs {
 		err := f(hyd, &payload)
 		if err != nil {
-			r.Log.Error(err, "failed to load paylaod to manifestwork")
+			r.Log.Error(err, "failed to load payload to manifestwork")
 			return ctrl.Result{}, err
 		}
 	}
@@ -272,6 +274,8 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 }
 
 func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx context.Context, providerSecret *corev1.Secret) loadManifest {
+	log := r.Log
+
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 		var err error
 		refSecrets := []*corev1.Secret{}
@@ -284,7 +288,8 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 						Namespace: hyd.GetNamespace()})
 
 				if err != nil {
-					return fmt.Errorf("failed to duplicate pull secret, err %w", err)
+					log.Error(err, "failed to duplicate pull secret")
+					return err
 				}
 			} else {
 				pullCreds = r.scaffoldPullSecret(hyd, *providerSecret)
@@ -310,7 +315,8 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 					Namespace: hyd.GetNamespace()})
 
 			if err != nil {
-				return fmt.Errorf("failed to duplicate ssh secret, err %w", err)
+				log.Error(err, "failed to duplicate ssh secret")
+				return err
 			}
 
 			refSecrets = append(refSecrets, s)
@@ -576,4 +582,23 @@ func (r resourceMeta) ToIdentifier() workv1.ResourceIdentifier {
 		Name:      r.Name,
 		Namespace: r.Namespace,
 	}
+}
+
+func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName string) (*corev1.Secret, error) {
+	for _, v := range *manifests {
+		u := &unstructured.Unstructured{}
+		if err := json.Unmarshal(v.Raw, u); err != nil {
+			return nil, err
+		}
+
+		if u.GetKind() == "Secret" && u.GetName() == secretName {
+			secret := &corev1.Secret{}
+			if err := json.Unmarshal(v.Raw, secret); err != nil {
+				return nil, err
+			}
+			return secret, nil
+		}
+	}
+
+	return nil, nil
 }
