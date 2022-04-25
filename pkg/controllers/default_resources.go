@@ -97,6 +97,24 @@ func transferHostedClusterAnnotations(hdAnnotations map[string]string, hcAnnotat
 	}
 }
 
+// Copy Spec.HostedClusterOnlyConfigItems to the HostedClusterSpec.Configuration.Items
+// These config items are excluded from the manifest payload
+func copyHostedClusterOnlyConfigItems(hyd *hypdeployment.HypershiftDeployment) {
+	hcOnlyConfigItems := hyd.Spec.HostedClusterOnlyConfigItems
+	if len(hcOnlyConfigItems) != 0 {
+		if hyd.Spec.HostedClusterSpec.Configuration == nil {
+			hyd.Spec.HostedClusterSpec.Configuration = &hyp.ClusterConfiguration{}
+		}
+
+		if hyd.Spec.HostedClusterSpec.Configuration.Items == nil || len(hyd.Spec.HostedClusterSpec.Configuration.Items) == 0 {
+			hyd.Spec.HostedClusterSpec.Configuration.Items = hcOnlyConfigItems
+			return
+		}
+
+		hyd.Spec.HostedClusterSpec.Configuration.Items = append(hyd.Spec.HostedClusterSpec.Configuration.Items, hcOnlyConfigItems...)
+	}
+}
+
 // Creates an instance of ServicePublishingStrategyMapping
 func spsMap(service hyp.ServiceType, psType hyp.PublishingStrategyType) hyp.ServicePublishingStrategyMapping {
 	return hyp.ServicePublishingStrategyMapping{
@@ -202,6 +220,9 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 			},
 		}
 	}
+
+	// Copy hyd.Spec.HostedClusterOnlyConfigItems to hyd.Spec.HostedClusterSpec.Configuration.Items
+	copyHostedClusterOnlyConfigItems(hyd)
 }
 
 func scaffoldDnsSpec(baseDomain string, privateZoneID string, publicZoneID string) *hyp.DNSSpec {

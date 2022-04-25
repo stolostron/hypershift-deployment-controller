@@ -99,6 +99,14 @@ spec:
                     - nodePoolManagementARN
                     type: object
                 type: object
+              hostedClusterOnlyConfigItems:
+                description: Items embeds the serialized configuration resources in
+                  the hostedClusterSpec. Items here are included only in the hostedClusterSpec,
+                  and not in the manifestwork's payload. Thus, the items will be in
+                  the hosted cluster, but not in the hosting cluster.
+                items:
+                  type: object
+                type: array
               hostedClusterSpec:
                 description: HostedCluster that will be applied to the ManagementCluster
                   by ACM, if omitted, it will be generated

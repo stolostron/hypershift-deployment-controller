@@ -20,6 +20,7 @@ import (
 	hypv1alpha1 "github.com/openshift/hypershift/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
 type ConditionType string
@@ -123,6 +124,12 @@ type HypershiftDeploymentSpec struct {
 
 	// Credentials are ARN's that are used for standing up the resources in the cluster.
 	Credentials *CredentialARNs `json:"credentials,omitempty"`
+
+	// Items embeds the serialized configuration resources in the hostedClusterSpec.
+	// Items here are included only in the hostedClusterSpec, and not in the manifestwork's payload.
+	// Thus, the items will be in the hosted cluster, but not in the hosting cluster.
+	// +optional
+	HostedClusterOnlyConfigItems []runtime.RawExtension `json:"hostedClusterOnlyConfigItems,omitempty"`
 }
 
 type CredentialARNs struct {

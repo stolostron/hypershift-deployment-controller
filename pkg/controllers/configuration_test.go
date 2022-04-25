@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	apifixtures "github.com/openshift/hypershift/api/fixtures"
@@ -349,4 +350,44 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 	loadManifest = r.ensureConfiguration(ctx, m)
 	err = loadManifest(configTHD, &payload3)
 	assert.Len(t, err.(utilerrors.Aggregate).Errors(), 1, "kms encryption secrets not found")
+}
+
+func TestHCOnlyConfigItems(t *testing.T) {
+	r := GetHypershiftDeploymentReconciler()
+	ctx := context.Background()
+	configFHD := getHDforSecretEncryption(false)
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-secret",
+			Namespace: "test",
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	secretRaw, _ := json.Marshal(secret)
+	secretItem := runtime.RawExtension{
+		Raw: secretRaw,
+	}
+	configFHD.Spec.HostedClusterOnlyConfigItems = []runtime.RawExtension{secretItem}
+
+	// HostedClusterOnlyConfigItems should be scaffolded to HD.Spec.HostedClusterSpec.Configuration.Items
+	scaffoldHostedClusterSpec(configFHD)
+	hcItems := configFHD.Spec.HostedClusterSpec.Configuration.Items
+	assert.Len(t, hcItems, 1, "has secret in hostedcluster configuration items")
+	hcSecret := &corev1.Secret{}
+	json.Unmarshal(hcItems[0].Raw, hcSecret)
+	assert.Equal(t, secret, hcSecret, "secret is hostedclusterSpec matches the secret in the HostedClusterOnlyConfigItems")
+
+	// manifestwork payload should not contain the config item
+	m, err := ScaffoldManifestwork(configFHD)
+	assert.Nil(t, err)
+	payload := []workv1.Manifest{}
+	loadManifest := r.ensureConfiguration(ctx, m)
+	err = loadManifest(configFHD, &payload)
+	assert.Nil(t, err)
+	assert.Len(t, payload, 0, "hc-only secret is not in the manifestwork payload")
 }

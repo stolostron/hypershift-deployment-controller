@@ -249,10 +249,13 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: t}})
 		}
 
+		hcOnlyConfigItems := hyd.Spec.HostedClusterOnlyConfigItems
 		for _, it := range items {
 			// assuming the input templates are valid k8s inputs. meaning all the objects have unique
 			// keys
-			*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: it.Object, Raw: it.Raw}})
+			if !helper.ContainsConfigItem(hcOnlyConfigItems, it.Raw) {
+				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: it.Object, Raw: it.Raw}})
+			}
 		}
 
 		return utilerrors.NewAggregate(allErr)
