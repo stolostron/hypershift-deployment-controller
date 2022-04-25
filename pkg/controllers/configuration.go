@@ -143,11 +143,6 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 				if len(hcSpecCfg.ConfigMapRefs) != 0 {
 					configMapRefs = append(configMapRefs, hcSpecCfg.ConfigMapRefs...)
 				}
-
-				if len(hcSpecCfg.Items) != 0 {
-					items = append(items, hcSpecCfg.Items...)
-				}
-
 			}
 
 			if hcSpec.SecretEncryption != nil {
