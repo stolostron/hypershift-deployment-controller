@@ -39,7 +39,7 @@ type kindAndKey struct {
 
 func getHDforManifestWork() *hyd.HypershiftDeployment {
 	infraOut := getAWSInfrastructureOut()
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
@@ -125,6 +125,27 @@ func (m *manifestworkChecker) shouldNotHave(res map[kindAndKey]bool) error {
 	return nil
 }
 
+func getHostedClusterForManifestworkTest(testHD *hyd.HypershiftDeployment) *hyp.HostedCluster {
+	hostedCluster := getHostedCluster()
+	ap := &hyp.AWSPlatformSpec{
+		Region:                    testHD.Spec.Infrastructure.Platform.AWS.Region,
+		ControlPlaneOperatorCreds: corev1.LocalObjectReference{Name: testHD.Name + "-cpo-creds"},
+		KubeCloudControllerCreds:  corev1.LocalObjectReference{Name: testHD.Name + "-cloud-ctrl-creds"},
+		NodePoolManagementCreds:   corev1.LocalObjectReference{Name: testHD.Name + "-node-mgmt-creds"},
+		EndpointAccess:            hyp.Public,
+		ResourceTags: []hyp.AWSResourceTag{
+			//set the resource tags to prevent the work always updating the hostedcluster resource on the hosting cluster.
+			{
+				Key:   "kubernetes.io/cluster/" + testHD.Spec.HostedClusterSpec.InfraID,
+				Value: "owned",
+			},
+		},
+	}
+	hostedCluster.Spec.Platform.AWS = ap
+	hostedCluster.Spec.PullSecret.Name = "test1-pull-secret"
+	return hostedCluster
+}
+
 // TestManifestWorkFlow tests if the manifestwork is created
 // and reference secret is put into manifestwork payload
 func TestManifestWorkFlowBaseCase(t *testing.T) {
@@ -134,6 +155,11 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 	testHD := getHDforManifestWork()
 	testHD.Spec.HostingCluster = "local-cluster"
 
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
 
@@ -155,22 +181,6 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 				Group: "", Version: "v1", Kind: "Namespace"},
 			NamespacedName: types.NamespacedName{
 				Name: "default", Namespace: ""}}: true,
-
-		{
-			GroupVersionKind: schema.GroupVersionKind{
-				Group: "hypershift.openshift.io", Version: "v1alpha1", Kind: "HostedCluster"},
-			NamespacedName: genKeyFromObject(testHD)}: true,
-
-		{
-			GroupVersionKind: schema.GroupVersionKind{
-				Group: "hypershift.openshift.io", Version: "v1alpha1", Kind: "NodePool"},
-			NamespacedName: genKeyFromObject(testHD)}: true,
-
-		{
-			GroupVersionKind: schema.GroupVersionKind{
-				Group: "", Version: "v1", Kind: "Secret"},
-			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
 
 		{
 			GroupVersionKind: schema.GroupVersionKind{
@@ -212,23 +222,24 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	cfgAdditionalTrustBundle := "hostedcluster-additionaltrustbundle"
 	serviceAccountSigningKey := "hostedcluster-sask"
 
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
 	insertConfigSecretAndConfigMap := func() {
-		testHD.Spec.HostedClusterSpec.Configuration = &hyp.ClusterConfiguration{}
-		testHD.Spec.HostedClusterSpec.Configuration.SecretRefs = []corev1.LocalObjectReference{
-			corev1.LocalObjectReference{Name: cfgSecretName}}
+		hostedCluster.Spec.Configuration = &hyp.ClusterConfiguration{}
+		hostedCluster.Spec.Configuration.SecretRefs = []corev1.LocalObjectReference{
+			{Name: cfgSecretName}}
 
-		testHD.Spec.HostedClusterSpec.Configuration.ConfigMapRefs = []corev1.LocalObjectReference{
-			corev1.LocalObjectReference{Name: cfgConfigName}}
+		hostedCluster.Spec.Configuration.ConfigMapRefs = []corev1.LocalObjectReference{
+			{Name: cfgConfigName}}
 
-		testHD.Spec.HostedClusterSpec.AdditionalTrustBundle = &corev1.LocalObjectReference{
+		hostedCluster.Spec.AdditionalTrustBundle = &corev1.LocalObjectReference{
 			Name: cfgAdditionalTrustBundle,
 		}
 
-		testHD.Spec.HostedClusterSpec.ServiceAccountSigningKey = &corev1.LocalObjectReference{
+		hostedCluster.Spec.ServiceAccountSigningKey = &corev1.LocalObjectReference{
 			Name: serviceAccountSigningKey,
 		}
 
-		testHD.Spec.HostedClusterSpec.Configuration.Items = []runtime.RawExtension{runtime.RawExtension{Object: &corev1.Secret{
+		hostedCluster.Spec.Configuration.Items = []runtime.RawExtension{runtime.RawExtension{Object: &corev1.Secret{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Secret",
 				APIVersion: corev1.SchemeGroupVersion.String(),
@@ -243,8 +254,10 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 		},
 		}}
 	}
-
 	insertConfigSecretAndConfigMap()
+
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
 
 	// ensure the pull secret exist in cluster
 	// this pull secret is generated by the hypershift operator
@@ -302,6 +315,7 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 	client.Create(ctx, cb)
 	defer client.Delete(ctx, cb)
 
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
 
@@ -377,54 +391,27 @@ func TestManifestWorkFlowNoHostingCluster(t *testing.T) {
 	assert.Equal(t, constant.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
 }
 
-func TestManifestWorkFlowSpecCredentialsNil(t *testing.T) {
-	client := initClient()
-	ctx := context.Background()
-
-	testHD := getHDforManifestWork()
-	testHD.Spec.HostingCluster = "local-cluster"
-	testHD.Spec.Credentials = nil
-
-	client.Create(ctx, testHD)
-	defer client.Delete(ctx, testHD)
-
-	// ensure the pull secret exist in cluster
-	// this pull secret is generated by the hypershift operator
-	client.Create(ctx, getPullSecret(testHD))
-
-	hdr := &HypershiftDeploymentReconciler{
-		Client: client,
-		Log:    ctrl.Log.WithName("tester"),
-	}
-
-	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
-	assert.Nil(t, err, "err nil when reconcile was successfull")
-
-	var resultHD hyd.HypershiftDeployment
-	err = client.Get(context.Background(), getNN, &resultHD)
-	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
-
-	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.PlatformIAMConfigured))
-	t.Log("Condition msg: " + c.Message)
-	assert.Equal(t, "Missing Spec.Crednetials.AWS.* platform IAM", c.Message, "is equal when spec.credentials is missing")
-}
-
 // TestManifestWorkFlow tests if the manifestwork is created
 // and referenece secret is put into manifestwork payload
 func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 	client := initClient()
-
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
 	testHD.Spec.HostingCluster = "local-host"
 	testHD.Spec.HostingNamespace = "multicluster-engine"
+	testHD.Spec.Infrastructure.CloudProvider.Name = "aws"
 
 	sshKeySecretName := fmt.Sprintf("%s-ssh-key", testHD.GetName())
 	pullSecretName := fmt.Sprintf("%s-pull-secret", testHD.GetName())
 
-	testHD.Spec.HostedClusterSpec.SSHKey.Name = sshKeySecretName
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	hostedCluster.Spec.SSHKey.Name = sshKeySecretName
 
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	client.Create(context.Background(), testHD)
 
 	hdr := &HypershiftDeploymentReconciler{
@@ -486,8 +473,8 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 
 	t.Log("test hypershiftDeployment remove ssh key reference")
 	update := func() bool {
-		_, err := controllerutil.CreateOrUpdate(ctx, client, testHD, func() error {
-			testHD.Spec.HostedClusterSpec.SSHKey.Name = ""
+		_, err := controllerutil.CreateOrUpdate(ctx, client, hostedCluster, func() error {
+			hostedCluster.Spec.SSHKey.Name = ""
 			return nil
 		})
 
@@ -525,6 +512,11 @@ func TestManifestWorkSecrets(t *testing.T) {
 	testHD := getHDforManifestWork()
 	testHD.Spec.HostingCluster = "local-cluster"
 
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
 
@@ -579,11 +571,15 @@ func TestManifestWorkCustomSecretNames(t *testing.T) {
 	testHD.Spec.HostingCluster = "local-cluster"
 
 	//Customize the secret names
-	testHD.Spec.HostedClusterSpec.PullSecret.Name = "my-secret-to-pull"
-	testHD.Spec.HostedClusterSpec.Platform.AWS.ControlPlaneOperatorCreds.Name = "my-control"
-	testHD.Spec.HostedClusterSpec.Platform.AWS.KubeCloudControllerCreds.Name = "kube-creds-for-here"
-	testHD.Spec.HostedClusterSpec.Platform.AWS.NodePoolManagementCreds.Name = "node-cred-may-i-use"
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	hostedCluster.Spec.PullSecret.Name = "my-secret-to-pull"
+	hostedCluster.Spec.Platform.AWS.ControlPlaneOperatorCreds.Name = "my-control"
+	hostedCluster.Spec.Platform.AWS.KubeCloudControllerCreds.Name = "kube-creds-for-here"
+	hostedCluster.Spec.Platform.AWS.NodePoolManagementCreds.Name = "node-cred-may-i-use"
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
 
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
 
@@ -649,6 +645,11 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	testHD.Spec.HostingCluster = "local-host"
 	testHD.Spec.HostingNamespace = "multicluster-engine"
 
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	clt.Create(ctx, hostedCluster)
+	defer clt.Delete(ctx, hostedCluster)
+
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	clt.Create(ctx, testHD)
 	defer clt.Delete(ctx, testHD)
 

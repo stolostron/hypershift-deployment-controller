@@ -25,6 +25,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		hydName        string
 		hydNamespace   string
 		hyd            *hypdeployment.HypershiftDeployment
+		hc             *hyp.HostedCluster
 		infraID        string
 		s3bucketSecret *corev1.Secret
 	)
@@ -36,7 +37,15 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hydName,
 				Namespace: hydNamespace,
-			}}
+			},
+		}
+
+		hc = &hyp.HostedCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      hydName,
+				Namespace: hydNamespace,
+			},
+		}
 
 		s3bucketSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -101,6 +110,24 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		})
 
 		ginkgo.It("infra config false without pull secret", func() {
+			hc.Spec = hyp.HostedClusterSpec{
+				Platform: hyp.PlatformSpec{
+					Type: hyp.AWSPlatform,
+				},
+				Networking: hyp.ClusterNetworking{
+					NetworkType: hyp.OpenShiftSDN,
+				},
+				Services: []hyp.ServicePublishingStrategyMapping{},
+				Release: hyp.Release{
+					Image: constant.ReleaseImage,
+				},
+				Etcd: hyp.EtcdSpec{
+					ManagementType: hyp.Managed,
+				},
+			}
+			err := mgr.GetClient().Create(ctx, hc, &client.CreateOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
 				InfraID:          infraID,
 				Override:         hypdeployment.DeleteHostingNamespace,
@@ -109,24 +136,9 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 				Infrastructure: hypdeployment.InfraSpec{
 					Configure: false,
 				},
-				HostedClusterSpec: &hyp.HostedClusterSpec{
-					Platform: hyp.PlatformSpec{
-						Type: hyp.AWSPlatform,
-					},
-					Networking: hyp.ClusterNetworking{
-						NetworkType: hyp.OpenShiftSDN,
-					},
-					Services: []hyp.ServicePublishingStrategyMapping{},
-					Release: hyp.Release{
-						Image: constant.ReleaseImage,
-					},
-					Etcd: hyp.EtcdSpec{
-						ManagementType: hyp.Managed,
-					},
-				},
+				HostedClusterRef: corev1.LocalObjectReference{Name: hc.Name},
 			}
-
-			err := mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
+			err = mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			gomega.Eventually(func() bool {
@@ -146,6 +158,27 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		})
 
 		ginkgo.It("infra config false with pull secret", func() {
+			hc.Spec = hyp.HostedClusterSpec{
+				Platform: hyp.PlatformSpec{
+					Type: hyp.AWSPlatform,
+				},
+				Networking: hyp.ClusterNetworking{
+					NetworkType: hyp.OpenShiftSDN,
+				},
+				Services: []hyp.ServicePublishingStrategyMapping{},
+				Release: hyp.Release{
+					Image: constant.ReleaseImage,
+				},
+				Etcd: hyp.EtcdSpec{
+					ManagementType: hyp.Managed,
+				},
+				PullSecret: corev1.LocalObjectReference{
+					Name: cloudProviderSecret.Name,
+				},
+			}
+			err := mgr.GetClient().Create(ctx, hc, &client.CreateOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
 				InfraID:          infraID,
 				Override:         hypdeployment.DeleteHostingNamespace,
@@ -154,27 +187,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 				Infrastructure: hypdeployment.InfraSpec{
 					Configure: false,
 				},
-				HostedClusterSpec: &hyp.HostedClusterSpec{
-					Platform: hyp.PlatformSpec{
-						Type: hyp.AWSPlatform,
-					},
-					Networking: hyp.ClusterNetworking{
-						NetworkType: hyp.OpenShiftSDN,
-					},
-					Services: []hyp.ServicePublishingStrategyMapping{},
-					Release: hyp.Release{
-						Image: constant.ReleaseImage,
-					},
-					Etcd: hyp.EtcdSpec{
-						ManagementType: hyp.Managed,
-					},
-					PullSecret: corev1.LocalObjectReference{
-						Name: cloudProviderSecret.Name,
-					},
-				},
+				HostedClusterRef: corev1.LocalObjectReference{Name: hc.Name},
 			}
 
-			err := mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
+			err = mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			gomega.Eventually(func() bool {
@@ -286,6 +302,24 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		})
 
 		ginkgo.It("infra config false without pull secret", func() {
+			hc.Spec = hyp.HostedClusterSpec{
+				Platform: hyp.PlatformSpec{
+					Type: hyp.AzurePlatform,
+				},
+				Networking: hyp.ClusterNetworking{
+					NetworkType: hyp.OpenShiftSDN,
+				},
+				Services: []hyp.ServicePublishingStrategyMapping{},
+				Release: hyp.Release{
+					Image: constant.ReleaseImage,
+				},
+				Etcd: hyp.EtcdSpec{
+					ManagementType: hyp.Managed,
+				},
+			}
+			err := mgr.GetClient().Create(ctx, hc, &client.CreateOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
 				InfraID:          infraID,
 				Override:         hypdeployment.DeleteHostingNamespace,
@@ -294,24 +328,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 				Infrastructure: hypdeployment.InfraSpec{
 					Configure: false,
 				},
-				HostedClusterSpec: &hyp.HostedClusterSpec{
-					Platform: hyp.PlatformSpec{
-						Type: hyp.AzurePlatform,
-					},
-					Networking: hyp.ClusterNetworking{
-						NetworkType: hyp.OpenShiftSDN,
-					},
-					Services: []hyp.ServicePublishingStrategyMapping{},
-					Release: hyp.Release{
-						Image: constant.ReleaseImage,
-					},
-					Etcd: hyp.EtcdSpec{
-						ManagementType: hyp.Managed,
-					},
-				},
+				HostedClusterRef: corev1.LocalObjectReference{Name: hc.Name},
 			}
 
-			err := mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
+			err = mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			gomega.Eventually(func() bool {
@@ -331,6 +351,27 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		})
 
 		ginkgo.It("infra config false with pull secret", func() {
+			hc.Spec = hyp.HostedClusterSpec{
+				Platform: hyp.PlatformSpec{
+					Type: hyp.AzurePlatform,
+				},
+				Networking: hyp.ClusterNetworking{
+					NetworkType: hyp.OpenShiftSDN,
+				},
+				Services: []hyp.ServicePublishingStrategyMapping{},
+				Release: hyp.Release{
+					Image: constant.ReleaseImage,
+				},
+				Etcd: hyp.EtcdSpec{
+					ManagementType: hyp.Managed,
+				},
+				PullSecret: corev1.LocalObjectReference{
+					Name: cloudProviderSecret.Name,
+				},
+			}
+			err := mgr.GetClient().Create(ctx, hc, &client.CreateOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
 				InfraID:          infraID,
 				Override:         hypdeployment.DeleteHostingNamespace,
@@ -339,27 +380,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 				Infrastructure: hypdeployment.InfraSpec{
 					Configure: false,
 				},
-				HostedClusterSpec: &hyp.HostedClusterSpec{
-					Platform: hyp.PlatformSpec{
-						Type: hyp.AzurePlatform,
-					},
-					Networking: hyp.ClusterNetworking{
-						NetworkType: hyp.OpenShiftSDN,
-					},
-					Services: []hyp.ServicePublishingStrategyMapping{},
-					Release: hyp.Release{
-						Image: constant.ReleaseImage,
-					},
-					Etcd: hyp.EtcdSpec{
-						ManagementType: hyp.Managed,
-					},
-					PullSecret: corev1.LocalObjectReference{
-						Name: cloudProviderSecret.Name,
-					},
-				},
+				HostedClusterRef: corev1.LocalObjectReference{Name: hc.Name},
 			}
 
-			err := mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
+			err = mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			gomega.Eventually(func() bool {

@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func getHypershiftDeployment(namespace string, name string) *hyd.HypershiftDeployment {
+func getHypershiftDeployment(namespace string, name string, configure bool) *hyd.HypershiftDeployment {
 	return &hyd.HypershiftDeployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -44,7 +44,7 @@ func getHypershiftDeployment(namespace string, name string) *hyd.HypershiftDeplo
 		},
 		Spec: hyd.HypershiftDeploymentSpec{
 			Infrastructure: hyd.InfraSpec{
-				Configure: false,
+				Configure: configure,
 			},
 		},
 	}
@@ -117,7 +117,7 @@ var getNN = types.NamespacedName{
 func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
 
 	t.Log("Test AWS scaffolding")
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	// The Reconcile code exits with a condition if platform or AWS are nil
 	oAWS := getAWSInfrastructureOut()
@@ -139,7 +139,7 @@ func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
 func TestScaffoldAzureHostedClusterSpec(t *testing.T) {
 
 	t.Log("Test Azure scaffolding")
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	// The Reconcile code exits with a condition if platform or AWS are nil
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{Azure: &hyd.AzurePlatform{}}
@@ -165,7 +165,8 @@ func TestScaffoldAWSHostedCluster(t *testing.T) {
 	r := GetHypershiftDeploymentReconciler()
 	ctx := context.Background()
 
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
+	testHD.Spec.Infrastructure.Configure = true
 
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	ScaffoldAWSHostedClusterSpec(testHD, getAWSInfrastructureOut())
@@ -181,7 +182,7 @@ func TestScaffoldAzureHostedCluster(t *testing.T) {
 	r := GetHypershiftDeploymentReconciler()
 	ctx := context.Background()
 
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", true)
 
 	ScaffoldAzureHostedClusterSpec(testHD, getAzureInfrastructureOut())
 
@@ -194,7 +195,7 @@ func TestScaffoldAzureHostedCluster(t *testing.T) {
 
 func TestScaffoldAWSNodePoolSpec(t *testing.T) {
 
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", true)
 
 	assert.Equal(t, 0, len(testHD.Spec.NodePools), "Should be zero node pools")
 	oAWS := getAWSInfrastructureOut()
@@ -206,7 +207,7 @@ func TestScaffoldAWSNodePoolSpec(t *testing.T) {
 
 func TestScaffoldAzureNodePoolSpec(t *testing.T) {
 
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	assert.Equal(t, 0, len(testHD.Spec.NodePools), "Should be zero node pools")
 	oAzure := getAzureInfrastructureOut()
@@ -217,7 +218,7 @@ func TestScaffoldAzureNodePoolSpec(t *testing.T) {
 
 func TestScaffoldAWSNodePool(t *testing.T) {
 
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	infraOut := getAWSInfrastructureOut()
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
@@ -231,7 +232,7 @@ func TestScaffoldAWSNodePool(t *testing.T) {
 
 func TestScaffoldAzureNodePool(t *testing.T) {
 
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	infraOut := getAzureInfrastructureOut()
 	ScaffoldAzureNodePoolSpec(testHD, infraOut)
@@ -253,10 +254,15 @@ func genKeyFromObject(obj metav1.Object) types.NamespacedName {
 func TestHypershiftdeployment_controller(t *testing.T) {
 
 	client := initClient()
-
 	ctx := context.Background()
+
+	hostedCluster := getHostedCluster()
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	infraOut := getAWSInfrastructureOut()
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
 	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
@@ -309,7 +315,7 @@ func TestConfigureFalseWithManifestWork(t *testing.T) {
 
 	client := initClient()
 
-	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name)
+	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name, false)
 	testHD.Spec.HostingCluster = "local-host"
 	testHD.Spec.HostingNamespace = "multicluster-engine"
 	testHD.Spec.InfraID = getNN.Name + "-AB1YZ"
@@ -371,6 +377,7 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
+	testHD.Spec.Infrastructure.Configure = true
 	_, found := testHD.Annotations["test1"]
 	assert.Equal(t, true, found, "validating annotation is present")
 
@@ -402,14 +409,11 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 
 func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	r := GetHypershiftDeploymentReconciler()
-	// TODO: Cleanup
-	hyd.AddToScheme(r.Scheme)
-	hyp.AddToScheme(r.Scheme)
 
 	ctx := context.Background()
 
 	// HD with configure=F
-	testHD := getHypershiftDeployment("default", "ObjRefTest")
+	testHD := getHypershiftDeployment("default", "ObjRefTest", false)
 	infraOut := getAWSInfrastructureOut()
 	testHD.Spec.InfraID = infraOut.InfraID
 

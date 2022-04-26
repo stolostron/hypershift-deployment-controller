@@ -67,7 +67,7 @@ func duplicateSecretWithOverride(in *corev1.Secret, ops ...override) *corev1.Sec
 func (r *HypershiftDeploymentReconciler) generateSecret(ctx context.Context, key types.NamespacedName, ops ...override) (*corev1.Secret, error) {
 	origin := &corev1.Secret{}
 	if err := r.Get(ctx, key, origin); err != nil {
-		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
+		return nil, fmt.Errorf("failed to get the pull secret %v, err: %w", key, err)
 	}
 
 	return duplicateSecretWithOverride(origin, ops...), nil
@@ -94,7 +94,7 @@ func duplicateConfigMapWithOverride(in *corev1.ConfigMap, ops ...override) *core
 func (r *HypershiftDeploymentReconciler) generateConfigMap(ctx context.Context, key types.NamespacedName, ops ...override) (*corev1.ConfigMap, error) {
 	origin := &corev1.ConfigMap{}
 	if err := r.Get(ctx, key, origin); err != nil {
-		return nil, fmt.Errorf("failed to get the pull secret, err: %w", err)
+		return nil, fmt.Errorf("failed to get the configMap, err: %w", err)
 	}
 
 	return duplicateConfigMapWithOverride(origin, ops...), nil
@@ -126,8 +126,11 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 		configMapRefs := []corev1.LocalObjectReference{}
 
 		// Get hostedcluster from manifestwork instead of hypD
+		var hcSpec *hyp.HostedClusterSpec
 		hostedCluster := getHostedClusterInManifestPayload(payload)
-		hcSpec := &hostedCluster.Spec
+		if hostedCluster != nil {
+			hcSpec = &hostedCluster.Spec
+		}
 
 		if hcSpec != nil {
 			hcSpecCfg := hcSpec.Configuration
@@ -181,11 +184,11 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			}
 		}
 
-		if hcSpec.AdditionalTrustBundle != nil && len(hcSpec.AdditionalTrustBundle.Name) != 0 {
+		if hcSpec != nil && hcSpec.AdditionalTrustBundle != nil && len(hcSpec.AdditionalTrustBundle.Name) != 0 {
 			configMapRefs = append(configMapRefs, *hcSpec.AdditionalTrustBundle)
 		}
 
-		if hcSpec.ServiceAccountSigningKey != nil && len(hcSpec.ServiceAccountSigningKey.Name) != 0 {
+		if hcSpec != nil && hcSpec.ServiceAccountSigningKey != nil && len(hcSpec.ServiceAccountSigningKey.Name) != 0 {
 			secretRefs = append(secretRefs, secretResource{secretRef: *hcSpec.ServiceAccountSigningKey})
 		}
 

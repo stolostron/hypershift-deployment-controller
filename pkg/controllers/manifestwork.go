@@ -162,10 +162,8 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, constant.HostingClusterMissing, hypdeployment.MisConfiguredReason)
 	}
 
-	// Check that a valid spec is present and update the hypershiftDeployment.status.conditions
-	// Since you can omit the nodePool, we only check hostedClusterSpec
-	if hyd.Spec.HostedClusterSpec == nil {
-		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec is nil")
+	if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) == 0 {
+		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterRef is nil")
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
 	}
 
@@ -178,7 +176,8 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	// This is a special check to make sure these values are provided as they are Not part of the standard
 	// HostedClusterSpec
-	if hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
+	// TODO: Add check for hostedcluster ref object?
+	if hyd.Spec.Infrastructure.Configure && hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
 		(hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
 		r.Log.Error(errors.New("hyd.Spec.Credentials.AWS == nil"), "missing IAM configuration")
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
@@ -304,7 +303,7 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 		}
 
 		if hcSpec.Platform.AWS != nil {
-			refSecrets = append(refSecrets, ScaffoldAWSSecrets(hyd)...)
+			refSecrets = append(refSecrets, ScaffoldAWSSecrets(hyd, hostedCluster)...)
 		} else if hcSpec.Platform.Azure != nil {
 			creds, err := getAzureCloudProviderCreds(providerSecret)
 			if err != nil {
@@ -616,17 +615,21 @@ func (r resourceMeta) ToIdentifier() workv1.ResourceIdentifier {
 
 func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName string) (*corev1.Secret, error) {
 	for _, v := range *manifests {
-		u := &unstructured.Unstructured{}
-		if err := json.Unmarshal(v.Raw, u); err != nil {
-			return nil, err
-		}
-
-		if u.GetKind() == "Secret" && u.GetName() == secretName {
-			secret := &corev1.Secret{}
-			if err := json.Unmarshal(v.Raw, secret); err != nil {
+		if len(v.Raw) != 0 {
+			u := &unstructured.Unstructured{}
+			if err := json.Unmarshal(v.Raw, u); err != nil {
 				return nil, err
 			}
-			return secret, nil
+
+			if u.GetKind() == "Secret" && u.GetName() == secretName {
+				secret := &corev1.Secret{}
+				if err := json.Unmarshal(v.Raw, secret); err != nil {
+					return nil, err
+				}
+				return secret, nil
+			}
+		} else if v.Object != nil && v.Object.GetObjectKind().GroupVersionKind().Kind == "Secret" {
+			return v.Object.(*corev1.Secret), nil
 		}
 	}
 

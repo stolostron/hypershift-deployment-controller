@@ -344,7 +344,7 @@ func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment
 	}
 }
 
-func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secret {
+func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment, hc *hyp.HostedCluster) []*corev1.Secret {
 	var secrets []*corev1.Secret
 
 	buildAWSCreds := func(name, arn string) *corev1.Secret {
@@ -371,9 +371,9 @@ func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment) []*corev1.Secre
 	return append(
 		secrets,
 		//These ObjectRef.Name's will always be set by this point.
-		buildAWSCreds(hyd.Spec.HostedClusterSpec.Platform.AWS.ControlPlaneOperatorCreds.Name, hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
-		buildAWSCreds(hyd.Spec.HostedClusterSpec.Platform.AWS.KubeCloudControllerCreds.Name, hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
-		buildAWSCreds(hyd.Spec.HostedClusterSpec.Platform.AWS.NodePoolManagementCreds.Name, hyd.Spec.Credentials.AWS.NodePoolManagementARN),
+		buildAWSCreds(hc.Spec.Platform.AWS.ControlPlaneOperatorCreds.Name, hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
+		buildAWSCreds(hc.Spec.Platform.AWS.KubeCloudControllerCreds.Name, hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
+		buildAWSCreds(hc.Spec.Platform.AWS.NodePoolManagementCreds.Name, hyd.Spec.Credentials.AWS.NodePoolManagementARN),
 	)
 }
 
