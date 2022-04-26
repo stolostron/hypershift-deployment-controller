@@ -162,25 +162,31 @@ func TestScaffoldAzureHostedClusterSpec(t *testing.T) {
 }
 
 func TestScaffoldAWSHostedCluster(t *testing.T) {
+	r := GetHypershiftDeploymentReconciler()
+	ctx := context.Background()
+
 	testHD := getHypershiftDeployment("default", "test1")
 
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	ScaffoldAWSHostedClusterSpec(testHD, getAWSInfrastructureOut())
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldHostedCluster(testHD))
+	err := client.Create(context.Background(), r.scaffoldHostedCluster(ctx, testHD))
 
 	assert.Nil(t, err, "err is nil when HostedCluster Custom Resource is well formed")
 	t.Log("ScaffoldHostedCluster was successful")
 }
 
 func TestScaffoldAzureHostedCluster(t *testing.T) {
+	r := GetHypershiftDeploymentReconciler()
+	ctx := context.Background()
+
 	testHD := getHypershiftDeployment("default", "test1")
 
 	ScaffoldAzureHostedClusterSpec(testHD, getAzureInfrastructureOut())
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldHostedCluster(testHD))
+	err := client.Create(context.Background(), r.scaffoldHostedCluster(ctx, testHD))
 
 	assert.Nil(t, err, "err is nil when HostedCluster Custom Resource is well formed")
 	t.Log("ScaffoldHostedCluster was successful")
@@ -361,6 +367,8 @@ func getProviderSecret() *corev1.Secret {
 }
 
 func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
+	r := GetHypershiftDeploymentReconciler()
+	ctx := context.Background()
 
 	testHD := getHDforManifestWork()
 	_, found := testHD.Annotations["test1"]
@@ -374,7 +382,7 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 		testHD.Annotations[a] = "value--" + a
 	}
 
-	resultHC := ScaffoldHostedCluster(testHD)
+	resultHC := r.scaffoldHostedCluster(ctx, testHD)
 
 	// Validate all known annotations
 	for a, _ := range checkHostedClusterAnnotations {
@@ -391,3 +399,95 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 }
 
 // TODO Azure test using provider secret
+
+func TestLocalObjectReferencesForHCandNP(t *testing.T) {
+	r := GetHypershiftDeploymentReconciler()
+	// TODO: Cleanup
+	hyd.AddToScheme(r.Scheme)
+	hyp.AddToScheme(r.Scheme)
+
+	ctx := context.Background()
+
+	// HD with configure=F
+	testHD := getHypershiftDeployment("default", "ObjRefTest")
+	infraOut := getAWSInfrastructureOut()
+	testHD.Spec.InfraID = infraOut.InfraID
+
+	hostedCluster := &hyp.HostedCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "HostedCluster",
+			APIVersion: "hypershift.openshift.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "testHostedCluster",
+			Namespace: testHD.Namespace,
+		},
+		Spec: hyp.HostedClusterSpec{
+			Platform: hyp.PlatformSpec{
+				Type: hyp.AWSPlatform,
+			},
+			Networking: hyp.ClusterNetworking{
+				NetworkType: hyp.OpenShiftSDN,
+			},
+			Services: []hyp.ServicePublishingStrategyMapping{},
+			Release: hyp.Release{
+				Image: constant.ReleaseImage,
+			},
+			Etcd: hyp.EtcdSpec{
+				ManagementType: hyp.Managed,
+			},
+		},
+	}
+	err := r.Create(ctx, hostedCluster)
+	defer r.Delete(ctx, hostedCluster)
+	assert.Nil(t, err, "hostedcluster is created without err")
+
+	np := &hyp.NodePool{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "testNodePool",
+			Namespace: testHD.Namespace,
+		},
+		Spec: hyp.NodePoolSpec{
+			ClusterName: testHD.Name,
+			Release: hyp.Release{
+				Image: constant.ReleaseImage,
+			},
+			Platform: hyp.NodePoolPlatform{
+				Type: hyp.AWSPlatform,
+				AWS:  &hyp.AWSNodePoolPlatform{},
+			},
+			Management:       hyp.NodePoolManagement{},
+			Config:           []corev1.LocalObjectReference{},
+			NodeDrainTimeout: &metav1.Duration{},
+		},
+	}
+	err = r.Create(ctx, np)
+	defer r.Delete(ctx, np)
+	assert.Nil(t, err, "nodepool is created without err")
+
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
+	testHD.Spec.NodePoolsRef = []corev1.LocalObjectReference{{Name: np.Name}}
+
+	m, err := ScaffoldManifestwork(testHD)
+	assert.Nil(t, err, "is nil if scaffold manifestwork successfully")
+	payload := &m.Spec.Workload.Manifests
+
+	// No hosted cluster in manifestwork payload from hypD raw
+	hc := getHostedClusterInManifestPayload(payload)
+	assert.Nil(t, hc, "hostedcluster is nil in manifestwork from hypershiftdeployment raw")
+
+	// No node pool in manifestwork payload from hypD raw
+	nps := getNodePoolsInManifestPayload(payload)
+	assert.Len(t, nps, 0, "nodepool is nil in manifestwork from hypershiftdeployment raw")
+
+	// Manifestwork payload has hosted cluster added from hypD hostedClusterRef
+	r.appendHostedCluster(ctx)(testHD, payload)
+	hc = getHostedClusterInManifestPayload(payload)
+	assert.NotNil(t, hc, "hostedcluster is added in manifestwork from hypershiftdeployment hostedClusterRef")
+
+	// Manifestwork payload has hosted cluster added from hypD nodePoolRef
+	r.appendNodePool(ctx)(testHD, payload)
+	nps = getNodePoolsInManifestPayload(payload)
+	assert.Len(t, nps, 1, "nodepool is added in manifestwork from hypershiftdeployment nodePoolRef")
+}

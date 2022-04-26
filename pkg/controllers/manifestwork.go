@@ -194,8 +194,8 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	manifestFuncs := []loadManifest{
 		ensureTaregetNamespace,
-		appendHostedCluster,
-		appendNodePool,
+		r.appendHostedCluster(ctx),
+		r.appendNodePool(ctx),
 		r.appendHostedClusterReferenceSecrets(ctx, providerSecret),
 		r.ensureConfiguration(ctx, m),
 	}
@@ -281,11 +281,15 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 		var err error
 		refSecrets := []*corev1.Secret{}
 
-		if len(hyd.Spec.HostedClusterSpec.PullSecret.Name) != 0 {
+		// Get hostedcluster from manifestwork instead of hypD
+		hostedCluster := getHostedClusterInManifestPayload(payload)
+		hcSpec := &hostedCluster.Spec
+
+		if len(hcSpec.PullSecret.Name) != 0 {
 			var pullCreds *corev1.Secret
 			if !hyd.Spec.Infrastructure.Configure {
 				pullCreds, err = r.generateSecret(ctx,
-					types.NamespacedName{Name: hyd.Spec.HostedClusterSpec.PullSecret.Name,
+					types.NamespacedName{Name: hcSpec.PullSecret.Name,
 						Namespace: hyd.GetNamespace()})
 
 				if err != nil {
@@ -299,9 +303,9 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			refSecrets = append(refSecrets, pullCreds)
 		}
 
-		if hyd.Spec.HostedClusterSpec.Platform.AWS != nil {
+		if hcSpec.Platform.AWS != nil {
 			refSecrets = append(refSecrets, ScaffoldAWSSecrets(hyd)...)
-		} else if hyd.Spec.HostedClusterSpec.Platform.Azure != nil {
+		} else if hcSpec.Platform.Azure != nil {
 			creds, err := getAzureCloudProviderCreds(providerSecret)
 			if err != nil {
 				return nil
@@ -309,7 +313,7 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			refSecrets = append(refSecrets, ScaffoldAzureCloudCredential(hyd, creds))
 		}
 
-		sshKey := hyd.Spec.HostedClusterSpec.SSHKey
+		sshKey := hcSpec.SSHKey
 		if len(sshKey.Name) != 0 {
 			s, err := r.generateSecret(ctx,
 				types.NamespacedName{Name: sshKey.Name,
@@ -332,17 +336,20 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 	}
 }
 
-func appendHostedCluster(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-	hc := ScaffoldHostedCluster(hyd)
+func (r *HypershiftDeploymentReconciler) appendHostedCluster(ctx context.Context) loadManifest {
+	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 
-	hc.TypeMeta = metav1.TypeMeta{
-		Kind:       "HostedCluster",
-		APIVersion: hyp.GroupVersion.String(),
+		hc := r.scaffoldHostedCluster(ctx, hyd)
+
+		hc.TypeMeta = metav1.TypeMeta{
+			Kind:       "HostedCluster",
+			APIVersion: hyp.GroupVersion.String(),
+		}
+
+		*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
+
+		return nil
 	}
-
-	*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
-
-	return nil
 }
 
 func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
@@ -362,19 +369,41 @@ func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]
 	return nil
 }
 
-func appendNodePool(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-	for _, hdNp := range hyd.Spec.NodePools {
-		np := ScaffoldNodePool(hyd, hdNp)
+func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loadManifest {
+	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
+		if !hyd.Spec.Infrastructure.Configure {
+			npRefs := hyd.Spec.NodePoolsRef
+			if len(npRefs) == 0 {
+				r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Missing Spec.NodePoolsRef", hypdeployment.MisConfiguredReason)
+				return nil
+			}
 
-		np.TypeMeta = metav1.TypeMeta{
-			Kind:       "NodePool",
-			APIVersion: hyp.GroupVersion.String(),
+			for _, npRef := range npRefs {
+				np := &hyp.NodePool{}
+				if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: npRef.Name}, np); err != nil {
+					r.Log.Error(err, fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, np.Name))
+					errMsg := fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, np.Name)
+					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, errMsg, hypdeployment.MisConfiguredReason)
+					return nil
+				}
+
+				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
+			}
+		} else {
+			for _, hdNp := range hyd.Spec.NodePools {
+				np := ScaffoldNodePool(hyd, hdNp)
+
+				np.TypeMeta = metav1.TypeMeta{
+					Kind:       "NodePool",
+					APIVersion: hyp.GroupVersion.String(),
+				}
+
+				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
+			}
 		}
 
-		*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
+		return nil
 	}
-
-	return nil
 }
 
 func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.ResourceIdentifier]workv1.ManifestConfigOption {
@@ -602,4 +631,25 @@ func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName str
 	}
 
 	return nil, nil
+}
+
+func getHostedClusterInManifestPayload(manifests *[]workv1.Manifest) *hyp.HostedCluster {
+	for _, v := range *manifests {
+		if v.Object.GetObjectKind().GroupVersionKind().Kind == "HostedCluster" {
+			return v.Object.(*hyp.HostedCluster)
+		}
+	}
+
+	return nil
+}
+
+func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*hyp.NodePool {
+	nodePools := []*hyp.NodePool{}
+	for _, v := range *manifests {
+		if v.Object.GetObjectKind().GroupVersionKind().Kind == "NodePool" {
+			nodePools = append(nodePools, v.Object.(*hyp.NodePool))
+		}
+	}
+
+	return nodePools
 }

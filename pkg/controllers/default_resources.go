@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -48,21 +50,36 @@ func getReleaseImagePullSpec() string {
 
 }
 
-func ScaffoldHostedCluster(hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
-	hostedCluster := &hyp.HostedCluster{
-		ObjectMeta: v1.ObjectMeta{
+func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
+	hostedCluster := &hyp.HostedCluster{}
+
+	if !hyd.Spec.Infrastructure.Configure {
+		hcRef := hyd.Spec.HostedClusterRef
+		if len(hcRef.Name) == 0 {
+			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Missing Spec.HostedClusterRef", hypdeployment.MisConfiguredReason)
+			return nil
+		}
+
+		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hcRef.Name}, hostedCluster); err != nil {
+			r.Log.Error(err, fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name))
+			errMsg := fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name)
+			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, errMsg, hypdeployment.MisConfiguredReason)
+			return nil
+		}
+	} else {
+		hostedCluster.ObjectMeta = v1.ObjectMeta{
 			Name:      hyd.Name,
 			Namespace: helper.GetHostingNamespace(hyd),
 			Annotations: map[string]string{
 				constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
 			},
-		},
-		Spec: *hyd.Spec.HostedClusterSpec,
-	}
+		}
+		hostedCluster.Spec = *hyd.Spec.HostedClusterSpec
 
-	// Pass all appropriate annotations to the HostedCluster
-	// Find Annotation references here: https://github.com/openshift/hypershift/blob/main/api/v1alpha1/hostedcluster_types.go
-	transferHostedClusterAnnotations(hyd.Annotations, hostedCluster.Annotations)
+		// Pass all appropriate annotations to the HostedCluster
+		// Find Annotation references here: https://github.com/openshift/hypershift/blob/main/api/v1alpha1/hostedcluster_types.go
+		transferHostedClusterAnnotations(hyd.Annotations, hostedCluster.Annotations)
+	}
 
 	return hostedCluster
 }
@@ -315,7 +332,6 @@ func scaffoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePo
 }
 
 func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
-
 	return &hyp.NodePool{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      np.Name,

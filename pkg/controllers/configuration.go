@@ -125,7 +125,9 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 		// hyd.Spec.NodePoolSpec.Config
 		configMapRefs := []corev1.LocalObjectReference{}
 
-		hcSpec := hyd.Spec.HostedClusterSpec
+		// Get hostedcluster from manifestwork instead of hypD
+		hostedCluster := getHostedClusterInManifestPayload(payload)
+		hcSpec := &hostedCluster.Spec
 
 		if hcSpec != nil {
 			hcSpecCfg := hcSpec.Configuration

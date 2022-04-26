@@ -116,10 +116,22 @@ type HypershiftDeploymentSpec struct {
 	// +optional
 	HostedClusterSpec *hypv1alpha1.HostedClusterSpec `json:"hostedClusterSpec,omitempty"`
 
+	// Reference to a HostedCluster on the HyperShift deployment namespace that will be applied to the
+	// ManagementCluster by ACM, if omitted, it will be generated
+	// required if InfraSpec.Configure is false
+	// +optional
+	HostedClusterRef corev1.LocalObjectReference `json:"hostedClusterReference,omitempty"`
+
 	// NodePools is an array of NodePool resources that will be applied to the ManagementCluster by ACM,
 	// if omitted, a default NodePool will be generated
 	// +optional
 	NodePools []*HypershiftNodePools `json:"nodePools,omitempty"`
+
+	// Reference to an array of NodePool resources on the HyperShift deployment namespace that will be applied
+	// to the ManagementCluster by ACM,
+	// required if InfraSpec.Configure is false
+	// +optional
+	NodePoolsRef []corev1.LocalObjectReference `json:"nodePoolReferences,omitempty"`
 
 	// Credentials are ARN's that are used for standing up the resources in the cluster.
 	Credentials *CredentialARNs `json:"credentials,omitempty"`
