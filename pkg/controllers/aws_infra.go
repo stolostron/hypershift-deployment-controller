@@ -105,7 +105,10 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 				infraOut.LocalZoneID,
 			)(r.ctx, r.Client)
 			if iamErr != nil {
-				_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, iamErr.Error(), hypdeployment.MisConfiguredReason)
+				_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured,
+					metav1.ConditionFalse,
+					iamErr.Error(),
+					hypdeployment.MisConfiguredReason)
 				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
 			}
 
@@ -118,7 +121,11 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 					NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
 				}}
 			if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
-				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+				return ctrl.Result{},
+					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured,
+						metav1.ConditionFalse,
+						err.Error(),
+						hypdeployment.MisConfiguredReason)
 			}
 			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
 			log.Info("IAM configured")
@@ -150,7 +157,12 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		string(providerSecret.Data["baseDomain"]),
 	)(ctx); err != nil {
 		log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second},
+			r.updateStatusConditionsOnChange(
+				hyd, hypdeployment.PlatformConfigured,
+				metav1.ConditionFalse,
+				err.Error(),
+				hypdeployment.PlatfromDestroyReason)
 	}
 
 	log.Info("Deleting Infrastructure IAM on provider")
@@ -163,7 +175,12 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		hyd.Spec.InfraID,
 	)(ctx); err != nil {
 		log.Error(err, "failed to delete IAM on provider")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second},
+			r.updateStatusConditionsOnChange(
+				hyd, hypdeployment.PlatformIAMConfigured,
+				metav1.ConditionFalse,
+				err.Error(),
+				hypdeployment.RemovingReason)
 	}
 
 	return ctrl.Result{}, nil

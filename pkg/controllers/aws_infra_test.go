@@ -196,8 +196,7 @@ func TestCreateAwsInfra(t *testing.T) {
 	assert.Nil(t, err, "nil, when conditions are written correctly")
 	c = meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))
 	assert.NotNil(t, c, "not nil, when condition is found")
-	assert.Equal(t, metav1.ConditionFalse, c.Status,
-		"false, when the AwsInfraCreator fails")
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "false, when the AwsInfraCreator fails")
 	assert.Equal(t, "failed to create aws infrastructure", c.Message, "error message returned from AwsInfraCreator")
 }
 
@@ -213,25 +212,30 @@ func TestDestroyAwsInfra(t *testing.T) {
 
 	r.InfraHandler = &FakeInfraHandler{}
 
-	// Test missing: Spec.Infrastructure.Platform.AWS.Region
+	t.Log("Test successful clean up of infrastructure and IAM")
 	_, err := r.destroyAWSInfrastructure(hyd, getProviderSecret())
 	assert.Nil(t, err, "nil, when destroy is successful")
 	c := meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))
 	assert.NotNil(t, c, "not nil, when condition is found")
-	assert.Equal(t, c.Status, metav1.ConditionFalse, "false, when deleting infrastructure")
-	assert.Equal(t, c.Reason, hypdeployment.PlatfromDestroyReason, "reason is Destroying")
+	assert.Equal(t, metav1.ConditionFalse, c.Status, metav1.ConditionFalse, "false, when deleting infrastructure")
+	assert.Equal(t, hypdeployment.PlatfromDestroyReason, c.Reason, "reason is Destroying")
 
 	c = meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured))
 	assert.NotNil(t, c, "not nil, when condition is found")
-	assert.Equal(t, c.Status, metav1.ConditionFalse, "false, when deleting iam infrastructure")
-	assert.Equal(t, c.Reason, hypdeployment.RemovingReason, "reason is Removing")
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "false, when deleting iam infrastructure")
+	assert.Equal(t, hypdeployment.RemovingReason, c.Reason, "reason is Removing")
 
 	r.InfraHandler = &FakeInfraHandlerFailure{}
 
-	// Test missing: Spec.Infrastructure.Platform.AWS.Region
+	t.Log("Test AwsInfraDestroyer function failure")
 	_, err = r.destroyAWSInfrastructure(hyd, getProviderSecret())
-	assert.NotNil(t, err, "not nil, when condition is set successfully")
-	assert.Equal(t, "failed to destroy aws infrastructure", err.Error(), "error from DestroyAWSInfrastructure")
+	assert.Nil(t, err, "nil, when condition is set successfully")
+
+	c = meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured))
+	assert.NotNil(t, c, "not nil, when condition is found")
+	assert.Equal(t, metav1.ConditionFalse, c.Status, metav1.ConditionFalse, "false, when removing iam infrastructure")
+	assert.Equal(t, hypdeployment.RemovingReason, c.Reason, "reason is Removing")
+	assert.Equal(t, "Removing AWS IAM with infra-id: test1-abcde", c.Message)
 }
 
 func TestCreateAwsInfraIAMMisConfigured(t *testing.T) {
@@ -259,9 +263,11 @@ func TestCreateAwsInfraIAMMisConfigured(t *testing.T) {
 	hyd.Spec.Credentials = &hypdeployment.CredentialARNs{}
 
 	_, err = r.createAWSInfra(hyd, getProviderSecret())
-	t.Log(hyd.Status.Conditions)
-
 	assert.Nil(t, err, "nil, when problem condition is written correctly")
-	assert.True(t, meta.IsStatusConditionFalse(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)),
-		"true, when the IAM condition is mis-configured")
+
+	c := meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured))
+	assert.NotNil(t, c, "not nil, when condition is found")
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "false, when removing iam infrastructure")
+	assert.Equal(t, hypdeployment.MisConfiguredReason, c.Reason, "reason is Removing")
+	assert.Equal(t, "Missing Spec.Credentials.AWS", c.Message)
 }
