@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -127,6 +128,8 @@ var _ InfraHandler = &FakeInfraHandler{}
 
 type FakeInfraHandler struct{}
 
+type FakeInfraHandlerFailure struct{}
+
 func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsCreateInfra {
 	return func(ctx context.Context) (*aws.CreateInfraOutput, error) {
 		return &aws.CreateInfraOutput{
@@ -147,9 +150,21 @@ func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID
 	}
 }
 
+func (h *FakeInfraHandlerFailure) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsCreateInfra {
+	return func(ctx context.Context) (*aws.CreateInfraOutput, error) {
+		return nil, errors.New("failed to create aws infrastructure")
+	}
+}
+
 func (h *FakeInfraHandler) AwsInfraDestroyer(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsDestroyInfra {
 	return func(ctx context.Context) error {
 		return nil
+	}
+}
+
+func (h *FakeInfraHandlerFailure) AwsInfraDestroyer(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsDestroyInfra {
+	return func(ctx context.Context) error {
+		return errors.New("failed to destroy aws infrastructure")
 	}
 }
 
@@ -186,15 +201,33 @@ func (h *FakeInfraHandler) AwsIAMCreator(awsKey, awsSecretKey, region, infraID, 
 	}
 }
 
+func (h *FakeInfraHandlerFailure) AwsIAMCreator(awsKey, awsSecretKey, region, infraID, s3BucketName, s3Region, privateZoneID, publicZoneID, localZoneID string) AwsCreateIAM {
+	return func(ctx context.Context, client crclient.Client) (*aws.CreateIAMOutput, error) {
+		return nil, errors.New("failed to create aws iam infrastructure")
+	}
+}
+
 func (h *FakeInfraHandler) AwsIAMDestroyer(awsKey, awsSecretKey, region, infraID string) AwsDestroyIAM {
 	return func(ctx context.Context) error {
 		return nil
 	}
 }
 
+func (h *FakeInfraHandlerFailure) AwsIAMDestroyer(awsKey, awsSecretKey, region, infraID string) AwsDestroyIAM {
+	return func(ctx context.Context) error {
+		return errors.New("failed to destroy aws iam infrastructure")
+	}
+}
+
 func (h *FakeInfraHandler) AzureInfraDestroyer(name, location, infraID string, credentials *fixtures.AzureCreds) AzureDestroyInfra {
 	return func(ctx context.Context) error {
 		return nil
+	}
+}
+
+func (h *FakeInfraHandlerFailure) AzureInfraDestroyer(name, location, infraID string, credentials *fixtures.AzureCreds) AzureDestroyInfra {
+	return func(ctx context.Context) error {
+		return errors.New("failed to destroy azure infrastructure")
 	}
 }
 
@@ -213,5 +246,11 @@ func (h *FakeInfraHandler) AzureInfraCreator(name, baseDomain, location, infraID
 			PrivateZoneID:     "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourceGroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.Network/privateDnsZones/hypershift-test-azurecluster.a.b.c",
 			BootImageID:       "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourceGroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.Compute/images/rhcos.x86_64.vhd",
 		}, nil
+	}
+}
+
+func (h *FakeInfraHandlerFailure) AzureInfraCreator(name, baseDomain, location, infraID string, credentials *fixtures.AzureCreds) AzureCreateInfra {
+	return func(ctx context.Context) (*azure.CreateInfraOutput, error) {
+		return nil, errors.New("failed to create azure infrastructure")
 	}
 }

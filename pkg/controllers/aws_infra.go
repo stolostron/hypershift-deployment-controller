@@ -71,7 +71,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 					hypdeployment.MisConfiguredReason)
 		}
 
-		// This creates the required HostedClusterSpec and NodePoolSpec(s), from scratch or if supplied
+		// This creates the required HostedClusterSpec and NodePoolSpec(s), from scratch if not supplied
 		ScaffoldAWSHostedClusterSpec(hyd, infraOut)
 		ScaffoldAWSNodePoolSpec(hyd, infraOut)
 
