@@ -338,7 +338,10 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 func (r *HypershiftDeploymentReconciler) appendHostedCluster(ctx context.Context) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
 
-		hc := r.scaffoldHostedCluster(ctx, hyd)
+		hc, err := r.scaffoldHostedCluster(ctx, hyd)
+		if err != nil {
+			return err
+		}
 
 		hc.TypeMeta = metav1.TypeMeta{
 			Kind:       "HostedCluster",
@@ -374,18 +377,20 @@ func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loa
 			npRefs := hyd.Spec.NodePoolsRef
 			if len(npRefs) == 0 {
 				r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Missing Spec.NodePoolsRef", hypdeployment.MisConfiguredReason)
-				return nil
+				return fmt.Errorf("no Spec.NodePoolRef specified")
 			}
 
 			for _, npRef := range npRefs {
 				np := &hyp.NodePool{}
 				if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: npRef.Name}, np); err != nil {
-					r.Log.Error(err, fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, np.Name))
-					errMsg := fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, np.Name)
-					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, errMsg, hypdeployment.MisConfiguredReason)
-					return nil
+					errMsg := fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, np.Name)
+					r.Log.Error(err, errMsg)
+					statusErrMsg := fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, np.Name)
+					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, statusErrMsg, hypdeployment.MisConfiguredReason)
+					return fmt.Errorf(errMsg)
 				}
 
+				np.Namespace = helper.GetHostingNamespace(hyd)
 				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
 			}
 		} else {

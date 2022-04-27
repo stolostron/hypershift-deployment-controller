@@ -172,7 +172,8 @@ func TestScaffoldAWSHostedCluster(t *testing.T) {
 	ScaffoldAWSHostedClusterSpec(testHD, getAWSInfrastructureOut())
 
 	client := initClient()
-	err := client.Create(context.Background(), r.scaffoldHostedCluster(ctx, testHD))
+	hc, _ := r.scaffoldHostedCluster(ctx, testHD)
+	err := client.Create(context.Background(), hc)
 
 	assert.Nil(t, err, "err is nil when HostedCluster Custom Resource is well formed")
 	t.Log("ScaffoldHostedCluster was successful")
@@ -187,7 +188,8 @@ func TestScaffoldAzureHostedCluster(t *testing.T) {
 	ScaffoldAzureHostedClusterSpec(testHD, getAzureInfrastructureOut())
 
 	client := initClient()
-	err := client.Create(context.Background(), r.scaffoldHostedCluster(ctx, testHD))
+	hc, _ := r.scaffoldHostedCluster(ctx, testHD)
+	err := client.Create(context.Background(), hc)
 
 	assert.Nil(t, err, "err is nil when HostedCluster Custom Resource is well formed")
 	t.Log("ScaffoldHostedCluster was successful")
@@ -256,17 +258,23 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	client := initClient()
 	ctx := context.Background()
 
-	hostedCluster := getHostedCluster()
-	client.Create(ctx, hostedCluster)
-	defer client.Delete(ctx, hostedCluster)
-
 	infraOut := getAWSInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1", false)
-	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
+
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
 	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
+
+	hostedCluster := getHostedCluster(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
+	nps := getNodePools(testHD)
+	for _, np := range nps {
+		client.Create(ctx, np)
+		defer client.Delete(ctx, hostedCluster)
+	}
 
 	client.Create(ctx, testHD)
 
@@ -389,7 +397,7 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 		testHD.Annotations[a] = "value--" + a
 	}
 
-	resultHC := r.scaffoldHostedCluster(ctx, testHD)
+	resultHC, _ := r.scaffoldHostedCluster(ctx, testHD)
 
 	// Validate all known annotations
 	for a, _ := range checkHostedClusterAnnotations {
@@ -414,6 +422,8 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 
 	// HD with configure=F
 	testHD := getHypershiftDeployment("default", "ObjRefTest", false)
+	testHD.Spec.HostingCluster = "local-cluster"
+	testHD.Spec.HostingNamespace = "clusters"
 	infraOut := getAWSInfrastructureOut()
 	testHD.Spec.InfraID = infraOut.InfraID
 
@@ -477,21 +487,24 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	assert.Nil(t, err, "is nil if scaffold manifestwork successfully")
 	payload := &m.Spec.Workload.Manifests
 
-	// No hosted cluster in manifestwork payload from hypD raw
-	hc := getHostedClusterInManifestPayload(payload)
-	assert.Nil(t, hc, "hostedcluster is nil in manifestwork from hypershiftdeployment raw")
-
-	// No node pool in manifestwork payload from hypD raw
-	nps := getNodePoolsInManifestPayload(payload)
-	assert.Len(t, nps, 0, "nodepool is nil in manifestwork from hypershiftdeployment raw")
-
 	// Manifestwork payload has hosted cluster added from hypD hostedClusterRef
 	r.appendHostedCluster(ctx)(testHD, payload)
-	hc = getHostedClusterInManifestPayload(payload)
+	hc := getHostedClusterInManifestPayload(payload)
 	assert.NotNil(t, hc, "hostedcluster is added in manifestwork from hypershiftdeployment hostedClusterRef")
+	assert.Equal(t, hc.Namespace, testHD.Spec.HostingNamespace)
 
 	// Manifestwork payload has hosted cluster added from hypD nodePoolRef
 	r.appendNodePool(ctx)(testHD, payload)
-	nps = getNodePoolsInManifestPayload(payload)
+	nps := getNodePoolsInManifestPayload(payload)
 	assert.Len(t, nps, 1, "nodepool is added in manifestwork from hypershiftdeployment nodePoolRef")
+	assert.Equal(t, nps[0].Namespace, testHD.Spec.HostingNamespace)
+
+	// Error if HostedClusterRef not found
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: "not_exist"}
+	err = r.Create(ctx, testHD)
+	defer r.Delete(ctx, testHD)
+
+	_, err = r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}})
+	assert.NotNil(t, err, "is not nil when HostedClusterRef is not found")
+	assert.Contains(t, err.Error(), "failed to get HostedClusterRef: default:not_exist", "error contains HostedClusterRef is not found message")
 }

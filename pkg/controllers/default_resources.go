@@ -50,22 +50,24 @@ func getReleaseImagePullSpec() string {
 
 }
 
-func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) *hyp.HostedCluster {
+func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*hyp.HostedCluster, error) {
 	hostedCluster := &hyp.HostedCluster{}
 
 	if !hyd.Spec.Infrastructure.Configure {
 		hcRef := hyd.Spec.HostedClusterRef
 		if len(hcRef.Name) == 0 {
 			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Missing Spec.HostedClusterRef", hypdeployment.MisConfiguredReason)
-			return nil
+			return nil, fmt.Errorf("no Spec.HostedClusterRef specified")
 		}
 
 		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hcRef.Name}, hostedCluster); err != nil {
-			r.Log.Error(err, fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name))
-			errMsg := fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name)
-			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, errMsg, hypdeployment.MisConfiguredReason)
-			return nil
+			errMsg := fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name)
+			r.Log.Error(err, errMsg)
+			statusErrMsg := fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name)
+			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, statusErrMsg, hypdeployment.MisConfiguredReason)
+			return nil, fmt.Errorf(errMsg)
 		}
+		hostedCluster.Namespace = helper.GetHostingNamespace(hyd)
 	} else {
 		hostedCluster.ObjectMeta = v1.ObjectMeta{
 			Name:      hyd.Name,
@@ -81,7 +83,7 @@ func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Conte
 		transferHostedClusterAnnotations(hyd.Annotations, hostedCluster.Annotations)
 	}
 
-	return hostedCluster
+	return hostedCluster, nil
 }
 
 var checkHostedClusterAnnotations = map[string]bool{

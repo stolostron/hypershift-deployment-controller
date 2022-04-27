@@ -16,6 +16,7 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func getHDforSecretEncryption(config bool) *hyd.HypershiftDeployment {
@@ -42,8 +43,8 @@ func getHDforSecretEncryption(config bool) *hyd.HypershiftDeployment {
 	}
 }
 
-func getHostedCluster() *hyp.HostedCluster {
-	return &hyp.HostedCluster{
+func getHostedCluster(hyd *hyd.HypershiftDeployment) *hyp.HostedCluster {
+	hc := &hyp.HostedCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "HostedCluster",
 			APIVersion: "hypershift.openshift.io/v1alpha1",
@@ -68,7 +69,22 @@ func getHostedCluster() *hyp.HostedCluster {
 			},
 		},
 	}
+	hyd.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hc.Name}
+	return hc
+}
 
+func getNodePools(hyd *hyd.HypershiftDeployment) []*hyp.NodePool {
+	hyd.Spec.NodePoolsRef = []corev1.LocalObjectReference{{Name: "testNodePool"}}
+	return []*hyp.NodePool{{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NodePool",
+			APIVersion: "hypershift.openshift.io/v1alpha1",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "testNodePool",
+			Namespace: "default",
+		},
+	}}
 }
 
 // TestHDEncryptionSecret tests if the manifestwork is created
@@ -77,7 +93,8 @@ func TestHDEncryptionSecret(t *testing.T) {
 	r := GetHypershiftDeploymentReconciler()
 	ctx := context.Background()
 
-	hostedCluster := getHostedCluster()
+	testHD := getHypershiftDeployment("default", "test1", false)
+	hostedCluster := getHostedCluster(testHD)
 	err := r.Create(ctx, hostedCluster)
 	defer r.Delete(ctx, hostedCluster)
 	assert.Nil(t, err, "hostedcluster is created without err")
