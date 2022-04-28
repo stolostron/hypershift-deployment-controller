@@ -226,7 +226,7 @@ func TestScaffoldAWSNodePool(t *testing.T) {
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0]))
+	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0].Name, testHD.Spec.NodePools[0].Spec))
 
 	assert.Nil(t, err, "err is nil when NodePools is created successfully")
 	t.Log("ScaffoldNodePool was successful")
@@ -240,7 +240,7 @@ func TestScaffoldAzureNodePool(t *testing.T) {
 	ScaffoldAzureNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0]))
+	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0].Name, testHD.Spec.NodePools[0].Spec))
 
 	assert.Nil(t, err, "err is nil when NodePools is created successfully")
 	t.Log("ScaffoldNodePool was successful")
@@ -355,16 +355,32 @@ func TestConfigureFalseWithManifestWork(t *testing.T) {
 	assert.Equal(t, resultHD.Labels[constant.InfraLabelName], testHD.Spec.InfraID, "The infra-id must contain the cluster name")
 }
 
-func getPullSecret(testHD *hyd.HypershiftDeployment) *corev1.Secret {
+func getSecret(secretName string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-pull-secret", testHD.GetName()),
+			Name:      secretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
 			".dockerconfigjson": []byte(`docker-pull-secret`),
 		},
 	}
+}
+
+func getPullSecret(testHD *hyd.HypershiftDeployment) *corev1.Secret {
+	return getSecret(fmt.Sprintf("%s-pull-secret", testHD.GetName()))
+}
+
+func getAwsCpoSecret(testHD *hyd.HypershiftDeployment) *corev1.Secret {
+	return getSecret(fmt.Sprintf("%s-cpo-creds", testHD.GetName()))
+}
+
+func getAwsCloudCtrlSecret(testHD *hyd.HypershiftDeployment) *corev1.Secret {
+	return getSecret(fmt.Sprintf("%s-cloud-ctrl-creds", testHD.GetName()))
+}
+
+func getAwsNodeMgmtSecret(testHD *hyd.HypershiftDeployment) *corev1.Secret {
+	return getSecret(fmt.Sprintf("%s-node-mgmt-creds", testHD.GetName()))
 }
 
 func getProviderSecret() *corev1.Secret {

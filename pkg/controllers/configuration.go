@@ -182,14 +182,27 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 					secretRefs = append(secretRefs, secretResource{secretRef: encr.KMS.AWS.Auth.Credentials})
 				}
 			}
-		}
 
-		if hcSpec != nil && hcSpec.AdditionalTrustBundle != nil && len(hcSpec.AdditionalTrustBundle.Name) != 0 {
-			configMapRefs = append(configMapRefs, *hcSpec.AdditionalTrustBundle)
-		}
+			if hcSpec.AdditionalTrustBundle != nil && len(hcSpec.AdditionalTrustBundle.Name) != 0 {
+				configMapRefs = append(configMapRefs, *hcSpec.AdditionalTrustBundle)
+			}
 
-		if hcSpec != nil && hcSpec.ServiceAccountSigningKey != nil && len(hcSpec.ServiceAccountSigningKey.Name) != 0 {
-			secretRefs = append(secretRefs, secretResource{secretRef: *hcSpec.ServiceAccountSigningKey})
+			if hcSpec.ServiceAccountSigningKey != nil && len(hcSpec.ServiceAccountSigningKey.Name) != 0 {
+				secretRefs = append(secretRefs, secretResource{secretRef: *hcSpec.ServiceAccountSigningKey})
+			}
+
+			// Get AWS secrets externally for configure=F
+			if !hyd.Spec.Infrastructure.Configure && hcSpec.Platform.AWS != nil {
+				if len(hcSpec.Platform.AWS.ControlPlaneOperatorCreds.Name) != 0 {
+					secretRefs = append(secretRefs, secretResource{secretRef: hcSpec.Platform.AWS.ControlPlaneOperatorCreds})
+				}
+				if len(hcSpec.Platform.AWS.KubeCloudControllerCreds.Name) != 0 {
+					secretRefs = append(secretRefs, secretResource{secretRef: hcSpec.Platform.AWS.KubeCloudControllerCreds})
+				}
+				if len(hcSpec.Platform.AWS.NodePoolManagementCreds.Name) != 0 {
+					secretRefs = append(secretRefs, secretResource{secretRef: hcSpec.Platform.AWS.NodePoolManagementCreds})
+				}
+			}
 		}
 
 		for _, np := range hyd.Spec.NodePools {

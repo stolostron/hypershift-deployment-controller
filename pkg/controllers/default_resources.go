@@ -51,7 +51,15 @@ func getReleaseImagePullSpec() string {
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*hyp.HostedCluster, error) {
-	hostedCluster := &hyp.HostedCluster{}
+	hostedCluster := &hyp.HostedCluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      hyd.Name,
+			Namespace: helper.GetHostingNamespace(hyd),
+			Annotations: map[string]string{
+				constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
+			},
+		},
+	}
 
 	if !hyd.Spec.Infrastructure.Configure {
 		hcRef := hyd.Spec.HostedClusterRef
@@ -60,22 +68,18 @@ func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Conte
 			return nil, fmt.Errorf("no Spec.HostedClusterRef specified")
 		}
 
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hcRef.Name}, hostedCluster); err != nil {
+		hostedClusterRef := &hyp.HostedCluster{}
+		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hcRef.Name}, hostedClusterRef); err != nil {
 			errMsg := fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name)
 			r.Log.Error(err, errMsg)
 			statusErrMsg := fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name)
 			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, statusErrMsg, hypdeployment.MisConfiguredReason)
 			return nil, fmt.Errorf(errMsg)
 		}
-		hostedCluster.Namespace = helper.GetHostingNamespace(hyd)
+
+		// TODO: Transfer annotations - there are annotations we don't want. ..
+		hostedCluster.Spec = hostedClusterRef.Spec
 	} else {
-		hostedCluster.ObjectMeta = v1.ObjectMeta{
-			Name:      hyd.Name,
-			Namespace: helper.GetHostingNamespace(hyd),
-			Annotations: map[string]string{
-				constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
-			},
-		}
 		hostedCluster.Spec = *hyd.Spec.HostedClusterSpec
 
 		// Pass all appropriate annotations to the HostedCluster
@@ -333,16 +337,20 @@ func scaffoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePo
 	}
 }
 
-func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, np *hypdeployment.HypershiftNodePools) *hyp.NodePool {
+func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, npName string, npSpec hyp.NodePoolSpec) *hyp.NodePool {
 	return &hyp.NodePool{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NodePool",
+			APIVersion: hyp.GroupVersion.String(),
+		},
 		ObjectMeta: v1.ObjectMeta{
-			Name:      np.Name,
+			Name:      npName,
 			Namespace: helper.GetHostingNamespace(hyd),
 			Labels: map[string]string{
 				constant.AutoInfraLabelName: hyd.Spec.InfraID,
 			},
 		},
-		Spec: np.Spec,
+		Spec: npSpec,
 	}
 }
 
@@ -370,13 +378,18 @@ func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment, hc *hyp.HostedC
 			},
 		}
 	}
-	return append(
-		secrets,
-		//These ObjectRef.Name's will always be set by this point.
-		buildAWSCreds(hc.Spec.Platform.AWS.ControlPlaneOperatorCreds.Name, hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
-		buildAWSCreds(hc.Spec.Platform.AWS.KubeCloudControllerCreds.Name, hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
-		buildAWSCreds(hc.Spec.Platform.AWS.NodePoolManagementCreds.Name, hyd.Spec.Credentials.AWS.NodePoolManagementARN),
-	)
+
+	if hyd.Spec.Infrastructure.Configure {
+		secrets = append(
+			secrets,
+			//These ObjectRef.Name's will always be set by this point.
+			buildAWSCreds(hc.Spec.Platform.AWS.ControlPlaneOperatorCreds.Name, hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
+			buildAWSCreds(hc.Spec.Platform.AWS.KubeCloudControllerCreds.Name, hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
+			buildAWSCreds(hc.Spec.Platform.AWS.NodePoolManagementCreds.Name, hyd.Spec.Credentials.AWS.NodePoolManagementARN),
+		)
+	}
+
+	return secrets
 }
 
 func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds *fixtures.AzureCreds) *corev1.Secret {

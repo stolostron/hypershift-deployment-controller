@@ -381,27 +381,22 @@ func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loa
 			}
 
 			for _, npRef := range npRefs {
-				np := &hyp.NodePool{}
-				if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: npRef.Name}, np); err != nil {
-					errMsg := fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, np.Name)
+				npObj := &hyp.NodePool{}
+				if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: npRef.Name}, npObj); err != nil {
+					errMsg := fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, npRef.Name)
 					r.Log.Error(err, errMsg)
-					statusErrMsg := fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, np.Name)
+					statusErrMsg := fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, npRef.Name)
 					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, statusErrMsg, hypdeployment.MisConfiguredReason)
 					return fmt.Errorf(errMsg)
 				}
 
-				np.Namespace = helper.GetHostingNamespace(hyd)
+				// Just use the spec from the nodepool object ref
+				np := ScaffoldNodePool(hyd, npObj.Name, npObj.Spec)
 				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
 			}
 		} else {
 			for _, hdNp := range hyd.Spec.NodePools {
-				np := ScaffoldNodePool(hyd, hdNp)
-
-				np.TypeMeta = metav1.TypeMeta{
-					Kind:       "NodePool",
-					APIVersion: hyp.GroupVersion.String(),
-				}
-
+				np := ScaffoldNodePool(hyd, hdNp.Name, hdNp.Spec)
 				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
 			}
 		}
