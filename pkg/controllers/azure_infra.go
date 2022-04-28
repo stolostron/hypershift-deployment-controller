@@ -42,7 +42,11 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 	// Does both INFRA
 	credentials, err := getAzureCloudProviderCreds(providerSecret)
 	if err != nil {
-		return ctrl.Result{}, err
+		log.Error(err, "could not correctly retreive the osServicePrincipal from the cloud provider "+providerSecret.Name)
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(
+			hyd, hypdeployment.ProviderSecretConfigured,
+			metav1.ConditionFalse,
+			"The cloud provider secret does not contain a valid osServicePrincipal.json value", hypdeployment.MisConfiguredReason)
 	}
 	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
 		log.Info("Creating infrastructure in Azure that will be used by the HypershiftDeployment, HostedClusters & NodePools")
@@ -88,9 +92,13 @@ func (r *HypershiftDeploymentReconciler) destroyAzureInfrastructure(hyd *hypdepl
 	log := r.Log
 	ctx := r.ctx
 
-	credentials := &fixtures.AzureCreds{}
-	if err := json.Unmarshal(providerSecret.Data["osServicePrincipal.json"], credentials); err != nil {
-		return ctrl.Result{}, err
+	credentials, err := getAzureCloudProviderCreds(providerSecret)
+	if err != nil {
+		log.Error(err, "could not correctly retreive the osServicePrincipal from the cloud provider "+providerSecret.Name)
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(
+			hyd, hypdeployment.ProviderSecretConfigured,
+			metav1.ConditionFalse,
+			"The cloud provider secret does not contain a valid osServicePrincipal.json value", hypdeployment.MisConfiguredReason)
 	}
 	_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing Azure infrastructure with infra-id: "+hyd.Spec.InfraID, hypdeployment.PlatfromDestroyReason)
 
@@ -102,7 +110,11 @@ func (r *HypershiftDeploymentReconciler) destroyAzureInfrastructure(hyd *hypdepl
 		credentials,
 	)(ctx); err != nil {
 		log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, r.updateStatusConditionsOnChange(
+			hyd, hypdeployment.PlatformConfigured,
+			metav1.ConditionFalse,
+			err.Error(),
+			hypdeployment.PlatfromDestroyReason)
 	}
 
 	return ctrl.Result{}, nil

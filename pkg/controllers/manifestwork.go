@@ -245,6 +245,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 	if err := r.Get(ctx, types.NamespacedName{Name: m.GetName(), Namespace: m.GetNamespace()}, m); err != nil {
 		if apierrors.IsNotFound(err) {
+			setStatusCondition(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "", hypdeployment.RemovingReason)
 			return ctrl.Result{}, nil
 		}
 
@@ -268,7 +269,7 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 
 	syncManifestworkStatusToHypershiftDeployment(hyd, m)
 	//caller will execute the status update
-	setStatusCondition(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Removing HypershiftDeployment's manifestwork and related resources", hypdeployment.RemovingReason)
+	setStatusCondition(hyd, hypdeployment.WorkConfigured, metav1.ConditionTrue, "Removing HypershiftDeployment's manifestwork and related resources", hypdeployment.RemovingReason)
 
 	return ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, nil
 }
