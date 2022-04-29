@@ -354,7 +354,8 @@ func getProviderSecret() *corev1.Secret {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"pullSecret": []byte(`docker-pull-secret`),
+			"pullSecret":              []byte(`docker-pull-secret`),
+			"osServicePrincipal.json": []byte(`{"clientId":"00000000-0000-0000-0000-000000000000","clientSecret":"abcdef123456","tenantId":"00000000-0000-0000-0000-000000000000","subscriptionId":"00000000-0000-0000-0000-000000000000"}`),
 		},
 	}
 }

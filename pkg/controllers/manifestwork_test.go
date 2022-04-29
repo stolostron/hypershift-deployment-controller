@@ -325,12 +325,6 @@ func TestManifestWorkFlowWithExtraConfigurations(t *testing.T) {
 
 		kindAndKey{
 			GroupVersionKind: schema.GroupVersionKind{
-				Group: "", Version: "v1", Kind: "Secret"},
-			NamespacedName: types.NamespacedName{
-				Name: cfgItemSecretName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
-
-		kindAndKey{
-			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "ConfigMap"},
 			NamespacedName: types.NamespacedName{
 				Name: cfgConfigName, Namespace: helper.GetHostingNamespace(testHD)}}: true,
