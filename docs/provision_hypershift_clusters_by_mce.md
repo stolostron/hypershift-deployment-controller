@@ -39,6 +39,11 @@ For details, please check: https://hypershift-docs.netlify.app/getting-started/ 
 oc create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=$HOME/.aws/credentials --from-literal=bucket=<s3-bucket-for-hypershift> --from-literal=region=<region> -n <hypershift-management-cluster>
 ```
 
+Add the special label to the `hypershift-operator-oidc-provider-s3-credentials` secret so that the secret is backed up for disaster recovery.
+```
+oc label secret hypershift-operator-oidc-provider-s3-credentials -n <hypershift-management-cluster> cluster.open-cluster-management.io/backup=true
+```
+
 3. Check the hypershift-addon is installed
 ```
 ╰─# oc get managedclusteraddons -n local-cluster hypershift-addon
@@ -71,10 +76,14 @@ You can create this secret by:
 - ACM console: https://<Advanced-Cluster-Management-Console>/credentials/add
 
 or
-- oc command
+- oc commands
 ```
 oc create secret generic <my-secret> -n <hypershift-deployment-namespace> --from-literal=baseDomain='your.domain.com' --from-literal=aws_access_key_id='your-aws-access-key' --from-literal=aws_secret_access_key='your-aws-secret-key' --from-literal=pullSecret='{"auths":{"cloud.openshift.com":{"auth":"auth-info", "email":"xx@redhat.com"}, "quay.io":{"auth":"auth-info", "email":"xx@redhat.com"} } }' --from-literal=ssh-publickey='your-ssh-publickey' --from-literal=ssh-privatekey='your-ssh-privatekey'
+
+oc label secret <my-secret> -n <hypershift-deployment-namespace> cluster.open-cluster-management.io/backup=true
 ```
+
+Note: `cluster.open-cluster-management.io/backup=true` is added to the secret so that the secret is backed up for disaster recovery.
 
 2. Create a HypershiftDeployment in the cloud provider secret namespace
 ```
