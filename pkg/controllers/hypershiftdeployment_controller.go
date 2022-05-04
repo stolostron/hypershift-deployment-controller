@@ -99,8 +99,12 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: secretName}, &providerSecret)
 		if err != nil {
 			log.Error(err, "Could not retrieve the provider secret")
-			r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionFalse, "The secret "+secretName+" could not be retreived from namespace "+hyd.Namespace, hypdeployment.MisConfiguredReason)
-			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
+				r.updateStatusConditionsOnChange(&hyd,
+					hypdeployment.ProviderSecretConfigured,
+					metav1.ConditionFalse,
+					"The secret "+secretName+" could not be retreived from namespace "+hyd.Namespace,
+					hypdeployment.MisConfiguredReason)
 		}
 		if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+secretName, string(hypdeployment.AsExpectedReason)); err != nil {
 			return ctrl.Result{}, err
