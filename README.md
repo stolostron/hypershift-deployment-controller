@@ -5,54 +5,49 @@
 This is to be an interface for ACM (Advanced Cluster Management for Kubernetes) to work with Hypershift in the following use cases
   | Use case   | ManagementCluster install | HostedCluster control plane | ACM creates Infrastructure | User brings infrastructure |
   | :---------:| :-----------------------: | :-------------------------: | :------------------------: | :------------------------: |
-  | (1) ManagementCluster on ACM cluster    | ACM                         | ACM                        | AWS & IBM |
-  | (2) ManagementCluster on ManagedCluster | ManagedCluster              | ACM                        | AWS & IBM |
-
-  Note: Only 1 is supported at this time
+  | (1) Hosting cluster on the ACM Hub cluster    | ACM                         | ACM                        | AWS, Azure, & Agent |
+  | (2) Hosting cluster on a ManagedCluster | ManagedCluster              | ACM                        | AWS & Azure |
 
 ## Hypershift on the ACM cluster (CURRENTLY SUPPORTED)
 This allows you to create multiple Hypershift HostedClusters on the ACM cluster.
 
 ### Preparing the ACM cluster to be a ManagementCluster (Run once)
-1. Connect to the ACM cluster with `oc` cli
-2. Git Clone the Hypershift repository
-  ```shell
-  git clone git@github.com:openshift/hypershift.git
-  ```
-3. Follow the README.md and build the project to get the `hypershift` cli
-  ```shell
-  make build
-  ```
-4. Use the quickstart to install the Hypershift operator with the `hypershift` cli
-  https://hypershift-docs.netlify.app/getting-started/
-  Complete `Prerequisites` and `Before you begin`
-  You need to create the S3 bucket, and run the `hypershift install ...` command. Ignore the rest.
+1. Connect to the ACM/MCE Hub cluster with `oc` cli
 
-### Using the Hypeershift Deployment Controller
-1. Clone this repository
-#### Run the controller from your development environment
-2. Make sure you are connected to the ACM/OCP cluster where you ran `hypershift install` and launch the controller
+2. Clone this repository
+
+3. Complete the `Prerequisites` section in the Hypershift quickstart https://hypershift-docs.netlify.app/getting-started/, making sure you have the route53 base domain and the S3 bucket (This is required for AWS).
+
+#### Activating the environment
+3.
   ```shell
-  go run pkg/main.go
+  samples/quickstart/start.sh
   ```
-#### Run the controller in OCP
-2. Make sure you are connected to the ACM/OCP cluster where you ran `hypershift install` and launch the controller
+  a. You will be prompted for an AWS credential with access to an AWS S3 bucket
+  b. You will be prompted for the name of the AWS S3 bucket to use
+  c. You will be prompted for the region where the AWS S3 bucket resides
+
+#### Alternative - Developing from your environment
+4. Make sure you are connected to the ACM/MCE on an OCP cluster and did not run Step 3 (otherwise this controller is already running)
   ```shell
-  oc apply -k config/deployment
+
+  make vendor     # Incorporates the dependant Go modules
+  make manifests  # Creates the CRD (Custom Resource Definition) for the ..._type.go
+  make install    # Installs the CRD
+  make run        # Launches the controller
   ```
-  This will create the service account, roles, role-bindings and deployment that runs the controller. It currently uses the image `quay.io/stolostron/hypershift-deployment-controller`
 #### Creating the Hypershift HostedCluster
-3. In another shell, create the namespace `clusters` and set that as the default for you context
-4. Make sure you have a copy of the AWS Provider Connection in this namespace. You can use the ACM console to create it in the `clusters` namespace.
-4. Create a `HypershiftDeployment` resource (hd), and watch the logs.  The `hd` resource will create the infrastructure in AWS if: `Spec.Infrastructure.Configure: True`. Once all the AWS resources are created, it will create a `HostedCluster` resource and `NodePool`.  You will also notice that the `hd.Spec.HostedClusterSpec` and `hd.Spec.NodePools[]` keys are filled in with the values that were used to create the kube resources.
-5. You can add additional NodePools, by editing the NodePools array, and adding addional specs. The easiest way to do this is to copy the existing spec, and just change the name.
+5. In another shell, create the namespace `clusters` and set that as the default for you context
+6. Make sure you have a copy of the ACM AWS Provider Connection in this namespace. You can use the ACM console to create this secret in the `clusters` namespace.
+7. Create a `HypershiftDeployment` resource (hd), and watch the logs.  The `hd` resource will create the infrastructure in AWS if: `Spec.Infrastructure.Configure: True`. Once all the AWS resources are created, it will create a `HostedCluster` resource and `NodePool`.  You will also notice that the `hd.Spec.HostedClusterSpec` and `hd.Spec.NodePools[]` keys are filled in with the values that were used to create the kube resources.
+8. You can add additional NodePools, by editing the NodePools array, and adding addional specs. The easiest way to do this is to copy the existing spec, and just change the name.
 
 ### Checking status
 ```bash
 oc get hd  # displays the status of Infrastructure deployment if configure: true
 
-# NAME     INFRA                  READY   IAM                    READY   PROVIDER REF          FOUND
-# sample   ConfiguredAsExpected   True    ConfiguredAsExpected   True    ReferenceAsExpected   True
+# NAME     INFRA                  READY   IAM                    READY   PROVIDER REF          FOUND   PROGRESS    AVAILABLE
+# sample   ConfiguredAsExpected   True    ConfiguredAsExpected   True    ReferenceAsExpected   Truee   Completed   True
 ```
 If there is problem, looking at the `HypershiftDeployment.Status.Conditions[].message` and you will see a specific error message.  When destroying the infrastructure, you will see similar details on the progres of clean up.
 
