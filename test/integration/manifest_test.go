@@ -153,6 +153,51 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		})
 
 		ginkgo.It("infra config false without pull secret", func() {
+			hyd.Spec = hypdeployment.HypershiftDeploymentSpec{
+				InfraID:          infraID,
+				Override:         hypdeployment.DeleteHostingNamespace,
+				HostingNamespace: "clusters",
+				HostingCluster:   "default",
+				Infrastructure: hypdeployment.InfraSpec{
+					Configure: false,
+				},
+				HostedClusterSpec: &hyp.HostedClusterSpec{
+					Platform: hyp.PlatformSpec{
+						Type: hyp.AWSPlatform,
+					},
+					Networking: hyp.ClusterNetworking{
+						NetworkType: hyp.OpenShiftSDN,
+					},
+					Services: []hyp.ServicePublishingStrategyMapping{},
+					Release: hyp.Release{
+						Image: constant.ReleaseImage,
+					},
+					Etcd: hyp.EtcdSpec{
+						ManagementType: hyp.Managed,
+					},
+				},
+			}
+
+			err := mgr.GetClient().Create(ctx, hyd, &client.CreateOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			gomega.Eventually(func() bool {
+				manifestwork := workv1.ManifestWork{}
+				err = mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hyd.Spec.HostingCluster, Name: infraID}, &manifestwork)
+				if err != nil {
+					return false
+				}
+
+				// HostedCluster + NodePool
+				if len(manifestwork.Spec.Workload.Manifests) != 2 {
+					return false
+				}
+
+				return true
+			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
+		})
+
+		ginkgo.It("infra config false, with hostedClusterRef, without pull secret", func() {
 			hc.Spec = hyp.HostedClusterSpec{
 				Platform: hyp.PlatformSpec{
 					Type: hyp.AWSPlatform,

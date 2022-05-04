@@ -29,8 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,6 +56,8 @@ var (
 
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
 type loadManifest func(*hypdeployment.HypershiftDeployment, *[]workv1.Manifest) error
+
+var mLog = ctrl.Log.WithName("manifestworks")
 
 func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
 	return hyd.Spec.InfraID
@@ -162,9 +166,17 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, constant.HostingClusterMissing, hypdeployment.MisConfiguredReason)
 	}
 
-	if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) == 0 {
-		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterRef is nil")
+	// Check that a valid spec, for infra.configure=T, is present and update the hypershiftDeployment.status.conditions
+	// Since you can omit the nodePool, we only check hostedClusterSpec
+	if hyd.Spec.HostedClusterSpec == nil && hyd.Spec.Infrastructure.Configure {
+		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec is nil")
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec is missing", hypdeployment.MisConfiguredReason)
+	}
+
+	// For infra.configure=F, either HostedClusterSpec or HostedClusterRef is required
+	if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) == 0 && hyd.Spec.HostedClusterSpec == nil {
+		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec and hypershiftDeployment.Spec.HostedClusterRef are nil")
+		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec or HostedClusterRef is required", hypdeployment.MisConfiguredReason)
 	}
 
 	m, err := ScaffoldManifestwork(hyd)
@@ -176,8 +188,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	// This is a special check to make sure these values are provided as they are Not part of the standard
 	// HostedClusterSpec
-	// TODO: Add check for hostedcluster ref object?
-	if hyd.Spec.Infrastructure.Configure && hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
+	if hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
 		(hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
 		r.Log.Error(errors.New("hyd.Spec.Credentials.AWS == nil"), "missing IAM configuration")
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
@@ -282,8 +293,11 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 
 		// Get hostedcluster from manifestwork instead of hypD
 		hostedCluster := getHostedClusterInManifestPayload(payload)
-		hcSpec := &hostedCluster.Spec
+		if hostedCluster == nil {
+			return err
+		}
 
+		hcSpec := &hostedCluster.Spec
 		if len(hcSpec.PullSecret.Name) != 0 {
 			var pullCreds *corev1.Secret
 			if !hyd.Spec.Infrastructure.Configure {
@@ -343,11 +357,6 @@ func (r *HypershiftDeploymentReconciler) appendHostedCluster(ctx context.Context
 			return err
 		}
 
-		hc.TypeMeta = metav1.TypeMeta{
-			Kind:       "HostedCluster",
-			APIVersion: hyp.GroupVersion.String(),
-		}
-
 		*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: hc}})
 
 		return nil
@@ -373,30 +382,47 @@ func ensureTaregetNamespace(hyd *hypdeployment.HypershiftDeployment, payload *[]
 
 func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loadManifest {
 	return func(hyd *hypdeployment.HypershiftDeployment, payload *[]workv1.Manifest) error {
-		if !hyd.Spec.Infrastructure.Configure {
+		if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.NodePoolsRef) != 0 {
 			npRefs := hyd.Spec.NodePoolsRef
-			if len(npRefs) == 0 {
-				r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Missing Spec.NodePoolsRef", hypdeployment.MisConfiguredReason)
-				return fmt.Errorf("no Spec.NodePoolRef specified")
-			}
 
 			for _, npRef := range npRefs {
-				npObj := &hyp.NodePool{}
-				if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: npRef.Name}, npObj); err != nil {
+				gvr := schema.GroupVersionResource{
+					Group:    "hypershift.openshift.io",
+					Version:  "v1alpha1",
+					Resource: "nodepools",
+				}
+				unstructNodePool, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, npRef.Name, v1.GetOptions{})
+				if err != nil {
+					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse,
+						fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, npRef.Name), hypdeployment.MisConfiguredReason)
+
 					errMsg := fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, npRef.Name)
 					r.Log.Error(err, errMsg)
-					statusErrMsg := fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, npRef.Name)
-					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, statusErrMsg, hypdeployment.MisConfiguredReason)
+					return fmt.Errorf(errMsg)
+				}
+
+				npObj := &hyp.NodePool{}
+				err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructNodePool.UnstructuredContent(), npObj)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to convert unstructured node pool to concrete type: %v:%v", hyd.Namespace, npRef.Name)
+					r.Log.Error(err, errMsg)
 					return fmt.Errorf(errMsg)
 				}
 
 				// Just use the spec from the nodepool object ref
-				np := ScaffoldNodePool(hyd, npObj.Name, npObj.Spec)
+				np := ScaffoldNodePool(hyd, npObj.Name, unstructNodePool.Object["spec"].(map[string]interface{}))
 				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
 			}
 		} else {
 			for _, hdNp := range hyd.Spec.NodePools {
-				np := ScaffoldNodePool(hyd, hdNp.Name, hdNp.Spec)
+				usNpSpec, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&hdNp.Spec)
+				if err != nil {
+					errMsg := fmt.Sprintf("failed to convert node pool spec to unstructured: %v:%v", hyd.Namespace, hdNp.Name)
+					r.Log.Error(err, errMsg)
+					return fmt.Errorf(errMsg)
+				}
+
+				np := ScaffoldNodePool(hyd, hdNp.Name, usNpSpec)
 				*payload = append(*payload, workv1.Manifest{RawExtension: runtime.RawExtension{Object: np}})
 			}
 		}
@@ -639,18 +665,25 @@ func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName str
 func getHostedClusterInManifestPayload(manifests *[]workv1.Manifest) *hyp.HostedCluster {
 	for _, v := range *manifests {
 		if v.Object.GetObjectKind().GroupVersionKind().Kind == "HostedCluster" {
-			return v.Object.(*hyp.HostedCluster)
+			hostedCluster := &hyp.HostedCluster{}
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(v.Object.(*unstructured.Unstructured).UnstructuredContent(), hostedCluster)
+			if err != nil {
+				mLog.Error(err, "failed to unstructured HostedCluster to concrete type")
+				return nil
+			}
+
+			return hostedCluster
 		}
 	}
 
 	return nil
 }
 
-func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*hyp.NodePool {
-	nodePools := []*hyp.NodePool{}
+func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*unstructured.Unstructured {
+	nodePools := []*unstructured.Unstructured{}
 	for _, v := range *manifests {
 		if v.Object.GetObjectKind().GroupVersionKind().Kind == "NodePool" {
-			nodePools = append(nodePools, v.Object.(*hyp.NodePool))
+			nodePools = append(nodePools, v.Object.(*unstructured.Unstructured))
 		}
 	}
 

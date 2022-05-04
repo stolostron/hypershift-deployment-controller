@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -51,9 +52,10 @@ import (
 // HypershiftDeploymentReconciler reconciles a HypershiftDeployment object
 type HypershiftDeploymentReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	ctx    context.Context
-	Log    logr.Logger
+	DynamicClient dynamic.Interface
+	Scheme        *runtime.Scheme
+	ctx           context.Context
+	Log           logr.Logger
 
 	InfraHandler InfraHandler
 }

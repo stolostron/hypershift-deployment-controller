@@ -33,7 +33,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -50,41 +52,57 @@ func getReleaseImagePullSpec() string {
 
 }
 
-func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*hyp.HostedCluster, error) {
-	hostedCluster := &hyp.HostedCluster{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      hyd.Name,
-			Namespace: helper.GetHostingNamespace(hyd),
-			Annotations: map[string]string{
-				constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
-			},
-		},
-	}
+func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
+	hostedCluster := &unstructured.Unstructured{}
+	hostedCluster.SetAPIVersion(hyp.GroupVersion.String())
+	hostedCluster.SetKind("HostedCluster")
+	hostedCluster.SetName(hyd.Name)
+	hostedCluster.SetNamespace(helper.GetHostingNamespace(hyd))
+	hostedCluster.SetAnnotations(map[string]string{
+		constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
+	})
 
-	if !hyd.Spec.Infrastructure.Configure {
+	if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) != 0 {
 		hcRef := hyd.Spec.HostedClusterRef
-		if len(hcRef.Name) == 0 {
-			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Missing Spec.HostedClusterRef", hypdeployment.MisConfiguredReason)
-			return nil, fmt.Errorf("no Spec.HostedClusterRef specified")
-		}
 
-		hostedClusterRef := &hyp.HostedCluster{}
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hcRef.Name}, hostedClusterRef); err != nil {
+		gvr := schema.GroupVersionResource{
+			Group:    "hypershift.openshift.io",
+			Version:  "v1alpha1",
+			Resource: "hostedclusters",
+		}
+		unstructHostedCluster, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, hcRef.Name, v1.GetOptions{})
+		if err != nil {
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse,
+				fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name), hypdeployment.MisConfiguredReason)
+
 			errMsg := fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name)
 			r.Log.Error(err, errMsg)
-			statusErrMsg := fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name)
-			r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, statusErrMsg, hypdeployment.MisConfiguredReason)
+			return nil, fmt.Errorf(errMsg)
+		}
+
+		// Validate hosted cluster by converting the unstructured HC to the concrete HC obj
+		hostedClusterRef := &hyp.HostedCluster{}
+		err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructHostedCluster.UnstructuredContent(), hostedClusterRef)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to convert unstructured hosted cluster to concrete type: %v:%v", hyd.Namespace, hcRef.Name)
+			r.Log.Error(err, errMsg)
 			return nil, fmt.Errorf(errMsg)
 		}
 
 		// TODO: Transfer annotations - there are annotations we don't want. ..
-		hostedCluster.Spec = hostedClusterRef.Spec
+		hostedCluster.Object["spec"] = unstructHostedCluster.Object["spec"]
 	} else {
-		hostedCluster.Spec = *hyd.Spec.HostedClusterSpec
+		usHcSpec, err := runtime.DefaultUnstructuredConverter.ToUnstructured(hyd.Spec.HostedClusterSpec)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to convert HypershiftDeployment.Spec.HostedClusterSpec to unstructured: %v:%v", hyd.Namespace, hyd.Name)
+			r.Log.Error(err, errMsg)
+			return nil, fmt.Errorf(errMsg)
+		}
+		hostedCluster.Object["spec"] = usHcSpec
 
 		// Pass all appropriate annotations to the HostedCluster
 		// Find Annotation references here: https://github.com/openshift/hypershift/blob/main/api/v1alpha1/hostedcluster_types.go
-		transferHostedClusterAnnotations(hyd.Annotations, hostedCluster.Annotations)
+		hostedCluster.SetAnnotations(transferHostedClusterAnnotations(hyd.Annotations, hostedCluster.GetAnnotations()))
 	}
 
 	return hostedCluster, nil
@@ -112,12 +130,14 @@ var checkHostedClusterAnnotations = map[string]bool{
 }
 
 // Looping through annotations on HypershiftDeployment and checking against the MAP is the fastest
-func transferHostedClusterAnnotations(hdAnnotations map[string]string, hcAnnotations map[string]string) {
+func transferHostedClusterAnnotations(hdAnnotations map[string]string, hcAnnotations map[string]string) map[string]string {
 	for a, val := range hdAnnotations {
 		if checkHostedClusterAnnotations[a] {
 			hcAnnotations[a] = val
 		}
 	}
+
+	return hcAnnotations
 }
 
 // Creates an instance of ServicePublishingStrategyMapping
@@ -337,21 +357,18 @@ func scaffoldAWSNodePoolPlatform(infraOut *aws.CreateInfraOutput) *hyp.AWSNodePo
 	}
 }
 
-func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, npName string, npSpec hyp.NodePoolSpec) *hyp.NodePool {
-	return &hyp.NodePool{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "NodePool",
-			APIVersion: hyp.GroupVersion.String(),
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      npName,
-			Namespace: helper.GetHostingNamespace(hyd),
-			Labels: map[string]string{
-				constant.AutoInfraLabelName: hyd.Spec.InfraID,
-			},
-		},
-		Spec: npSpec,
-	}
+func ScaffoldNodePool(hyd *hypdeployment.HypershiftDeployment, npName string, npSpec map[string]interface{}) *unstructured.Unstructured {
+	np := &unstructured.Unstructured{}
+	np.SetAPIVersion(hyp.GroupVersion.String())
+	np.SetKind("NodePool")
+	np.SetName(npName)
+	np.SetNamespace(helper.GetHostingNamespace(hyd))
+	np.SetLabels(map[string]string{
+		constant.AutoInfraLabelName: hyd.Spec.InfraID,
+	})
+
+	np.Object["spec"] = npSpec
+	return np
 }
 
 func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment, hc *hyp.HostedCluster) []*corev1.Secret {
@@ -379,7 +396,7 @@ func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment, hc *hyp.HostedC
 		}
 	}
 
-	if hyd.Spec.Infrastructure.Configure {
+	if hyd.Spec.Credentials != nil && hyd.Spec.Credentials.AWS != nil {
 		secrets = append(
 			secrets,
 			//These ObjectRef.Name's will always be set by this point.

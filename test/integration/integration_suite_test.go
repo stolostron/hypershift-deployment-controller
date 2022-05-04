@@ -9,6 +9,7 @@ import (
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,11 +49,12 @@ func init() {
 }
 
 var (
-	testEnv    *envtest.Environment
-	restConfig *rest.Config
-	ctx        context.Context
-	cancel     context.CancelFunc
-	mgr        ctrl.Manager
+	testEnv       *envtest.Environment
+	restConfig    *rest.Config
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mgr           ctrl.Manager
+	dynamicClient dynamic.Interface
 )
 
 var _ = ginkgo.BeforeSuite(func() {
@@ -85,7 +87,16 @@ var _ = ginkgo.BeforeSuite(func() {
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-	go startCtrlManager(ctx, mgr)
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	hdr := &controllers.HypershiftDeploymentReconciler{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		InfraHandler:  &controllers.FakeInfraHandler{},
+		DynamicClient: dynamicClient,
+	}
+	go startCtrlManager(ctx, hdr, mgr)
 })
 
 var _ = ginkgo.AfterSuite(func() {
@@ -94,12 +105,8 @@ var _ = ginkgo.AfterSuite(func() {
 	}
 })
 
-func startCtrlManager(ctx context.Context, mgr ctrl.Manager) {
-	err := (&controllers.HypershiftDeploymentReconciler{
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		InfraHandler: &controllers.FakeInfraHandler{},
-	}).SetupWithManager(mgr)
+func startCtrlManager(ctx context.Context, hdr *controllers.HypershiftDeploymentReconciler, mgr ctrl.Manager) {
+	err := hdr.SetupWithManager(mgr)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// err = (&autoimport.Reconciler{

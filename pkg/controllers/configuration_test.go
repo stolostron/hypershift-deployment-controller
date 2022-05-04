@@ -95,9 +95,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 
 	testHD := getHypershiftDeployment("default", "test1", false)
 	hostedCluster := getHostedCluster(testHD)
-	err := r.Create(ctx, hostedCluster)
-	defer r.Delete(ctx, hostedCluster)
-	assert.Nil(t, err, "hostedcluster is created without err")
+	initFakeClient(r, hostedCluster)
 
 	// Create AESCBC active key secret
 	exampleOptions := &apifixtures.ExampleOptions{
@@ -105,7 +103,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 		Namespace: "default",
 	}
 	userActiveKeySecret := exampleOptions.EtcdEncryptionKeySecret()
-	err = r.Create(ctx, userActiveKeySecret)
+	err := r.Create(ctx, userActiveKeySecret)
 	defer r.Delete(ctx, userActiveKeySecret)
 	assert.Nil(t, err, "active encryption secret should be created with no error")
 
@@ -246,8 +244,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	err = r.Update(ctx, hostedCluster)
-	assert.Nil(t, err)
+	initFakeClient(r, hostedCluster)
 	m, _ = ScaffoldManifestwork(configFHD)
 	payload6 := []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configFHD, &payload6)
@@ -291,8 +288,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	err = r.Update(ctx, hostedCluster)
-	assert.Nil(t, err)
+	initFakeClient(r, hostedCluster)
 	payload7[1].Object.(*corev1.Secret).Name = "encryption-key-not-found"
 	payload7[1].Raw, _ = json.Marshal(payload7[1].Object)
 	m.Spec.Workload.Manifests = payload7
@@ -317,8 +313,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	err = r.Update(ctx, hostedCluster)
-	assert.Nil(t, err)
+	initFakeClient(r, hostedCluster)
 	m, _ = ScaffoldManifestwork(configFHD)
 	payload9 := []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configFHD, &payload9)

@@ -126,8 +126,8 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 		configMapRefs := []corev1.LocalObjectReference{}
 
 		// Get hostedcluster from manifestwork instead of hypD
-		var hcSpec *hyp.HostedClusterSpec
 		hostedCluster := getHostedClusterInManifestPayload(payload)
+		var hcSpec *hyp.HostedClusterSpec
 		if hostedCluster != nil {
 			hcSpec = &hostedCluster.Spec
 		}
@@ -191,8 +191,8 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 				secretRefs = append(secretRefs, secretResource{secretRef: *hcSpec.ServiceAccountSigningKey})
 			}
 
-			// Get AWS secrets externally for configure=F
-			if !hyd.Spec.Infrastructure.Configure && hcSpec.Platform.AWS != nil {
+			// Get AWS secrets externally for configure=F and using objectRef
+			if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) != 0 && hcSpec.Platform.AWS != nil {
 				if len(hcSpec.Platform.AWS.ControlPlaneOperatorCreds.Name) != 0 {
 					secretRefs = append(secretRefs, secretResource{secretRef: hcSpec.Platform.AWS.ControlPlaneOperatorCreds})
 				}

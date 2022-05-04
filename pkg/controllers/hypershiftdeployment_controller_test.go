@@ -13,7 +13,9 @@ import (
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
 	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
+	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -21,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -112,6 +115,23 @@ func initClient() client.Client {
 var getNN = types.NamespacedName{
 	Namespace: "default",
 	Name:      "test1",
+}
+
+func scaffoldTestNodePool(hyd *hypdeployment.HypershiftDeployment, npName string, npSpec hyp.NodePoolSpec) *hyp.NodePool {
+	return &hyp.NodePool{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NodePool",
+			APIVersion: hyp.GroupVersion.String(),
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      npName,
+			Namespace: helper.GetHostingNamespace(hyd),
+			Labels: map[string]string{
+				constant.AutoInfraLabelName: hyd.Spec.InfraID,
+			},
+		},
+		Spec: npSpec,
+	}
 }
 
 func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
@@ -226,7 +246,7 @@ func TestScaffoldAWSNodePool(t *testing.T) {
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0].Name, testHD.Spec.NodePools[0].Spec))
+	err := client.Create(context.Background(), scaffoldTestNodePool(testHD, testHD.Spec.NodePools[0].Name, testHD.Spec.NodePools[0].Spec))
 
 	assert.Nil(t, err, "err is nil when NodePools is created successfully")
 	t.Log("ScaffoldNodePool was successful")
@@ -240,7 +260,7 @@ func TestScaffoldAzureNodePool(t *testing.T) {
 	ScaffoldAzureNodePoolSpec(testHD, infraOut)
 
 	client := initClient()
-	err := client.Create(context.Background(), ScaffoldNodePool(testHD, testHD.Spec.NodePools[0].Name, testHD.Spec.NodePools[0].Spec))
+	err := client.Create(context.Background(), scaffoldTestNodePool(testHD, testHD.Spec.NodePools[0].Name, testHD.Spec.NodePools[0].Spec))
 
 	assert.Nil(t, err, "err is nil when NodePools is created successfully")
 	t.Log("ScaffoldNodePool was successful")
@@ -256,25 +276,14 @@ func genKeyFromObject(obj metav1.Object) types.NamespacedName {
 func TestHypershiftdeployment_controller(t *testing.T) {
 
 	client := initClient()
-	ctx := context.Background()
 
+	ctx := context.Background()
 	infraOut := getAWSInfrastructureOut()
 	testHD := getHypershiftDeployment("default", "test1", false)
-
 	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
 	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
 	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
-
-	hostedCluster := getHostedCluster(testHD)
-	client.Create(ctx, hostedCluster)
-	defer client.Delete(ctx, hostedCluster)
-
-	nps := getNodePools(testHD)
-	for _, np := range nps {
-		client.Create(ctx, np)
-		defer client.Delete(ctx, hostedCluster)
-	}
 
 	client.Create(ctx, testHD)
 
@@ -319,7 +328,111 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	assert.Contains(t, resultHD.Labels[constant.InfraLabelName], testHD.Name+"-", "The infra-id must contain the cluster name")
 }
 
+func TestHypershiftdeployment_controllerWithObjectRef(t *testing.T) {
+
+	client := initClient()
+	ctx := context.Background()
+
+	infraOut := getAWSInfrastructureOut()
+	testHD := getHypershiftDeployment("default", "test1", false)
+
+	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
+	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+	}
+
+	// Add hosted cluster and nodepool to fake dynamic client
+	var fakeObjList []runtime.Object
+	hostedCluster := getHostedCluster(testHD)
+	fakeObjList = append(fakeObjList, hostedCluster)
+
+	nps := getNodePools(testHD)
+	for _, np := range nps {
+		fakeObjList = append(fakeObjList, np)
+	}
+	initFakeClient(hdr, fakeObjList...)
+
+	client.Create(ctx, testHD)
+
+	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	var updated hyd.HypershiftDeployment
+	err = client.Get(ctx, getNN, &updated)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(updated.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, constant.HostingClusterMissing, c.Message, "is equal when hostingCluster is missing")
+
+	key := getManifestWorkKey(testHD)
+	manifestwork := &workv1.ManifestWork{}
+	assert.NotNil(t, client.Get(context.Background(), key, manifestwork), "err is Nil when Manifestwork is successfully created")
+	updated.Spec.HostingCluster = "local-cluster"
+	err = client.Update(context.Background(), &updated)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is updated")
+
+	// ensure the pull secret exist in cluster
+	// this pull secret is generated by the hypershift operator
+	pullSecret := getPullSecret(testHD)
+
+	client.Create(ctx, pullSecret)
+	defer client.Delete(ctx, pullSecret)
+
+	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	assert.NotNil(t, client.Get(context.Background(), key, manifestwork), "err is Nil when Manifestwork is successfully created")
+
+	var resultHD hyd.HypershiftDeployment
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	t.Log("Check infraID label")
+	assert.NotEmpty(t, resultHD.Labels, "The infra-id should always be written to the label hypershift.openshift.io/infra-id")
+	assert.Contains(t, resultHD.Labels[constant.InfraLabelName], testHD.Name+"-", "The infra-id must contain the cluster name")
+}
+
 func TestConfigureFalseWithManifestWork(t *testing.T) {
+
+	client := initClient()
+
+	testHD := getHypershiftDeployment(getNN.Namespace, getNN.Name, false)
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
+	testHD.Spec.InfraID = getNN.Name + "-AB1YZ"
+
+	client.Create(context.Background(), testHD)
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+	}
+	_, err := hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successful")
+
+	var resultHD hyd.HypershiftDeployment
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+	assert.True(t, meta.IsStatusConditionFalse(resultHD.Status.Conditions, string(hyd.WorkConfigured)), "is true when ManifestWork is not configured correctly")
+
+	err = client.Delete(context.Background(), &resultHD)
+	assert.Nil(t, err, "is nill when HypershiftDeployment resource is deleted")
+
+	_, err = hdr.Reconcile(context.Background(), ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile on delete was successful")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.True(t, errors.IsNotFound(err), "is not found when HypershiftDeployment resource is deleted successfully")
+
+	t.Log("Check infraID label")
+	assert.NotEmpty(t, resultHD.Labels, "The infra-id should always be written to the label hypershift.openshift.io/infra-id")
+	assert.Equal(t, resultHD.Labels[constant.InfraLabelName], testHD.Spec.InfraID, "The infra-id must contain the cluster name")
+}
+
+func TestConfigureFalseWithManifestWorkWithObjectRef(t *testing.T) {
 
 	client := initClient()
 
@@ -417,14 +530,14 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 
 	// Validate all known annotations
 	for a, _ := range checkHostedClusterAnnotations {
-		assert.EqualValues(t, "value--"+a, resultHC.Annotations[a], "Equal when annotation copied")
+		assert.EqualValues(t, "value--"+a, resultHC.GetAnnotations()[a], "Equal when annotation copied")
 	}
 
 	// Make sure test1 and test2 annotations were not transferred to the hostedCluster
-	_, found = resultHC.Annotations["test1"]
+	_, found = resultHC.GetAnnotations()["test1"]
 	assert.NotEqual(t, true, found, "validating annotation is present")
 
-	_, found = resultHC.Annotations["test2"]
+	_, found = resultHC.GetAnnotations()["test2"]
 	assert.NotEqual(t, true, found, "validating annotation is present")
 
 }
@@ -468,9 +581,8 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 			},
 		},
 	}
-	err := r.Create(ctx, hostedCluster)
-	defer r.Delete(ctx, hostedCluster)
-	assert.Nil(t, err, "hostedcluster is created without err")
+	var fakeObjList []runtime.Object
+	fakeObjList = append(fakeObjList, hostedCluster)
 
 	np := &hyp.NodePool{
 		TypeMeta: metav1.TypeMeta{},
@@ -492,9 +604,8 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 			NodeDrainTimeout: &metav1.Duration{},
 		},
 	}
-	err = r.Create(ctx, np)
-	defer r.Delete(ctx, np)
-	assert.Nil(t, err, "nodepool is created without err")
+	fakeObjList = append(fakeObjList, np)
+	initFakeClient(r, fakeObjList...)
 
 	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	testHD.Spec.NodePoolsRef = []corev1.LocalObjectReference{{Name: np.Name}}
@@ -513,7 +624,7 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	r.appendNodePool(ctx)(testHD, payload)
 	nps := getNodePoolsInManifestPayload(payload)
 	assert.Len(t, nps, 1, "nodepool is added in manifestwork from hypershiftdeployment nodePoolRef")
-	assert.Equal(t, nps[0].Namespace, testHD.Spec.HostingNamespace)
+	assert.Equal(t, nps[0].GetNamespace(), testHD.Spec.HostingNamespace)
 
 	// Error if HostedClusterRef not found
 	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: "not_exist"}
