@@ -6,7 +6,7 @@ This is to be an interface for ACM (Advanced Cluster Management for Kubernetes) 
   | Use case   | ManagementCluster install | HostedCluster control plane | ACM creates Infrastructure | User brings infrastructure |
   | :---------:| :-----------------------: | :-------------------------: | :------------------------: | :------------------------: |
   | (1) Hosting cluster on the ACM Hub cluster    | ACM                         | ACM                        | AWS, Azure, & Agent |
-  | (2) Hosting Cluster on a ManagedCluster | ManagedCluster              | ACM                        | AWS & Azure |
+  | (2) Hosting cluster on a ManagedCluster | ManagedCluster              | ACM                        | AWS & Azure |
 
 ## Hypershift on the ACM cluster (CURRENTLY SUPPORTED)
 This allows you to create multiple Hypershift HostedClusters on the ACM cluster.
