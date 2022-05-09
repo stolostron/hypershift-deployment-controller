@@ -72,31 +72,29 @@ func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Conte
 		}
 		unstructHostedCluster, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, hcRef.Name, v1.GetOptions{})
 		if err != nil {
-			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse,
-				fmt.Sprintf("HostedClusterRef %v:%v not found", hyd.Namespace, hcRef.Name), hypdeployment.MisConfiguredReason)
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+				fmt.Sprintf("HostedClusterRef %v:%v is not found", hyd.Namespace, hcRef.Name), hypdeployment.MisConfiguredReason)
 
-			errMsg := fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name)
-			r.Log.Error(err, errMsg)
-			return nil, fmt.Errorf(errMsg)
+			return nil, fmt.Errorf(fmt.Sprintf("failed to get HostedClusterRef: %v:%v", hyd.Namespace, hcRef.Name))
 		}
 
 		// Validate hosted cluster by converting the unstructured HC to the concrete HC obj
 		hostedClusterRef := &hyp.HostedCluster{}
 		err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructHostedCluster.UnstructuredContent(), hostedClusterRef)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to convert unstructured hosted cluster to concrete type: %v:%v", hyd.Namespace, hcRef.Name)
-			r.Log.Error(err, errMsg)
-			return nil, fmt.Errorf(errMsg)
+			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+				fmt.Sprintf("HostedClusterRef %v:%v is invalid", hyd.Namespace, hcRef.Name), hypdeployment.MisConfiguredReason)
+
+			return nil, fmt.Errorf(fmt.Sprintf("failed to validate Hosted Cluster object against current specs: %v:%v", hyd.Namespace, hcRef.Name))
 		}
 
-		// TODO: Transfer annotations - there are annotations we don't want. ..
 		hostedCluster.Object["spec"] = unstructHostedCluster.Object["spec"]
+
+		hostedCluster.SetAnnotations(transferHostedClusterAnnotations(unstructHostedCluster.GetAnnotations(), hostedCluster.GetAnnotations()))
 	} else {
 		usHcSpec, err := runtime.DefaultUnstructuredConverter.ToUnstructured(hyd.Spec.HostedClusterSpec)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to convert HypershiftDeployment.Spec.HostedClusterSpec to unstructured: %v:%v", hyd.Namespace, hyd.Name)
-			r.Log.Error(err, errMsg)
-			return nil, fmt.Errorf(errMsg)
+			return nil, fmt.Errorf(fmt.Sprintf("failed to transform HypershiftDeployment.Spec.HostedClusterSpec from hypershiftDeployment: %v:%v", hyd.Namespace, hyd.Name))
 		}
 		hostedCluster.Object["spec"] = usHcSpec
 

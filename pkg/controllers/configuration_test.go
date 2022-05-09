@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	apifixtures "github.com/openshift/hypershift/api/fixtures"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
@@ -413,4 +415,87 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 	loadManifest = r.ensureConfiguration(ctx, m)
 	err = loadManifest(configTHD, &payload3)
 	assert.Len(t, err.(utilerrors.Aggregate).Errors(), 1, "kms encryption secrets not found")
+}
+
+// Test configmap in nodepool is added to manifestwork payload
+func TestNodePoolConfigMaps(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+		Log:    ctrl.Log.WithName("tester"),
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.NodePools = []*hyd.HypershiftNodePools{}
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
+
+	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	var fakeObjList []runtime.Object
+	fakeObjList = append(fakeObjList, hostedCluster)
+
+	// Create configmap and add it to the nodepool
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "np-test-cm",
+			Namespace: testHD.GetNamespace(),
+		},
+		Data: map[string]string{
+			".dockerconfigjson": "docker-configmap",
+		},
+	}
+	client.Create(ctx, cm)
+	defer client.Delete(ctx, cm)
+
+	nps := getNodePools(testHD)
+	nps[0].Spec.Config = []corev1.LocalObjectReference{{Name: cm.Name}}
+	for _, np := range nps {
+		fakeObjList = append(fakeObjList, np)
+	}
+	initFakeClient(hdr, fakeObjList...)
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	m, err := ScaffoldManifestwork(testHD)
+	assert.Nil(t, err)
+	payload := []workv1.Manifest{}
+	hdr.appendHostedCluster(ctx)(testHD, &payload)
+	hdr.appendNodePool(ctx)(testHD, &payload)
+	hdr.ensureConfiguration(ctx, m)(testHD, &payload)
+
+	containsInPayload := func(wls []workv1.Manifest, cm *corev1.ConfigMap, hostingNs string) bool {
+		for _, wl := range wls {
+			if wl.Object.GetObjectKind().GroupVersionKind().Kind == "ConfigMap" {
+				cmObj := wl.Object.(*corev1.ConfigMap)
+				if cmObj.Namespace == hostingNs && cmObj.Name == cm.Name {
+					return true
+				}
+			}
+		}
+
+		return false
+	}
+
+	// Find nodepool configmap in payload
+	assert.True(t, containsInPayload(payload, cm, testHD.Spec.HostingNamespace), "true if configmap is found in the payload")
+
+	// Test configMap in hypD.Spect.NodePools.Spec.Config
+	testHD = getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
+
+	// Add configmap to nodepool
+	testHD.Spec.NodePools[0].Spec.Config = []corev1.LocalObjectReference{{Name: cm.Name}}
+
+	m, err = ScaffoldManifestwork(testHD)
+	assert.Nil(t, err)
+	payload = []workv1.Manifest{}
+	hdr.appendHostedCluster(ctx)(testHD, &payload)
+	hdr.appendNodePool(ctx)(testHD, &payload)
+	hdr.ensureConfiguration(ctx, m)(testHD, &payload)
+
+	// Find nodepool configmap in payload
+	assert.True(t, containsInPayload(payload, cm, testHD.Spec.HostingNamespace), "true if configmap is found in the payload")
 }

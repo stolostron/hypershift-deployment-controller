@@ -393,20 +393,19 @@ func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loa
 				}
 				unstructNodePool, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, npRef.Name, v1.GetOptions{})
 				if err != nil {
-					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse,
-						fmt.Sprintf("NodePoolRef %v:%v not found", hyd.Namespace, npRef.Name), hypdeployment.MisConfiguredReason)
+					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+						fmt.Sprintf("NodePoolRef %v:%v is not found", hyd.Namespace, npRef.Name), hypdeployment.MisConfiguredReason)
 
-					errMsg := fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, npRef.Name)
-					r.Log.Error(err, errMsg)
-					return fmt.Errorf(errMsg)
+					return fmt.Errorf(fmt.Sprintf("failed to get NodePoolRef: %v:%v", hyd.Namespace, npRef.Name))
 				}
 
 				npObj := &hyp.NodePool{}
 				err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructNodePool.UnstructuredContent(), npObj)
 				if err != nil {
-					errMsg := fmt.Sprintf("failed to convert unstructured node pool to concrete type: %v:%v", hyd.Namespace, npRef.Name)
-					r.Log.Error(err, errMsg)
-					return fmt.Errorf(errMsg)
+					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+						fmt.Sprintf("NodePoolRef %v:%v is invalid", hyd.Namespace, npRef.Name), hypdeployment.MisConfiguredReason)
+
+					return fmt.Errorf(fmt.Sprintf("failed to validate Node Pool against current specs: %v:%v", hyd.Namespace, npRef.Name))
 				}
 
 				// Just use the spec from the nodepool object ref
@@ -417,9 +416,7 @@ func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loa
 			for _, hdNp := range hyd.Spec.NodePools {
 				usNpSpec, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&hdNp.Spec)
 				if err != nil {
-					errMsg := fmt.Sprintf("failed to convert node pool spec to unstructured: %v:%v", hyd.Namespace, hdNp.Name)
-					r.Log.Error(err, errMsg)
-					return fmt.Errorf(errMsg)
+					return fmt.Errorf(fmt.Sprintf("failed to transform HypershiftDeployment.Spec.NodePools from hypershiftDeployment: %v:%v", hyd.Namespace, hdNp.Name))
 				}
 
 				np := ScaffoldNodePool(hyd, hdNp.Name, usNpSpec)
@@ -668,7 +665,7 @@ func getHostedClusterInManifestPayload(manifests *[]workv1.Manifest) *hyp.Hosted
 			hostedCluster := &hyp.HostedCluster{}
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(v.Object.(*unstructured.Unstructured).UnstructuredContent(), hostedCluster)
 			if err != nil {
-				mLog.Error(err, "failed to unstructured HostedCluster to concrete type")
+				mLog.Error(err, "failed to convert unstructured HostedCluster to concrete type")
 				return nil
 			}
 
@@ -679,11 +676,18 @@ func getHostedClusterInManifestPayload(manifests *[]workv1.Manifest) *hyp.Hosted
 	return nil
 }
 
-func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*unstructured.Unstructured {
-	nodePools := []*unstructured.Unstructured{}
+func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*hyp.NodePool {
+	nodePools := []*hyp.NodePool{}
 	for _, v := range *manifests {
 		if v.Object.GetObjectKind().GroupVersionKind().Kind == "NodePool" {
-			nodePools = append(nodePools, v.Object.(*unstructured.Unstructured))
+			np := &hyp.NodePool{}
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(v.Object.(*unstructured.Unstructured).UnstructuredContent(), np)
+			if err != nil {
+				mLog.Error(err, "failed to convert unstructured NodePool to concrete type")
+				return nil
+			}
+
+			nodePools = append(nodePools, np)
 		}
 	}
 

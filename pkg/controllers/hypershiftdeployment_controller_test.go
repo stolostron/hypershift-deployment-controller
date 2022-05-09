@@ -522,14 +522,14 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 	assert.Equal(t, true, found, "validating annotation is present")
 
 	// Add all known annotations
-	for a, _ := range checkHostedClusterAnnotations {
+	for a := range checkHostedClusterAnnotations {
 		testHD.Annotations[a] = "value--" + a
 	}
 
 	resultHC, _ := r.scaffoldHostedCluster(ctx, testHD)
 
 	// Validate all known annotations
-	for a, _ := range checkHostedClusterAnnotations {
+	for a := range checkHostedClusterAnnotations {
 		assert.EqualValues(t, "value--"+a, resultHC.GetAnnotations()[a], "Equal when annotation copied")
 	}
 
@@ -542,11 +542,38 @@ func TestHypershiftDeploymentToHostedClusterAnnotationTransfer(t *testing.T) {
 
 }
 
+func TestHypershiftDeploymentToHostedRefClusterAnnotationTransfer(t *testing.T) {
+	r := GetHypershiftDeploymentReconciler()
+	ctx := context.Background()
+
+	testHD := getHDforManifestWork()
+
+	hostedCluster := getHostedCluster(testHD)
+	hostedCluster.Annotations = make(map[string]string)
+	hostedCluster.Annotations[hyp.DisablePKIReconciliationAnnotation] = "value1"
+	hostedCluster.Annotations["test2"] = "value2"
+
+	var fakeObjList []runtime.Object
+	fakeObjList = append(fakeObjList, hostedCluster)
+	initFakeClient(r, fakeObjList...)
+
+	resultHC, _ := r.scaffoldHostedCluster(ctx, testHD)
+
+	// Make sure test1 and test2 annotations were transferred to the hostedCluster
+	found := resultHC.GetAnnotations()[hyp.DisablePKIReconciliationAnnotation]
+	assert.Equal(t, found, "value1")
+
+	found = resultHC.GetAnnotations()["test2"]
+	assert.Equal(t, found, "")
+}
+
 // TODO Azure test using provider secret
 
 func TestLocalObjectReferencesForHCandNP(t *testing.T) {
-	r := GetHypershiftDeploymentReconciler()
-
+	client := initClient()
+	r := &HypershiftDeploymentReconciler{
+		Client: client,
+	}
 	ctx := context.Background()
 
 	// HD with configure=F
@@ -628,10 +655,17 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 
 	// Error if HostedClusterRef not found
 	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: "not_exist"}
-	err = r.Create(ctx, testHD)
+	r.Create(ctx, testHD)
 	defer r.Delete(ctx, testHD)
 
 	_, err = r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}})
 	assert.NotNil(t, err, "is not nil when HostedClusterRef is not found")
 	assert.Contains(t, err.Error(), "failed to get HostedClusterRef: default:not_exist", "error contains HostedClusterRef is not found message")
+
+	var resultHD hyd.HypershiftDeployment
+	err = r.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is not found", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is missing")
 }

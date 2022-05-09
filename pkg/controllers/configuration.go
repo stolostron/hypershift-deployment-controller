@@ -205,7 +205,9 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			}
 		}
 
-		for _, np := range hyd.Spec.NodePools {
+		// Get nodepool from manifestwork instead of hypD
+		nodepools := getNodePoolsInManifestPayload(payload)
+		for _, np := range nodepools {
 			if len(np.Spec.Config) != 0 {
 				configMapRefs = append(configMapRefs, np.Spec.Config...)
 			}

@@ -1329,4 +1329,11 @@ func TestManifestWorkHostedClusterAttributes(t *testing.T) {
 
 	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
 	assert.NotNil(t, err, "err nil when reconcile was successfull")
+
+	var resultHD hyd.HypershiftDeployment
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is invalid", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is invalid")
 }
