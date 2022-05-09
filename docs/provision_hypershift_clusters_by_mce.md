@@ -5,8 +5,8 @@ The multicluster-engine(MCE) has been installed and at least one OCP managed clu
 ## Enable the hypershift related components on the hub cluster
 
 Because hypershift is a TP feature, the related components are disabled by default. we should enable it by editing the multiclusterengine resource to set the `spec.overrides.components[?(@.name=='hypershift-preview')].enabled` to `true`
-```
-╰─$ oc get mce multiclusterengine-sample -ojsonpath="{.spec.overrides.components[?(@.name=='hypershift-preview')].enabled}"
+```bash
+$ oc get mce multiclusterengine-sample -ojsonpath="{.spec.overrides.components[?(@.name=='hypershift-preview')].enabled}"
 true
 ```
 
@@ -15,8 +15,8 @@ true
 We call the cluster with the hypershift operator installed as the hypershift management cluster. In this section, we will use hypershift-addon to install a hypershift operator to one of the managed cluster.
 
 1. Create ManagedClusterAddon hypershift-addon
-```
-╰─$ oc apply -f - <<EOF
+```bash
+$ oc apply -f - <<EOF
 apiVersion: addon.open-cluster-management.io/v1alpha1
 kind: ManagedClusterAddOn
 metadata:
@@ -31,12 +31,12 @@ EOF
 
 The secret must contain 3 fields:
 - `bucket`: An S3 bucket with public access to host OIDC discovery documents for your hypershift clusters
-- `credentials`: region of the bucket
-- `region`: credentials to access the bucket
+- `credentials`: credentials to access the bucket
+- `region`: region of the s3 bucket
 
 For details, please check: https://hypershift-docs.netlify.app/getting-started/ , you can create this secret by:
-```
-oc create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=$HOME/.aws/credentials --from-literal=bucket=<s3-bucket-for-hypershift> --from-literal=region=<region> -n <hypershift-management-cluster>
+```bash
+$ oc create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=$HOME/.aws/credentials --from-literal=bucket=<s3-bucket-for-hypershift> --from-literal=region=<region> -n <hypershift-management-cluster>
 ```
 
 Add the special label to the `hypershift-operator-oidc-provider-s3-credentials` secret so that the secret is backed up for disaster recovery.
@@ -45,8 +45,8 @@ oc label secret hypershift-operator-oidc-provider-s3-credentials -n <hypershift-
 ```
 
 3. Check the hypershift-addon is installed
-```
-╰─# oc get managedclusteraddons -n local-cluster hypershift-addon
+```bash
+$ oc get managedclusteraddons -n local-cluster hypershift-addon
 NAME               AVAILABLE   DEGRADED   PROGRESSING
 hypershift-addon   True
 ```
@@ -56,38 +56,39 @@ hypershift-addon   True
 After the hypershift operator is installed, we can provision a hypershift hosted cluster by `HypershiftDeployment`
 
 1. Create a cloud provider secret, it has the following format for AWS:
-```
-  apiVersion: v1
-  metadata:
-      name: my-aws-cred
-      namespace: default      # Where you will create HypershiftDeployment resources
-  type: Opaque
-  kind: Secret
-  stringData:
-      ssh-publickey:          # Value
-      ssh-privatekey:         # Value
-      pullSecret:             # Value, required
-      baseDomain:             # Value, required
-      aws_secret_access_key:  # Value, required
-      aws_access_key_id:      # Value, required
+```yaml
+apiVersion: v1
+metadata:
+  name: my-aws-cred
+  namespace: default      # Where you will create HypershiftDeployment resources
+type: Opaque
+kind: Secret
+stringData:
+  ssh-publickey:          # Value
+  ssh-privatekey:         # Value
+  pullSecret:             # Value, required
+  baseDomain:             # Value, required
+  aws_secret_access_key:  # Value, required
+  aws_access_key_id:      # Value, required
 ```
 
 You can create this secret by:
-- ACM console: https://<Advanced-Cluster-Management-Console>/credentials/add
+- ACM console: `https://<Advanced-Cluster-Management-Console>/multicloud/credentials/create`
 
 or
-- oc commands
-```
-oc create secret generic <my-secret> -n <hypershift-deployment-namespace> --from-literal=baseDomain='your.domain.com' --from-literal=aws_access_key_id='your-aws-access-key' --from-literal=aws_secret_access_key='your-aws-secret-key' --from-literal=pullSecret='{"auths":{"cloud.openshift.com":{"auth":"auth-info", "email":"xx@redhat.com"}, "quay.io":{"auth":"auth-info", "email":"xx@redhat.com"} } }' --from-literal=ssh-publickey='your-ssh-publickey' --from-literal=ssh-privatekey='your-ssh-privatekey'
 
-oc label secret <my-secret> -n <hypershift-deployment-namespace> cluster.open-cluster-management.io/backup=true
+- oc commands
+```bash
+$ oc create secret generic <my-secret> -n <hypershift-deployment-namespace> --from-literal=baseDomain='your.domain.com' --from-literal=aws_access_key_id='your-aws-access-key' --from-literal=aws_secret_access_key='your-aws-secret-key' --from-literal=pullSecret='{"auths":{"cloud.openshift.com":{"auth":"auth-info", "email":"xx@redhat.com"}, "quay.io":{"auth":"auth-info", "email":"xx@redhat.com"} } }' --from-literal=ssh-publickey='your-ssh-publickey' --from-literal=ssh-privatekey='your-ssh-privatekey'
+
+$ oc label secret <my-secret> -n <hypershift-deployment-namespace> cluster.open-cluster-management.io/backup=true
 ```
 
 Note: `cluster.open-cluster-management.io/backup=true` is added to the secret so that the secret is backed up for disaster recovery.
 
 2. Create a HypershiftDeployment in the cloud provider secret namespace
-```
-╰─$ oc apply -f - <<EOF                                                                                                          130 ↵
+```bash
+$ oc apply -f - <<EOF
 apiVersion: cluster.open-cluster-management.io/v1alpha1
 kind: HypershiftDeployment
 metadata:
@@ -109,13 +110,13 @@ EOF
 Check each field [definition](./../api/v1alpha1/hypershiftdeployment_types.go)
 
 3. Check the HypershiftDeployment status
-```
-oc get hypershiftdeployment -n default hypershift-demo -w
+```bash
+$ oc get hypershiftdeployment -n default hypershift-demo -w
 ```
 
 4. After the hosted cluster is created, it will be imported to the hub automatically, you can check it with:
-```
-oc get managedcluster <hypershiftDeployment.Spec.infraID>
+```bash
+$ oc get managedcluster <hypershiftDeployment.Spec.infraID>
 ```
 
 ## Access the hosted cluster
@@ -128,13 +129,13 @@ The formats of the secrets name are:
 ## Destroying your hypershift Hosted cluster
 
 Delete the HypershiftDeployment resource
-```
-oc delete hypershiftdeployment hypershift-demo -n default
+```bash
+$ oc delete hypershiftdeployment hypershift-demo -n default
 ```
 
 ## Destroying hypershift operator
 
 Delete the hypershift-addon
-```
-oc delete managedclusteraddon -n <hypershift-management-cluster> hypershift-addon
+```bash
+$ oc delete managedclusteraddon -n <hypershift-management-cluster> hypershift-addon
 ```
