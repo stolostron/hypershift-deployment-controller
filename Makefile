@@ -95,6 +95,9 @@ docker-build: #test ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
+.PHONY: docker
+docker: docker-build docker-push ## Build and Psh the docker image
+
 ##@ Deployment
 
 ifndef ignore-not-found

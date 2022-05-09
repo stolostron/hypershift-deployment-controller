@@ -31,7 +31,6 @@ import (
 )
 
 func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
-	oHyd := *hyd.DeepCopy()
 	log := r.Log
 
 	if hyd.Spec.Infrastructure.Platform.Azure.Location == "" {
@@ -50,6 +49,8 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 	}
 	if !meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured)) {
 		log.Info("Creating infrastructure in Azure that will be used by the HypershiftDeployment, HostedClusters & NodePools")
+		setStatusCondition(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "Platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.NotApplicableReason)
+		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 
 		infraOut, err := r.InfraHandler.AzureInfraCreator(
 			hyd.GetName(),
@@ -74,7 +75,7 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 		hyd.Spec.HostedClusterSpec.Platform.Azure.SubscriptionID = credentials.SubscriptionID
 		ScaffoldAzureNodePoolSpec(hyd, infraOut)
 
-		if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
+		if err := r.patchHypershiftDeploymentResource(hyd); err != nil {
 			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
 			return ctrl.Result{}, err
 		}

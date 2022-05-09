@@ -111,8 +111,6 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}
 
-	oHyd := *hyd.DeepCopy()
-
 	if hyd.Spec.InfraID == "" {
 		hyd.Spec.InfraID = fmt.Sprintf("%s-%s", hyd.GetName(), utilrand.String(5))
 		log.Info("Using INFRA-ID: " + hyd.Spec.InfraID)
@@ -128,22 +126,9 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 			hyd.Labels[constant.InfraLabelName] = hyd.Spec.InfraID
 		}
 
-		if err := r.patchHypershiftDeploymentResource(&hyd, &oHyd); err != nil || hyd.Spec.InfraID == "" {
+		if err := r.patchHypershiftDeploymentResource(&hyd); err != nil || hyd.Spec.InfraID == "" {
 			return ctrl.Result{}, fmt.Errorf("failed to update infra-id: \"%s\" and error: %w", hyd.Spec.InfraID, err)
 		}
-
-		oHyd = *hyd.DeepCopy()
-
-		// Update the status.conditions. This only works the first time, so if you fix an issue, it will still be set to PlatformXXXMisConfigured
-		setStatusCondition(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
-		if hyd.Spec.Infrastructure.Platform != nil {
-			if hyd.Spec.Infrastructure.Platform.AWS != nil {
-				setStatusCondition(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
-			} else if hyd.Spec.Infrastructure.Platform.Azure != nil {
-				setStatusCondition(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.NotApplicableReason)
-			}
-		}
-		_ = r.updateStatusConditionsOnChange(&hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "Configuring ManifestWork: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 	}
 
 	// Destroying Platform infrastructure used by the HypershiftDeployment scheduled for deletion
@@ -155,6 +140,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		if hyd.Spec.Infrastructure.Platform == nil {
 			return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
 		}
+
 		if hyd.Spec.Infrastructure.Platform.AWS != nil {
 			if requeue, err := r.createAWSInfra(&hyd, &providerSecret); err != nil {
 				return requeue, err
@@ -200,7 +186,6 @@ func (r *HypershiftDeploymentReconciler) setDefaultValueForHostedCluster(ctx con
 
 	log := r.Log
 
-	oHyd := *hyd.DeepCopy()
 	spec := hyd.Spec.HostedClusterSpec
 	needsUpdate := false
 	if spec.ClusterID == "" {
@@ -215,7 +200,7 @@ func (r *HypershiftDeploymentReconciler) setDefaultValueForHostedCluster(ctx con
 		log.Info("Setting OLMCatalogPlacement", "OLMCatalogPlacement", hyd.Spec.HostedClusterSpec.OLMCatalogPlacement)
 	}
 	if needsUpdate {
-		if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
+		if err := r.patchHypershiftDeploymentResource(hyd); err != nil {
 			return fmt.Errorf("failed to update infra-id: \"%s\" and  olm-catalog-placement: \"%s\",error: %w",
 				hyd.Spec.HostedClusterSpec.ClusterID, hyd.Spec.HostedClusterSpec.OLMCatalogPlacement, err)
 		}
@@ -305,8 +290,16 @@ func (r *HypershiftDeploymentReconciler) updateStatusConditionsOnChange(
 	return err
 }
 
-func (r *HypershiftDeploymentReconciler) patchHypershiftDeploymentResource(hyd *hypdeployment.HypershiftDeployment, inHyd *hypdeployment.HypershiftDeployment) error {
-	err := r.Client.Patch(r.ctx, hyd, client.MergeFrom(inHyd))
+func (r *HypershiftDeploymentReconciler) patchHypershiftDeploymentResource(hyd *hypdeployment.HypershiftDeployment) error {
+
+	// Reduce the risk of a patch conflict
+	inHyd := hypdeployment.HypershiftDeployment{}
+	if err := r.Client.Get(r.ctx, types.NamespacedName{Name: hyd.Name, Namespace: hyd.Namespace}, &inHyd); err != nil {
+		return err
+	}
+
+	hyd.ResourceVersion = inHyd.ResourceVersion
+	err := r.Client.Patch(r.ctx, hyd, client.MergeFrom(&inHyd))
 	if err != nil {
 		if apierrors.IsConflict(err) {
 			r.Log.Error(err, "Conflict encountered when patching HypershiftDeployment")
