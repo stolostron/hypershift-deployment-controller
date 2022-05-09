@@ -4,18 +4,22 @@ import (
 	"context"
 	"testing"
 
+	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	hyd "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	hydapi "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
@@ -25,6 +29,8 @@ var s = clientgoscheme.Scheme
 
 func init() {
 	clientgoscheme.AddToScheme(s)
+	hyd.AddToScheme(s)
+	hyp.AddToScheme(s)
 }
 
 func GetHypershiftDeployment(namespace string, name string, hostingCluster string, hostingNamespace string, override hydapi.InfraOverride) *hydapi.HypershiftDeployment {
@@ -46,11 +52,16 @@ func GetHypershiftDeploymentReconciler() *HypershiftDeploymentReconciler {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
 
 	return &HypershiftDeploymentReconciler{
-		Client: clientfake.NewClientBuilder().WithScheme(s).Build(),
-		Log:    ctrl.Log.WithName("controllers").WithName("HypershiftDeploymentReconciler"),
-		Scheme: s,
-		ctx:    context.TODO(),
+		Client:       clientfake.NewClientBuilder().WithScheme(s).Build(),
+		Scheme:       s,
+		ctx:          context.TODO(),
+		Log:          ctrl.Log.WithName("controllers").WithName("HypershiftDeploymentReconciler"),
+		InfraHandler: nil,
 	}
+}
+
+func initFakeClient(r *HypershiftDeploymentReconciler, objects ...runtime.Object) {
+	r.DynamicClient = fake.NewSimpleDynamicClient(s, objects...)
 }
 
 func TestOidcDiscoveryURL(t *testing.T) {

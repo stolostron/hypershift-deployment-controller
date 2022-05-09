@@ -15,7 +15,7 @@ import (
 //Does not include Location
 func getFakeAzureHD() *hydapi.HypershiftDeployment {
 	infraOut := getAzureInfrastructureOut()
-	testHD := getHypershiftDeployment("default", "test1")
+	testHD := getHypershiftDeployment("default", "test1", false)
 
 	testHD.Spec.HostingCluster = "local-cluster"
 	testHD.Spec.InfraID = infraOut.InfraID

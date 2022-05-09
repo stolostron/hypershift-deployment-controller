@@ -23,6 +23,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"k8s.io/client-go/dynamic"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"github.com/go-logr/logr"
@@ -100,10 +101,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	dynamicClient, _ := dynamic.NewForConfig(ctrl.GetConfigOrDie())
 	if err = (&controllers.HypershiftDeploymentReconciler{
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		InfraHandler: &controllers.DefaultInfraHandler{},
+		Client:        mgr.GetClient(),
+		DynamicClient: dynamicClient,
+		Scheme:        mgr.GetScheme(),
+		InfraHandler:  &controllers.DefaultInfraHandler{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "HypershiftDeployment")
 		os.Exit(1)

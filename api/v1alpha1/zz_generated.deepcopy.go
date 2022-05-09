@@ -23,7 +23,8 @@ package v1alpha1
 
 import (
 	apiv1alpha1 "github.com/openshift/hypershift/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -160,6 +161,7 @@ func (in *HypershiftDeploymentSpec) DeepCopyInto(out *HypershiftDeploymentSpec) 
 		*out = new(apiv1alpha1.HostedClusterSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	out.HostedClusterRef = in.HostedClusterRef
 	if in.NodePools != nil {
 		in, out := &in.NodePools, &out.NodePools
 		*out = make([]*HypershiftNodePools, len(*in))
@@ -170,6 +172,11 @@ func (in *HypershiftDeploymentSpec) DeepCopyInto(out *HypershiftDeploymentSpec) 
 				(*in).DeepCopyInto(*out)
 			}
 		}
+	}
+	if in.NodePoolsRef != nil {
+		in, out := &in.NodePoolsRef, &out.NodePoolsRef
+		*out = make([]v1.LocalObjectReference, len(*in))
+		copy(*out, *in)
 	}
 	if in.Credentials != nil {
 		in, out := &in.Credentials, &out.Credentials
@@ -193,7 +200,7 @@ func (in *HypershiftDeploymentStatus) DeepCopyInto(out *HypershiftDeploymentStat
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
