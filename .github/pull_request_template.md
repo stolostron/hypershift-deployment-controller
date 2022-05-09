@@ -6,13 +6,15 @@
 ## Why do we need this PR:
 *  
 
-<!-- include the jira or github issue link. Github issue linkes help identify this PR in your issue -->
+<!-- include the Jira or GitHub issue link. Github issue links help identify this PR in your issue -->
 ## Issue reference: 
 * 
 
 <!-- the last few lines, showing the test coverage and success.
-     Use the output from "make test" or vscode golang Test All output -->
+     Use the output from "make test" or vscode golang Test All output.
+     Add any additional test output that is relevant -->
 ## Test API/Unit - Success
 ```script
 
 ```
+
