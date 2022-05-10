@@ -122,30 +122,38 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 	$(KUSTOMIZE) build config/deployment | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
+CONTROLLER_GEN_PACKAGE ?= sigs.k8s.io/controller-tools/cmd/controller-gen@v0.7.0
 .PHONY: controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.7.0)
+	$(call go-get-tool,$(CONTROLLER_GEN),$(CONTROLLER_GEN_PACKAGE))
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
+KUSTOMIZE_PACKAGE ?= sigs.k8s.io/kustomize/kustomize/v3@v3.8.7
 .PHONY: kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
+	$(call go-get-tool,$(KUSTOMIZE),$(KUSTOMIZE_PACKAGE))
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
+ENVTEST_PACKAGE ?= sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 .PHONY: envtest
 envtest: ## Download envtest-setup locally if necessary.
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	$(call go-get-tool,$(ENVTEST),$(ENVTEST_PACKAGE))
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 define go-get-tool
+	$(call go-get-tool-internal,$(1),$(2),$(firstword $(subst @, ,$(2))))
+endef
+
+define go-get-tool-internal
 @[ -f $(1) ] || { \
 set -e ;\
 TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin go get -d $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin go install $(3) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef

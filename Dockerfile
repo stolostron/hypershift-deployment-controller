@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.ci.openshift.org/stolostron/builder:go1.17-linux as builder
+FROM registry.ci.openshift.org/stolostron/builder:go1.18-linux as builder
 
 WORKDIR /go/src/github.com/stolostron/hypershift-deployment-controller
 # Copy the Go Modules manifests
