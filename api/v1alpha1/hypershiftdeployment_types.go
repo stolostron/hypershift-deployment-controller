@@ -213,12 +213,9 @@ type HypershiftDeploymentStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="TYPE",type="string",JSONPath=".spec.hostedClusterSpec.platform.type",description="Infrastructure type"
 // +kubebuilder:printcolumn:name="INFRA",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].reason",description="Reason"
-// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformInfrastructureConfigured\")].status",description="Configured"
 // +kubebuilder:printcolumn:name="IAM",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].reason",description="Reason"
-// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"PlatformIAMConfigured\")].status",description="Configured"
 // +kubebuilder:printcolumn:name="MANIFESTWORK",type="string",JSONPath=".status.conditions[?(@.type==\"ManifestWorkConfigured\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="PROVIDER REF",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].reason",description="Reason"
-// +kubebuilder:printcolumn:name="Found",type="string",JSONPath=".status.conditions[?(@.type==\"ProviderSecretConfigured\")].status",description="Found"
 // +kubebuilder:printcolumn:name="PROGRESS",type="string",JSONPath=".status.conditions[?(@.type==\"HostedClusterProgress\")].reason",description="Reason"
 // +kubebuilder:printcolumn:name="AVAILABLE",type="string",JSONPath=".status.conditions[?(@.type==\"HostedClusterAvailable\")].status",description="Available"
 

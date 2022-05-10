@@ -37,8 +37,6 @@ import (
 func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
 	var iamOut *aws.CreateIAMOutput
-	oHyd := *hyd.DeepCopy()
-
 	ctx := r.ctx
 	log := r.Log
 
@@ -52,6 +50,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 		!meta.IsStatusConditionTrue(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured)) {
 
 		log.Info("Creating infrastructure on the provider that will be used by the HypershiftDeployment, HostedClusters & NodePools")
+		_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Configuring platform with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason)
 		infraOut, err := r.InfraHandler.AwsInfraCreator(
 			string(providerSecret.Data["aws_access_key_id"]),
 			string(providerSecret.Data["aws_secret_access_key"]),
@@ -59,7 +58,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			hyd.Spec.InfraID,
 			hyd.GetName(),
 			string(providerSecret.Data["baseDomain"]),
-		)(r.ctx)
+		)(ctx)
 		if err != nil {
 			log.Error(err, "Could not create infrastructure")
 
@@ -75,7 +74,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 		ScaffoldAWSHostedClusterSpec(hyd, infraOut)
 		ScaffoldAWSNodePoolSpec(hyd, infraOut)
 
-		if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
+		if err := r.patchHypershiftDeploymentResource(hyd); err != nil {
 			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
 			return ctrl.Result{}, err
 		}
@@ -85,11 +84,9 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 		}
 		log.Info("Infrastructure configured")
 
-		if err := r.Get(ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: hyd.Name}, hyd); err != nil {
-			return ctrl.Result{}, nil
+		if err = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Configuring platform IAM with infra-id: "+hyd.Spec.InfraID, hypdeployment.BeingConfiguredReason); err != nil {
+			return ctrl.Result{}, err
 		}
-
-		oHyd = *hyd.DeepCopy()
 
 		oidcSPName, oidcSPRegion, iamErr := oidcDiscoveryURL(r, hyd)
 		if iamErr == nil {
@@ -103,7 +100,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 				infraOut.PrivateZoneID,
 				infraOut.PublicZoneID,
 				infraOut.LocalZoneID,
-			)(r.ctx, r.Client)
+			)(ctx, r.Client)
 			if iamErr != nil {
 				_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured,
 					metav1.ConditionFalse,
@@ -120,14 +117,16 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 					KubeCloudControllerARN:  iamOut.KubeCloudControllerRoleARN,
 					NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
 				}}
-			if err := r.patchHypershiftDeploymentResource(hyd, &oHyd); err != nil {
+			if err := r.patchHypershiftDeploymentResource(hyd); err != nil {
 				return ctrl.Result{},
 					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured,
 						metav1.ConditionFalse,
 						err.Error(),
 						hypdeployment.MisConfiguredReason)
 			}
-			_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason)
+			if err := r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionTrue, "", hypdeployment.ConfiguredAsExpectedReason); err != nil {
+				return ctrl.Result{}, err
+			}
 			log.Info("IAM configured")
 		}
 	}

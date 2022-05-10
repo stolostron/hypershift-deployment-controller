@@ -28,17 +28,9 @@ spec:
       jsonPath: .status.conditions[?(@.type=="PlatformInfrastructureConfigured")].reason
       name: INFRA
       type: string
-    - description: Configured
-      jsonPath: .status.conditions[?(@.type=="PlatformInfrastructureConfigured")].status
-      name: Ready
-      type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="PlatformIAMConfigured")].reason
       name: IAM
-      type: string
-    - description: Configured
-      jsonPath: .status.conditions[?(@.type=="PlatformIAMConfigured")].status
-      name: Ready
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="ManifestWorkConfigured")].reason
@@ -47,10 +39,6 @@ spec:
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].reason
       name: PROVIDER REF
-      type: string
-    - description: Found
-      jsonPath: .status.conditions[?(@.type=="ProviderSecretConfigured")].status
-      name: Found
       type: string
     - description: Reason
       jsonPath: .status.conditions[?(@.type=="HostedClusterProgress")].reason
