@@ -153,6 +153,10 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				return requeue, err
 			}
 		}
+	} else {
+		_ = r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Platform IAM configuration is not applicable for Spec.Infrastructure.Configure=False", hypdeployment.NotApplicableReason)
+
+		_ = r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformConfigured, metav1.ConditionFalse, "Platform configuration is not applicable for Spec.Infrastructure.Configure=False", hypdeployment.NotApplicableReason)
 	}
 
 	// Just build the infrastruction platform, do not deploy HostedCluster and NodePool(s)

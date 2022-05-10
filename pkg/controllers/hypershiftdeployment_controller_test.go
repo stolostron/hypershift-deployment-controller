@@ -466,6 +466,14 @@ func TestConfigureFalseWithManifestWorkWithObjectRef(t *testing.T) {
 	t.Log("Check infraID label")
 	assert.NotEmpty(t, resultHD.Labels, "The infra-id should always be written to the label hypershift.openshift.io/infra-id")
 	assert.Equal(t, resultHD.Labels[constant.InfraLabelName], testHD.Spec.InfraID, "The infra-id must contain the cluster name")
+
+	// Check PlatformConfigure and PlatformIAMConfigure status conditions
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.PlatformConfigured))
+	assert.Equal(t, hypdeployment.NotApplicableReason, c.Reason, "is equal when Platform configure status condition is correct")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.PlatformIAMConfigured))
+	assert.Equal(t, hypdeployment.NotApplicableReason, c.Reason, "is equal when Platform IAM configure status condition is correct")
+
 }
 
 func getSecret(secretName string) *corev1.Secret {
