@@ -651,7 +651,8 @@ func getManifestPayloadSecretByName(manifests *[]workv1.Manifest, secretName str
 				}
 				return secret, nil
 			}
-		} else if v.Object != nil && v.Object.GetObjectKind().GroupVersionKind().Kind == "Secret" {
+		} else if v.Object != nil && v.Object.GetObjectKind().GroupVersionKind().Kind == "Secret" &&
+			v.Object.(*corev1.Secret).Name == secretName {
 			return v.Object.(*corev1.Secret), nil
 		}
 	}

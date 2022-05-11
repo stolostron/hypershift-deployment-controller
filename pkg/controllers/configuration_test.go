@@ -123,7 +123,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 	defer r.Delete(ctx, userBackupKeySecret)
 	assert.Nil(t, err, "backup encryption secret should be created with no error")
 
-	// Test configure=T - not encryption secret - generate AESCBC encryption secret
+	// Test configure=T - no encryption secret specified - generate AESCBC encryption secret
 	configTHD := getHDforSecretEncryption(true)
 	scaffoldHostedClusterSpec(configTHD)
 	assert.Equal(t, hyp.AESCBC, configTHD.Spec.HostedClusterSpec.SecretEncryption.Type, "secretEncryption should default to AESCBC for configure=T")
@@ -137,26 +137,28 @@ func TestHDEncryptionSecret(t *testing.T) {
 	loadManifest := r.ensureConfiguration(ctx, m)
 	err = loadManifest(configTHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload, 2, "only 1 manifestwork payload which is the generated encryption secret")
-	payload0Obj := payload[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, configTHD.Name+"-etcd-encryption-key", payload0Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configTHD.Spec.HostingNamespace, payload0Obj.(*corev1.Secret).Namespace)
+	assert.Len(t, payload, 2, "2 manifestwork payload which is the hostedcluster and the generated encryption secret")
+	payloadSec, _ := getManifestPayloadSecretByName(&payload, configTHD.Name+"-etcd-encryption-key")
+	assert.NotNil(t, payloadSec, "is not nil when encryption secret is found")
+	assert.Equal(t, configTHD.Spec.HostingNamespace, payloadSec.GetNamespace())
 
 	// Test configure=T - use encryption secret found in old manifestwork payload
-	payload[0].Raw, _ = json.Marshal(payload0Obj)
-	m.Spec.Workload.Manifests = payload
-	payload2 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configTHD, &payload2)
+	oSec := payloadSec
+	oSecPayload := workv1.Manifest{}
+	oSecPayload.Raw, _ = json.Marshal(oSec)
+	m.Spec.Workload.Manifests = []workv1.Manifest{oSecPayload}
+
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configTHD, &payload2)
+	err = loadManifest(configTHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload2, 2, "only 1 manifestwork payload which is the hc & generated encryption secret")
-	payload0Obj = payload2[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, configTHD.Name+"-etcd-encryption-key", payload0Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configTHD.Spec.HostingNamespace, payload0Obj.(*corev1.Secret).Namespace)
-	assert.Equal(t, m.Spec.Workload.Manifests[1].Object.(*corev1.Secret).Data, payload0Obj.(*corev1.Secret).Data, "encrypt secet in payload should match the secret is the manifestwork")
+	assert.Len(t, payload, 2, "2 manifestwork payload which is the hostedcluster and the generated encryption secret")
+	payloadSec, _ = getManifestPayloadSecretByName(&payload, configTHD.Name+"-etcd-encryption-key")
+	assert.NotNil(t, payloadSec, "is not nil when encryption secret is found")
+	assert.Equal(t, configTHD.Spec.HostingNamespace, payloadSec.GetNamespace())
+	// encryption secret is not re-generated, but instead used from the previous manifestwork.manifest
+	assert.Equal(t, oSec.Data, payloadSec.Data, "encrypt secet in payload should match the original secret is the manifestwork")
 
 	// Test configure=T - user provided encryption secret
 	configTHD.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -168,16 +170,15 @@ func TestHDEncryptionSecret(t *testing.T) {
 		},
 	}
 	m, _ = ScaffoldManifestwork(configTHD)
-	payload3 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configTHD, &payload3)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configTHD, &payload3)
+	err = loadManifest(configTHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload3, 2, "only 1 manifestwork payload which is the hc & generated encryption secret")
-	payload0Obj = payload3[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, "test-my-etcd-encryption-key", payload0Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configTHD.Spec.HostingNamespace, payload0Obj.(*corev1.Secret).Namespace)
+	assert.Len(t, payload, 2, "2 manifestwork payload which is the hostedcluster and the generated encryption secret")
+	payloadSec, _ = getManifestPayloadSecretByName(&payload, "test-my-etcd-encryption-key")
+	assert.NotNil(t, payloadSec, "is not nil when encryption secret is found")
+	assert.Equal(t, configTHD.Spec.HostingNamespace, payloadSec.Namespace)
 
 	// Test configure=T - user provided activekey encryption secret not found - generate it
 	configTHD.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -189,16 +190,15 @@ func TestHDEncryptionSecret(t *testing.T) {
 		},
 	}
 	m, _ = ScaffoldManifestwork(configTHD)
-	payload4 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configTHD, &payload4)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configTHD, &payload4)
+	err = loadManifest(configTHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload4, 2, "only 2 manifestwork payload which is the hc & generated encryption secret")
-	payload0Obj = payload4[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, "encryption-key-not-found", payload0Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configTHD.Spec.HostingNamespace, payload0Obj.(*corev1.Secret).Namespace)
+	assert.Len(t, payload, 2, "2 manifestwork payload which is the hc & generated encryption secret")
+	payloadSec, _ = getManifestPayloadSecretByName(&payload, "encryption-key-not-found")
+	assert.NotNil(t, payloadSec, "is not nil when encryption secret is found")
+	assert.Equal(t, configTHD.Spec.HostingNamespace, payloadSec.Namespace)
 
 	// Test configure=T - user provided backup encryption secret not found - error
 	configTHD.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -213,10 +213,10 @@ func TestHDEncryptionSecret(t *testing.T) {
 		},
 	}
 	m, _ = ScaffoldManifestwork(configTHD)
-	payload4 = []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configTHD, &payload4)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configTHD, &payload4)
+	err = loadManifest(configTHD, &payload)
 	assert.Len(t, err.(utilerrors.Aggregate).Errors(), 1, "backupkey encryption secret not found")
 
 	// Test configure=F - no secret encryption
@@ -227,12 +227,12 @@ func TestHDEncryptionSecret(t *testing.T) {
 	m, err = ScaffoldManifestwork(configFHD)
 	assert.Nil(t, err)
 
-	payload5 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configFHD, &payload5)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configFHD, &payload5)
+	err = loadManifest(configFHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload5, 1, "no additonal manifestwork payload should be created, just hc")
+	assert.Len(t, payload, 1, "no additonal manifestwork payload should be created, just hc")
 
 	// Test configure=F - use provided encryption secret
 	hostedCluster.Spec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -248,35 +248,38 @@ func TestHDEncryptionSecret(t *testing.T) {
 	}
 	initFakeClient(r, hostedCluster)
 	m, _ = ScaffoldManifestwork(configFHD)
-	payload6 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configFHD, &payload6)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configFHD, &payload6)
+	err = loadManifest(configFHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload6, 3, "3 manifestwork payload which is the hc & active & backup encryption secret")
-	payload0Obj = payload6[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, userActiveKeySecret.Name, payload0Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configFHD.Spec.HostingNamespace, payload0Obj.(*corev1.Secret).Namespace)
-	payload1Obj := payload6[2].Object
-	assert.Equal(t, "Secret", payload1Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, userBackupKeySecret.Name, payload1Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configFHD.Spec.HostingNamespace, payload1Obj.(*corev1.Secret).Namespace)
+	assert.Len(t, payload, 3, "3 manifestwork payload which is the hc & active & backup encryption secret")
+	payloadActiveSec, _ := getManifestPayloadSecretByName(&payload, userActiveKeySecret.Name)
+	assert.NotNil(t, payloadActiveSec, "is not nil when encryption secret activeKey is found")
+	assert.Equal(t, configFHD.Spec.HostingNamespace, payloadActiveSec.Namespace)
+	payloadBackupSec, _ := getManifestPayloadSecretByName(&payload, userBackupKeySecret.Name)
+	assert.NotNil(t, payloadBackupSec, "is not nil when encryption secret backupKey is found")
+	assert.Equal(t, configFHD.Spec.HostingNamespace, payloadBackupSec.Namespace)
 
 	// Test configure=F - use user encryption secret found instead of old manifestwork payload
-	payload0Obj.(*corev1.Secret).Data["test"] = []byte(`aes_activekey`)
-	payload6[1].Raw, _ = json.Marshal(payload0Obj)
-	payload1Obj.(*corev1.Secret).Data["test"] = []byte(`aes_backupkey`)
-	payload6[2].Raw, _ = json.Marshal(payload1Obj)
-	m.Spec.Workload.Manifests = payload6
-	payload7 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configFHD, &payload7)
+	oActiveSecPayload := workv1.Manifest{}
+	oActiveSecPayload.Raw, _ = json.Marshal(userActiveKeySecret)
+	oBackkupSecPayload := workv1.Manifest{}
+	oBackkupSecPayload.Raw, _ = json.Marshal(userBackupKeySecret)
+	m.Spec.Workload.Manifests = []workv1.Manifest{oActiveSecPayload, oBackkupSecPayload}
+
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configFHD, &payload7)
+	err = loadManifest(configFHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload6, 3, "3 manifestwork payload which is the hc & active & backup encryption secret")
-	assert.Equal(t, userActiveKeySecret.Data, payload7[1].Object.(*corev1.Secret).Data, "active encrypt secret in payload should match the user-specified secret")
-	assert.Equal(t, userBackupKeySecret.Data, payload7[2].Object.(*corev1.Secret).Data, "backup encrypt secret in payload should match the user-specified secret")
+	assert.Len(t, payload, 3, "3 manifestwork payload which is the hc & active & backup encryption secret")
+	payloadActiveSec, _ = getManifestPayloadSecretByName(&payload, userActiveKeySecret.Name)
+	assert.NotNil(t, payloadActiveSec, "is not nil when encryption secret activeKey is found")
+	assert.Equal(t, userActiveKeySecret.Data, payloadActiveSec.Data, "active encrypt secret in payload should match the user-specified secret")
+	payloadBackupSec, _ = getManifestPayloadSecretByName(&payload, userBackupKeySecret.Name)
+	assert.NotNil(t, payloadBackupSec, "is not nil when encryption secret backupKey is found")
+	assert.Equal(t, userBackupKeySecret.Data, payloadBackupSec.Data, "backup encrypt secret in payload should match the user-specified secret")
 
 	// Test configure=F - activekey encryption secret not found - use secret in manifestwork
 	hostedCluster.Spec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -291,17 +294,20 @@ func TestHDEncryptionSecret(t *testing.T) {
 		},
 	}
 	initFakeClient(r, hostedCluster)
-	payload7[1].Object.(*corev1.Secret).Name = "encryption-key-not-found"
-	payload7[1].Raw, _ = json.Marshal(payload7[1].Object)
-	m.Spec.Workload.Manifests = payload7
-	payload8 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configFHD, &payload8)
+
+	oActiveSecPayload = workv1.Manifest{}
+	userActiveKeySecret.Name = "encryption-key-not-found"
+	oActiveSecPayload.Raw, _ = json.Marshal(userActiveKeySecret)
+	m.Spec.Workload.Manifests = []workv1.Manifest{oActiveSecPayload}
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configFHD, &payload8)
+	err = loadManifest(configFHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload8, 3, "3 manifestwork payload which is the hc & active & backup encryption secret")
-	assert.Equal(t, "encryption-key-not-found", payload8[1].Object.(*corev1.Secret).Name, "active encrypt secret in payload should match the user-specified secret")
-	assert.Equal(t, "encryption-key-not-found", payload8[2].Object.(*corev1.Secret).Name, "backup encrypt secret in payload should match the user-specified secret")
+	assert.Len(t, payload, 3, "3 manifestwork payload which is the hc & active & backup encryption secret")
+	payloadBackupSec, _ = getManifestPayloadSecretByName(&payload, userActiveKeySecret.Name)
+	assert.NotNil(t, payloadBackupSec, "is not nil when encryption secret activeKey is found")
+	assert.Equal(t, "encryption-key-not-found", payloadBackupSec.Name, "active encrypt secret in payload should match the user-specified secret")
 
 	// Test configure=F - activekey encryption secret not found and not in manifestwork - fail
 	hostedCluster.Spec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -317,12 +323,11 @@ func TestHDEncryptionSecret(t *testing.T) {
 	}
 	initFakeClient(r, hostedCluster)
 	m, _ = ScaffoldManifestwork(configFHD)
-	payload9 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configFHD, &payload9)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configFHD, &payload9)
+	err = loadManifest(configFHD, &payload)
 	assert.Len(t, err.(utilerrors.Aggregate).Errors(), 2, "2 encryption secrets (active and backup) not found")
-
 }
 
 func TestHDKmsEncryptionSecret(t *testing.T) {
@@ -365,10 +370,9 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 	err = loadManifest(configTHD, &payload)
 	assert.Nil(t, err)
 	assert.Len(t, payload, 2, "2 manifestwork payload which is the hc & kms encryption secret")
-	payload0Obj := payload[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, "test-kms-key", payload0Obj.(*corev1.Secret).Name)
-	assert.Equal(t, configTHD.Spec.HostingNamespace, payload0Obj.(*corev1.Secret).Namespace)
+	payloadSec, _ := getManifestPayloadSecretByName(&payload, "test-kms-key")
+	assert.NotNil(t, payloadSec, "is not nil when kms secret is found")
+	assert.Equal(t, configTHD.Spec.HostingNamespace, payloadSec.Namespace)
 
 	// Test configure=T - user-specified KMS encryption secret not found, use secret in old manifestwork payload
 	configTHD.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -383,18 +387,18 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	payload0Obj.(*corev1.Secret).Name = "test-kms-key-not-found"
-	payload[0].Raw, _ = json.Marshal(payload0Obj)
-	m.Spec.Workload.Manifests = payload
-	payload2 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configTHD, &payload2)
+	payloadSec.Name = "test-kms-key-not-found"
+	oKmsSecPayload := workv1.Manifest{}
+	oKmsSecPayload.Raw, _ = json.Marshal(payloadSec)
+	m.Spec.Workload.Manifests = []workv1.Manifest{oKmsSecPayload}
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configTHD, &payload2)
+	err = loadManifest(configTHD, &payload)
 	assert.Nil(t, err)
-	assert.Len(t, payload2, 2, "2 manifestwork payload which is the hc & generated encryption secret")
-	payload0Obj = payload2[1].Object
-	assert.Equal(t, "Secret", payload0Obj.GetObjectKind().GroupVersionKind().Kind)
-	assert.Equal(t, "test-kms-key-not-found", payload0Obj.(*corev1.Secret).Name)
+	assert.Len(t, payload, 2, "2 manifestwork payload which is the hc & generated encryption secret")
+	payloadSec, _ = getManifestPayloadSecretByName(&payload, "test-kms-key-not-found")
+	assert.NotNil(t, payloadSec, "is not nil when kms secret is found")
 
 	// Test configure=T - KMS encryption secret not found
 	configTHD.Spec.HostedClusterSpec.SecretEncryption = &hyp.SecretEncryptionSpec{
@@ -410,10 +414,10 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 		},
 	}
 	m, _ = ScaffoldManifestwork(configTHD)
-	payload3 := []workv1.Manifest{}
-	r.appendHostedCluster(ctx)(configTHD, &payload3)
+	payload = []workv1.Manifest{}
+	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
-	err = loadManifest(configTHD, &payload3)
+	err = loadManifest(configTHD, &payload)
 	assert.Len(t, err.(utilerrors.Aggregate).Errors(), 1, "kms encryption secrets not found")
 }
 
