@@ -1,6 +1,6 @@
 module github.com/stolostron/hypershift-deployment-controller
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-logr/logr v1.2.2
@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
-	github.com/openshift/hypershift v0.0.0-20220429033705-497b2817adbc
+	github.com/openshift/hypershift v0.0.0-20220511163932-ad143ad73524
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1

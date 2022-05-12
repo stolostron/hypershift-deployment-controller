@@ -76,7 +76,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 ##@ Build
 .PHONY: vendor
 vendor:
-	go mod tidy -compat=1.17
+	go mod tidy -compat=1.18
 	go mod vendor
 
 .PHONY: build
