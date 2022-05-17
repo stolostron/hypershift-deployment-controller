@@ -4,7 +4,7 @@ The multicluster-engine(MCE) has been installed and at least one OCP managed clu
 
 ## Enable the hypershift related components on the hub cluster
 
-Because hypershift is a TP feature, the related components are disabled by default. we should enable it by editing the multiclusterengine resource to set the `spec.overrides.components[?(@.name=='hypershift-preview')].enabled` to `true`
+Because hypershift is a TP feature, the related components are disabled by default. We should enable it by editing the multiclusterengine resource to set the `spec.overrides.components[?(@.name=='hypershift-preview')].enabled` to `true`
 ```bash
 $ oc get mce multiclusterengine-sample -ojsonpath="{.spec.overrides.components[?(@.name=='hypershift-preview')].enabled}"
 true
@@ -27,12 +27,12 @@ spec:
 EOF
 ```
 
-2. Create an oidc s3 credentials secret for the hypershift operator, name is `hypershift-operator-oidc-provider-s3-credentials` in the `hypershift-management-cluster` namespace, which one you want to install hypershift operator.
+2. Create an oidc S3 credentials secret for the hypershift operator, name is `hypershift-operator-oidc-provider-s3-credentials` in the `hypershift-management-cluster` namespace, which one you want to install hypershift operator.
 
 The secret must contain 3 fields:
 - `bucket`: An S3 bucket with public access to host OIDC discovery documents for your hypershift clusters
-- `credentials`: credentials to access the bucket
-- `region`: region of the s3 bucket
+- `credentials`: Credentials to access the bucket
+- `region`: Region of the S3 bucket
 
 For details, please check: https://hypershift-docs.netlify.app/getting-started/ , you can create this secret by:
 ```bash
@@ -51,7 +51,7 @@ NAME               AVAILABLE   DEGRADED   PROGRESSING
 hypershift-addon   True
 ```
 
-## Provision a hypershift hosted cluster
+## Provision a hypershift hosted cluster on AWS
 
 After the hypershift operator is installed, we can provision a hypershift hosted cluster by `HypershiftDeployment`
 
@@ -117,6 +117,41 @@ $ oc get hypershiftdeployment -n default hypershift-demo -w
 4. After the hosted cluster is created, it will be imported to the hub automatically, you can check it with:
 ```bash
 $ oc get managedcluster <hypershiftDeployment.Spec.infraID>
+```
+
+## Provision a hypershift hosted cluster on bare-metal
+
+Use the 'Agent' platform for HostedClusters with bare-metal worker nodes. The Agent platform uses the [Infrastructure Operator](https://github.com/openshift/assisted-service) (AKA Assisted Installer) to add worker nodes to a hosted cluster. For a primer on the Infrastructure Operator, see [here](https://github.com/openshift/assisted-service/blob/master/docs/hive-integration/kube-api-getting-started.md). In short, each bare-metal host should be booted with a Discovery Image that is provided by the Infrastructure Operator. The hosts can be booted manually or via user-provided automation, or by utilizing the [Cluster-Baremetal-Operator](https://github.com/openshift/cluster-baremetal-operator/blob/master/README.md) (CBO). Once booted, each host will run an agent process to facilitate discovering the host details and its installation. Each is represented by an Agent custom resource.
+
+When you create a HostedCluster with the Agent platform, HyperShift will install the [Agent CAPI provider](https://github.com/openshift/cluster-api-provider-agent) in the HyperShift control plane namespace.
+
+Upon scaling up a NodePool, a Machine will be created, and the CAPI provider will find a suitable Agent to match this Machine. Suitable means that the Agent is approved, is passing validations, is not currently bound (in use), and has the requirements specified on the NodePool Spec (e.g., minimum CPU/RAM, labels matching the label selector). You may monitor the installation of an Agent by checking its Status and Conditions.
+
+Upon scaling down a NodePool, Agents will be unbound from the corresponding cluster. However, you must boot them with the Discovery Image once again before reusing them.
+
+To use the Agent platform, the Infrastructure Operator must first be installed. Please see [here](https://hypershift-docs.netlify.app/how-to/agent/create-agent-cluster/) for details.
+
+When creating the HostedCluster resource, set spec.platform.type to "Agent" and spec.platform.agent.agentNamespace to the namespace containing the Agent CRs you would like to use. For NodePools, set spec.platform.type to "Agent", and optionally specify a label selector for selecting the Agent CRs to in spec.platform.agent.agentLabelSelector.
+
+The HypershiftDeployment would look like:
+```bash
+$ oc apply -f - <<EOF
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: hypershift-demo
+  namespace: default
+spec:
+  hostingCluster: hypershift-management-cluster     # the hypershift management cluster name.
+  hostingNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
+  infrastructure:
+    configure: True
+    platform:
+  platform:
+    agent:
+      agentNamespace: ${AGENT_NS}
+    type: Agent
+EOF
 ```
 
 ## Access the hosted cluster
