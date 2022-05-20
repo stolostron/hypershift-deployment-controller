@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/google/uuid"
 	"github.com/openshift/hypershift/api/fixtures"
@@ -186,6 +187,30 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	hyd.Spec.HostedClusterSpec.Platform.AWS = ap
 	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scaffoldCloudProviderConfig(infraOut)
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AWSPlatform
+	//Fill in missing values if present from infraOut
+	if hyd.Spec.HostedClusterSpec.Networking.PodCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.PodCIDR = "10.132.0.0/14"
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR = "172.31.0.0/16"
+	}
+	if reflect.DeepEqual(hyd.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{}) {
+		hyd.Spec.HostedClusterSpec.Services = []hyp.ServicePublishingStrategyMapping{
+			spsMap(hyp.APIServer, hyp.LoadBalancer),
+			spsMap(hyp.OAuthServer, hyp.Route),
+			spsMap(hyp.Konnectivity, hyp.Route),
+			spsMap(hyp.Ignition, hyp.Route),
+		}
+	}
+	if hyd.Spec.HostedClusterSpec.PullSecret.Name == "" {
+		hyd.Spec.HostedClusterSpec.PullSecret.Name = hyd.Name + "-pull-secret"
+	}
+}
+
+func replaceWhenNilOrEmpty(o interface{}, value interface{}) {
+	if o == nil || o == "" {
+		o = value
+	}
 }
 
 func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
@@ -279,6 +304,9 @@ func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut
 
 func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 	ScaffoldNodePoolSpec(hyd)
+	// TODO @jnpacker, this code should be moved outside this function and be called whenever NodePools
+	//      get reconciled.  Also need to store the SCG somehwere for use on NEW nodePools, the subnet is
+	//      available via the HostedClusterSpec.
 	for _, np := range hyd.Spec.NodePools {
 		np.Spec.Platform.Type = hyp.AWSPlatform
 		if np.Spec.Platform.AWS == nil {
