@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	mcv1 "open-cluster-management.io/api/cluster/v1"
+	mcv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 
 	hydapi "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
@@ -57,7 +58,7 @@ func getNamespaceName(namespace string, name string) types.NamespacedName {
 	}
 }
 
-func GetHypershiftDeployment(namespace string, name string, infraID string) *hydapi.HypershiftDeployment {
+func GetHypershiftDeployment(namespace string, name string, infraID string, hostingCluster string) *hydapi.HypershiftDeployment {
 	return &hydapi.HypershiftDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:       name,
@@ -65,7 +66,8 @@ func GetHypershiftDeployment(namespace string, name string, infraID string) *hyd
 			Finalizers: []string{constant.ManagedClusterCleanupFinalizer},
 		},
 		Spec: hydapi.HypershiftDeploymentSpec{
-			InfraID: infraID,
+			InfraID:        infraID,
+			HostingCluster: hostingCluster,
 		},
 	}
 }
@@ -142,19 +144,22 @@ func assertContainFinalizer(t *testing.T, ctx context.Context, client crclient.C
 }
 
 func TestReconcileCreate(t *testing.T) {
-	hyd := GetHypershiftDeployment(HYD_NAMESPACE, HYD_NAME, "id1")
+	hyd := GetHypershiftDeployment(HYD_NAMESPACE, HYD_NAME, "id1", HYD_NAMESPACE)
+	managementCluster := GetManagedCluster(HYD_NAMESPACE)
 
 	cases := []struct {
-		name            string
-		kubesecret      *corev1.Secret
-		hyd             *hydapi.HypershiftDeployment
-		validateActions func(t *testing.T, ctx context.Context, client crclient.Client)
-		expectedErr     string
+		name              string
+		kubesecret        *corev1.Secret
+		hyd               *hydapi.HypershiftDeployment
+		managementCluster *mcv1.ManagedCluster
+		validateActions   func(t *testing.T, ctx context.Context, client crclient.Client)
+		expectedErr       string
 	}{
 		{
-			name:       "create managed cluster",
-			kubesecret: nil,
-			hyd:        hyd.DeepCopy(),
+			name:              "create managed cluster",
+			kubesecret:        nil,
+			hyd:               hyd.DeepCopy(),
+			managementCluster: managementCluster.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				mcName := helper.ManagedClusterName(hyd)
@@ -173,14 +178,17 @@ func TestReconcileCreate(t *testing.T) {
 					mc.Labels["vendor"], "assert management cluster vendor label")
 				assert.Equal(t, "auto-detect",
 					mc.Labels["cloud"], "assert management cluster cloud label")
+				assert.Equal(t, "default",
+					mc.Labels[mcv1beta1.ClusterSetLabel], "assert management cluster managed cluster set label")
 
 				assertAnnoNotContainCreateMC(t, ctx, client)
 			},
 		},
 		{
-			name:       "create managed cluster and secret",
-			kubesecret: GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
-			hyd:        hyd.DeepCopy(),
+			name:              "create managed cluster and secret",
+			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
+			hyd:               hyd.DeepCopy(),
+			managementCluster: managementCluster.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
@@ -188,15 +196,16 @@ func TestReconcileCreate(t *testing.T) {
 
 				var autoImportSecret corev1.Secret
 				err = client.Get(ctx, getNamespaceName(mc.Name, "auto-import-secret"), &autoImportSecret)
-				assert.Nil(t, err, "managedCluster resource is retrieved")
+				assert.Nil(t, err, "secret resource is retrieved")
 
 				assertAnnoCreateMCFalse(t, ctx, client)
 			},
 		},
 		{
-			name:       "should not create managed cluster, annotation false",
-			kubesecret: GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
-			hyd:        setAnnotationHYD(hyd.DeepCopy(), map[string]string{createManagedClusterAnnotation: "false"}),
+			name:              "should not create managed cluster, annotation false",
+			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
+			hyd:               setAnnotationHYD(hyd.DeepCopy(), map[string]string{createManagedClusterAnnotation: "false"}),
+			managementCluster: managementCluster.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
@@ -204,9 +213,10 @@ func TestReconcileCreate(t *testing.T) {
 			},
 		},
 		{
-			name:       "should not create managed cluster, just add finalizer",
-			kubesecret: GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
-			hyd:        setFinalizerHYD(hyd.DeepCopy(), []string{}),
+			name:              "should not create managed cluster, just add finalizer",
+			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
+			hyd:               setFinalizerHYD(hyd.DeepCopy(), []string{}),
+			managementCluster: managementCluster.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
@@ -229,6 +239,9 @@ func TestReconcileCreate(t *testing.T) {
 			if c.kubesecret != nil {
 				assert.Nil(t, air.Client.Create(ctx, c.kubesecret, &crclient.CreateOptions{}), "")
 			}
+			if c.managementCluster != nil {
+				assert.Nil(t, air.Client.Create(ctx, c.managementCluster, &crclient.CreateOptions{}), "")
+			}
 
 			_, err := air.Reconcile(ctx, getRequest())
 			assert.Nil(t, err, "reconcile was successful")
@@ -238,19 +251,21 @@ func TestReconcileCreate(t *testing.T) {
 }
 
 func TestReconcileDelete(t *testing.T) {
-	hyd := GetHypershiftDeployment(HYD_NAMESPACE, HYD_NAME, "id1")
+	hyd := GetHypershiftDeployment(HYD_NAMESPACE, HYD_NAME, "id1", HYD_NAMESPACE)
 
 	cases := []struct {
-		name            string
-		managedcluster  *mcv1.ManagedCluster
-		hyd             *hydapi.HypershiftDeployment
-		validateActions func(t *testing.T, ctx context.Context, client crclient.Client)
-		expectedErr     string
+		name              string
+		managedcluster    *mcv1.ManagedCluster
+		hyd               *hydapi.HypershiftDeployment
+		managementCluster *mcv1.ManagedCluster
+		validateActions   func(t *testing.T, ctx context.Context, client crclient.Client)
+		expectedErr       string
 	}{
 		{
-			name:           "delete managed cluster",
-			managedcluster: GetManagedCluster(helper.ManagedClusterName(hyd)),
-			hyd:            setDeletionTimestamp(hyd.DeepCopy(), time.Now()),
+			name:              "delete managed cluster",
+			managedcluster:    GetManagedCluster(helper.ManagedClusterName(hyd)),
+			managementCluster: GetManagedCluster(HYD_NAMESPACE),
+			hyd:               setDeletionTimestamp(hyd.DeepCopy(), time.Now()),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				mcName := helper.ManagedClusterName(hyd)
@@ -259,9 +274,10 @@ func TestReconcileDelete(t *testing.T) {
 			},
 		},
 		{
-			name:           "delete managed cluster, no managed cluster created",
-			managedcluster: nil,
-			hyd:            setDeletionTimestamp(hyd.DeepCopy(), time.Now()),
+			name:              "delete managed cluster, no managed cluster created",
+			managedcluster:    nil,
+			managementCluster: GetManagedCluster(HYD_NAMESPACE),
+			hyd:               setDeletionTimestamp(hyd.DeepCopy(), time.Now()),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
 				mcName := helper.ManagedClusterName(hyd)
@@ -278,6 +294,10 @@ func TestReconcileDelete(t *testing.T) {
 
 			if c.managedcluster != nil {
 				assert.Nil(t, air.Client.Create(ctx, c.managedcluster, &crclient.CreateOptions{}), "")
+			}
+
+			if c.managementCluster != nil {
+				assert.Nil(t, air.Client.Create(ctx, c.managementCluster, &crclient.CreateOptions{}), "")
 			}
 
 			if c.hyd != nil {

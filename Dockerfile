@@ -16,6 +16,7 @@ COPY api/ api/
 COPY pkg/controllers/ pkg/controllers/
 COPY pkg/helper/ pkg/helper/
 COPY pkg/constant/ pkg/constant/
+COPY pkg/client/ pkg/client/
 #COPY vendor vendor                     # Developer Note: Needs to be retreived for every build
 COPY Makefile Makefile
 COPY hack hack

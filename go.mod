@@ -15,7 +15,7 @@ require (
 	k8s.io/api v0.24.0
 	k8s.io/apimachinery v0.24.0
 	k8s.io/client-go v0.24.0
-	open-cluster-management.io/api v0.6.0
+	open-cluster-management.io/api v0.7.1-0.20220526092915-173794903fb4
 	sigs.k8s.io/controller-runtime v0.12.0
 )
 
