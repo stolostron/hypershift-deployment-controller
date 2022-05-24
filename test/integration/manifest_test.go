@@ -49,7 +49,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			},
 		}
 
-		nodeCount := int32(2)
+		replicas := int32(2)
 		np = &hyp.NodePool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-nodepool",
@@ -68,7 +68,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					},
 					UpgradeType: hyp.UpgradeTypeReplace,
 				},
-				NodeCount: &nodeCount,
+				Replicas: &replicas,
 				Platform: hyp.NodePoolPlatform{
 					Type: hyp.NonePlatform,
 				},

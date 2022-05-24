@@ -304,7 +304,7 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 
 func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 
-	nodeCount := int32(2)
+	replicas := int32(2)
 
 	if len(hyd.Spec.NodePools) == 0 {
 		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{
@@ -323,7 +323,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 						},
 						UpgradeType: hyp.UpgradeTypeReplace,
 					},
-					NodeCount: &nodeCount,
+					Replicas: &replicas,
 					Platform: hyp.NodePoolPlatform{
 						Type: hyp.NonePlatform,
 					},
