@@ -109,7 +109,6 @@ type HypershiftDeploymentSpec struct {
 	//If not specified, the controller will flag an error condition.
 	//The HostingCluster would be the management cluster of the hostedcluster and nodepool generated
 	//by the hypershiftDeployment
-	// +optional
 	HostingCluster string `json:"hostingCluster"`
 
 	// HostedCluster that will be applied to the ManagementCluster by ACM, if omitted, it will be generated
