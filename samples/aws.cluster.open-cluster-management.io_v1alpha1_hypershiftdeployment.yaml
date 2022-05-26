@@ -3,6 +3,8 @@ kind: HypershiftDeployment
 metadata:
   name: aws-sample
 spec:
+  hostingCluster: local-cluster
+  hostingNamespace: clusters
   infrastructure:
     cloudProvider:
       name: my-cloud-provider-secret

@@ -1945,6 +1945,7 @@ spec:
                 - DELETE-HOSTING-NAMESPACE
                 type: string
             required:
+            - hostingCluster
             - infrastructure
             type: object
           status:
