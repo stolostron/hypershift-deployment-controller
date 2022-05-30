@@ -54,7 +54,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate ClusterRole and CustomResourceDefinition objects. rm -f config/crd/*.yaml
+manifests: controller-gen get-hypershift-crds## Generate ClusterRole and CustomResourceDefinition objects. rm -f config/crd/*.yaml
 	$(CONTROLLER_GEN) rbac:roleName=hypershfit-deployment-controller crd paths="./..." output:crd:artifacts:config=config/crd
 
 .PHONY: generate
@@ -172,3 +172,9 @@ create-a-policy:
 
 .PHONY: test-sd
 test-sd: install-hypershift-addon create-a-hosted-cluster create-a-policy
+
+.PHONY: get-hypershift-crds
+get-hypershift-crds:
+	export COMMIT_SHA=`cat go.mod | grep github.com/openshift/hypershift | sed -En 's/.* v.*-//p'`; \
+	curl https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_hostedclusters.yaml > ./config/crd/hypershift.openshift.io_hostedclusters.yaml; \
+	curl https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_nodepools.yaml > ./config/crd/hypershift.openshift.io_nodepools.yaml; \
