@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
-	github.com/openshift/hypershift v0.0.0-20220525174911-c7c2b57c98ca
+	github.com/openshift/hypershift v0.0.0-20220530194701-151246fd8480
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1
@@ -67,7 +67,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/openshift/api v0.0.0-20220124143425-d74727069f6f // indirect
+	github.com/openshift/api v0.0.0-20220525145417-ee5b62754c68 // indirect
 	github.com/openshift/cluster-api-provider-agent/api v0.0.0-20220227135922-dd6353f609dc // indirect
 	github.com/openshift/custom-resource-status v0.0.0-20200602122900-c002fd1547ca // indirect
 	github.com/pborman/uuid v1.2.0 // indirect

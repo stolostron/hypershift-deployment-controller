@@ -896,8 +896,8 @@ github.com/opencontainers/runtime-tools v0.0.0-20181011054405-1d69bd0f9c39/go.mo
 github.com/opencontainers/selinux v1.6.0/go.mod h1:VVGKuOLlE7v4PJyT6h7mNWvq1rzqiriPsEqVhc+svHE=
 github.com/opencontainers/selinux v1.8.0/go.mod h1:RScLhm78qiWa2gbVCcGkC7tCGdgk3ogry1nUQF8Evvo=
 github.com/opencontainers/selinux v1.8.2/go.mod h1:MUIHuUEvKB1wtJjQdOyYRgOnLD2xAPP8dBsCoU0KuF8=
-github.com/openshift/api v0.0.0-20220124143425-d74727069f6f h1:iOTv1WudhVm2UsoST+L+ZrA5A9w57h9vmQsdlBuqG6g=
-github.com/openshift/api v0.0.0-20220124143425-d74727069f6f/go.mod h1:F/eU6jgr6Q2VhMu1mSpMmygxAELd7+BUxs3NHZ25jV4=
+github.com/openshift/api v0.0.0-20220525145417-ee5b62754c68 h1:G4GBjFvaGlHc1dMFfJY8Z0LhMa0leRG75DvQ33PAgdY=
+github.com/openshift/api v0.0.0-20220525145417-ee5b62754c68/go.mod h1:LEnw1IVscIxyDnltE3Wi7bQb/QzIM8BfPNKoGA1Qlxw=
 github.com/openshift/build-machinery-go v0.0.0-20211213093930-7e33a7eb4ce3/go.mod h1:b1BuldmJlbA/xYtdZvKi+7j5YGB44qJUJDZ9zwiNCfE=
 github.com/openshift/cluster-api-provider-agent/api v0.0.0-20220227135922-dd6353f609dc h1:/CaKFCqrrle4NE8YLwcAavCQp37MPF2TliFenPWF8FM=
 github.com/openshift/cluster-api-provider-agent/api v0.0.0-20220227135922-dd6353f609dc/go.mod h1:SKABBM8Idpzg3hSwtf7/nPQU6zcRuU3i+IsDxMvQQLk=
@@ -905,8 +905,8 @@ github.com/openshift/cluster-api-provider-kubevirt v0.0.0-20211223062810-ef64d5f
 github.com/openshift/cluster-api-provider-kubevirt v0.0.0-20211223062810-ef64d5ff1cde/go.mod h1:Z4fR4Cg8/z9GEys79MU+8CpX98aZQqI+tl9YIao0KxQ=
 github.com/openshift/custom-resource-status v0.0.0-20200602122900-c002fd1547ca h1:F1MEnOMwSrTA0YAkO0he9ip9w0JhYzI/iCB2mXmaSPg=
 github.com/openshift/custom-resource-status v0.0.0-20200602122900-c002fd1547ca/go.mod h1:GDjWl0tX6FNIj82vIxeudWeSx2Ff6nDZ8uJn0ohUFvo=
-github.com/openshift/hypershift v0.0.0-20220525174911-c7c2b57c98ca h1:th0xr36Wm2TbPTKCPzI9VV7MmIO35PeiBULN+NOadl4=
-github.com/openshift/hypershift v0.0.0-20220525174911-c7c2b57c98ca/go.mod h1:KnMQOHXBL5w3B4PIynpX4a9sU4RgN9ZWcjRMyXCcd40=
+github.com/openshift/hypershift v0.0.0-20220530194701-151246fd8480 h1:tY5p+Qv0JL4FhF5qI/MsC2GglZ0m3LoRKsYwBwcgEFU=
+github.com/openshift/hypershift v0.0.0-20220530194701-151246fd8480/go.mod h1:yZU2irRqb0kFn+M3X4LHNnzCvY24fgeGzPyHqyWfY5o=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
@@ -1780,7 +1780,6 @@ k8s.io/api v0.20.6/go.mod h1:X9e8Qag6JV/bL5G6bU8sdVRltWKmdHsFUGS3eVndqE8=
 k8s.io/api v0.22.1/go.mod h1:bh13rkTp3F1XEaLGykbyRD2QaTTzPm0e/BMd8ptFONY=
 k8s.io/api v0.22.2/go.mod h1:y3ydYpLJAaDI+BbSe2xmGcqxiWHmWjkEeIbiwHvnPR8=
 k8s.io/api v0.22.3/go.mod h1:azgiXFiXqiWyLCfI62/eYBOu19rj2LKmIhFPP4+33fs=
-k8s.io/api v0.23.0/go.mod h1:8wmDdLBHBNxtOIytwLstXt5E9PddnZb0GaMcqsvDBpg=
 k8s.io/api v0.23.5/go.mod h1:Na4XuKng8PXJ2JsploYYrivXrINeTaycCGcYgF91Xm8=
 k8s.io/api v0.24.0 h1:J0hann2hfxWr1hinZIDefw7Q96wmCBx6SSB8IY0MdDg=
 k8s.io/api v0.24.0/go.mod h1:5Jl90IUrJHUJYEMANRURMiVvJ0g7Ax7r3R1bqO8zx8I=
@@ -1799,7 +1798,6 @@ k8s.io/apimachinery v0.20.6/go.mod h1:ejZXtW1Ra6V1O5H8xPBGz+T3+4gfkTCeExAHKU57MA
 k8s.io/apimachinery v0.22.1/go.mod h1:O3oNtNadZdeOMxHFVxOreoznohCpy0z6mocxbZr7oJ0=
 k8s.io/apimachinery v0.22.2/go.mod h1:O3oNtNadZdeOMxHFVxOreoznohCpy0z6mocxbZr7oJ0=
 k8s.io/apimachinery v0.22.3/go.mod h1:O3oNtNadZdeOMxHFVxOreoznohCpy0z6mocxbZr7oJ0=
-k8s.io/apimachinery v0.23.0/go.mod h1:fFCTTBKvKcwTPFzjlcxp91uPFZr+JA0FubU4fLzzFYc=
 k8s.io/apimachinery v0.23.5/go.mod h1:BEuFMMBaIbcOqVIJqNZJXGFTP4W6AycEpb5+m/97hrM=
 k8s.io/apimachinery v0.24.0 h1:ydFCyC/DjCvFCHK5OPMKBlxayQytB8pxy8YQInd5UyQ=
 k8s.io/apimachinery v0.24.0/go.mod h1:82Bi4sCzVBdpYjyI4jY6aHX+YCUchUIrZrXKedjd2UM=
@@ -1828,7 +1826,6 @@ k8s.io/code-generator v0.0.0-20190717022600-77f3a1fe56bb/go.mod h1:cDx5jQmWH25Ff
 k8s.io/code-generator v0.18.3/go.mod h1:TgNEVx9hCyPGpdtCWA34olQYLkh3ok9ar7XfSsr8b6c=
 k8s.io/code-generator v0.20.2/go.mod h1:UsqdF+VX4PU2g46NC2JRs4gc+IfrctnwHb76RNbWHJg=
 k8s.io/code-generator v0.22.2/go.mod h1:eV77Y09IopzeXOJzndrDyCI88UBok2h6WxAlBwpxa+o=
-k8s.io/code-generator v0.23.0/go.mod h1:vQvOhDXhuzqiVfM/YHp+dmg10WDZCchJVObc9MvowsE=
 k8s.io/code-generator v0.23.5/go.mod h1:S0Q1JVA+kSzTI1oUvbKAxZY/DYbA/ZUb4Uknog12ETk=
 k8s.io/code-generator v0.24.0/go.mod h1:dpVhs00hTuTdTY6jvVxvTFCk6gSMrtfRydbhZwHI15w=
 k8s.io/component-base v0.18.3/go.mod h1:bp5GzGR0aGkYEfTj+eTY0AN/vXTgkJdQXjNTTVUaa3k=
