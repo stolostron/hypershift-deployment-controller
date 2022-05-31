@@ -25,4 +25,4 @@ jobs:
       # For verification
       - name: Compare CRDs (HostedCluster & NodePool)
         run: |
-          ./test/crd-compares.sh
+          make validate-crds
