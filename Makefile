@@ -179,3 +179,7 @@ get-hypershift-crds:
 	@echo Using SHA ${COMMIT_SHA}; \
 	curl https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_hostedclusters.yaml > ./config/crd/hypershift.openshift.io_hostedclusters.yaml;
 	curl https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_nodepools.yaml > ./config/crd/hypershift.openshift.io_nodepools.yaml;
+
+.PHONY: validate-crds
+validate-crds:
+	test/crd-compare.sh
