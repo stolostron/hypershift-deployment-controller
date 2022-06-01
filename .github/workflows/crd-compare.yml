@@ -27,3 +27,23 @@ jobs:
       - name: Compare CRDs (HostedCluster & NodePool)
         run: |
           make validate-crds
+      - name: Send a slack message on failure
+        uses: slackapi/slack-github-action@v1.19.0
+        if: failure()
+        with:
+          payload: |
+            {
+              "text": "HypershiftDeployment CRD compare result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.type }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "HypershiftDeployment CRD compare result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.type }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
