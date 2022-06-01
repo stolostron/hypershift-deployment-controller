@@ -3,7 +3,8 @@ name: 'Validate HostedCluster & NodePool CRDs'
 on:
   workflow_dispatch:
   schedule:
-    - cron: '00 21 * * *'
+    - cron: '00 21 * * *' # 1700EST
+    - cron: '00 13 * * *' # 0900EST
   pull_request:
     branches:
       - main
