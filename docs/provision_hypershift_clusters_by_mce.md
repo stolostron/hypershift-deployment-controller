@@ -195,6 +195,9 @@ The number of `BareMetalHost` resources should match the `agent` namespace shoul
 
 Create `HostedCluster` and `NodePool` on the MCE cluster. These will be referenced by `HypershiftDeployment` to provision the hosted cluster on the target hosting cluster. We are going to create the `HostedCluster`, `NodePool` and  `HypershiftDeployment` all in `default` namespace on the MCE cluster. On the hosting cluster, hypershift deployment will create `HostedCluster` and `NodePool` in `clusters` namespace.
 
+**Note: If you are provisioning this hosted cluster on `local-cluster` hosting cluster, do not create `HostedCluster` and `NodePool` resources and reference them because the hypershift operator on MCE cluster for `local-cluster` hosting cluster will reconcile them to create a hosted cluster. Instead, use HypershiftDeployment `spec.hostedClusterSpec` and `spec.nodePools`.
+
+
 1. Create SSH key secret for `HostedCluster`.
 ```bash
 envsubst <<"EOF" | oc apply -f -
