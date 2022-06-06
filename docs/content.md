@@ -94,3 +94,41 @@ There is further details available, including node pool status via the describe 
 ```shell
 oc -n PROJECT_NAME describe hypershiftDeployment NAME
 ```
+
+# HostedCluster and NodePool Object References
+The HypershiftDeployment custom resource supports object references to the HostedCluster and NodePool custom resources. Instead of embedding the specs for the HostedCluster and NodePools within the HypershiftDeployment custom resource, references to the HostedCluster and NodePool custom resources could be used. These are local object references to the resources, so they must be created in the same namespace as the HypershiftDeployment custom resource. In addition, object reference is supported for manual infrastruture configuration only, `infrastructure.configure=False`. If the object reference for HostedCluster and NodePools are specified, the embedded specs for the HostedCluster and NodePool in the HypershiftDeployment custom resource are ignored.
+
+One of the benefits for using object references for HostedCluster and NodePool is that it decouples the HypershiftDeployment controller from the version of HyperShift CRDs installed on the ACM Hub. In other words, the HyperShift CRDs could be updated independent of the HypershiftDeployment controller. This works well if there are minor changes to the HyperShift CRD, like the addition of new fields. However, any major changes to the hyperShift CRD, such as changes to required attributes, especially those used by the hyperShiftDeployment controller, will require the version of the HypershiftDeployment controller to be updated.
+
+**Note: If you are provisioning this hosted cluster on `local-cluster` hosting cluster, do not create `HostedCluster` and `NodePool` resources and reference them because the hypershift operator on MCE cluster for `local-cluster` hosting cluster will reconcile them to create a hosted cluster. Instead, use HypershiftDeployment `spec.hostedClusterSpec` and `spec.nodePools`.
+
+To use HostedCluster and NodePools object references:
+1. HyperShift add-on must not be deployed on local-cluster. Instead, another managed cluster must be used. This is to prevent the HyperShift controller, that's running on local-cluster, from deploying a hosted cluster when the HostedCluster resource is created on the ACM Hub for object reference purposes.
+2. Manually create the secrets for the AWS credentials, pull-secret, and the etcd-encryption-secret on the same namespace as where the HypershiftDeployment custom resource will be created. These secrets are defined as LocalObjectReferences in the HostedCluster custom resource.
+3. Manually create the HostedCluster and NodePool custom resources on the same namespace as where the HypershiftDeployment custom resource will be created
+4. Create the HypershiftDeployment custom resource as shown in the sample below (Note: Spec.Infrastrure.Configure must be False)
+
+
+Sample hypershftDeployment.yaml:
+
+```yaml
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: sample-hd-1
+  namespace: default #${hostClusterNamespace}
+spec:
+  hostingCluster: cluster1
+  hostingNamespace: clusters
+  hostedClusterReference: 
+    name: sample-hc-1
+  nodePoolReferences: 
+  - name: sample-np-1
+  infrastructure:
+    cloudProvider:
+      name: aws
+    configure: False
+    platform:
+      aws:
+        region: us-east-1
+```
