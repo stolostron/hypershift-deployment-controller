@@ -43,14 +43,16 @@ import (
 
 var resLog = ctrl.Log.WithName("resource-render")
 
-func getReleaseImagePullSpec() string {
+func getReleaseImagePullSpec(annotations map[string]string) string {
+	if releaseImage, ok := annotations[constant.AnnoReleaseImage]; ok {
+		return releaseImage
+	}
 
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
 		return constant.ReleaseImage
 	}
 	return defaultVersion.PullSpec
-
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
@@ -246,7 +248,7 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				// Defaults for all platforms
 				PullSecret: corev1.LocalObjectReference{Name: hyd.Name + "-pull-secret"},
 				Release: hyp.Release{
-					Image: getReleaseImagePullSpec(), //.DownloadURL,
+					Image: getReleaseImagePullSpec(hyd.Annotations), //.DownloadURL,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{
 					spsMap(hyp.APIServer, hyp.LoadBalancer),
@@ -356,7 +358,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 						Type: hyp.NonePlatform,
 					},
 					Release: hyp.Release{
-						Image: getReleaseImagePullSpec(), //.DownloadURL,,
+						Image: getReleaseImagePullSpec(hyd.Annotations), //.DownloadURL,,
 					},
 				},
 			},

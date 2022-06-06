@@ -9,6 +9,9 @@ const (
 
 	ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.10.9-x86_64"
 
+	// AnnoReleaseImage is an annotation used to specify the release image
+	AnnoReleaseImage = "hypershiftdeployment.cluster.open-cluster-management.io/release-image"
+
 	// DestroyFinalizer makes sure infrastructure is cleaned up before it is removed
 	DestroyFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
 

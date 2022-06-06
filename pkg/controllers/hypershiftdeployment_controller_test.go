@@ -677,3 +677,12 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is not found", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is missing")
 }
+
+func TestGetReleaseImagePullSpec(t *testing.T) {
+	expectedReleaseImage := "quay.io/openshift-release-dev/ocp-release:4.10.16-x86_64"
+	annos := map[string]string{
+		constant.AnnoReleaseImage: expectedReleaseImage,
+	}
+	releaseImage := getReleaseImagePullSpec(annos)
+	assert.Equal(t, expectedReleaseImage, releaseImage, "is equal when annotation release image is set")
+}
