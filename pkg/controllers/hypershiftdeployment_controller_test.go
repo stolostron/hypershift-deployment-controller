@@ -660,20 +660,4 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	nps := getNodePoolsInManifestPayload(payload)
 	assert.Len(t, nps, 1, "nodepool is added in manifestwork from hypershiftdeployment nodePoolRef")
 	assert.Equal(t, nps[0].GetNamespace(), testHD.Spec.HostingNamespace)
-
-	// Error if HostedClusterRef not found
-	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: "not_exist"}
-	r.Create(ctx, testHD)
-	defer r.Delete(ctx, testHD)
-
-	_, err = r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}})
-	assert.NotNil(t, err, "is not nil when HostedClusterRef is not found")
-	assert.Contains(t, err.Error(), "failed to get HostedClusterRef: default:not_exist", "error contains HostedClusterRef is not found message")
-
-	var resultHD hyd.HypershiftDeployment
-	err = r.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
-	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
-
-	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
-	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is not found", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is missing")
 }

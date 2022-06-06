@@ -86,6 +86,15 @@ func getNodePools(hyd *hyd.HypershiftDeployment) []*hyp.NodePool {
 			Name:      "testNodePool",
 			Namespace: "default",
 		},
+		Spec: hyp.NodePoolSpec{
+			ClusterName: "testHostedCluster",
+			Platform: hyp.NodePoolPlatform{
+				Type: hyp.AWSPlatform,
+			},
+			Release: hyp.Release{
+				Image: constant.ReleaseImage,
+			},
+		},
 	}}
 }
 
