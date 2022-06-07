@@ -164,6 +164,7 @@ func ScaffoldAzureHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, inf
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.Platform.Azure = ap
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AzurePlatform
+	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
 }
 
 func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
