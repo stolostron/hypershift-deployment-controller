@@ -21,6 +21,68 @@ import (
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 )
 
+func injectStatusFeedBackValues(c client.Client, hyd hypdeployment.HypershiftDeployment) bool {
+	mw := &workv1.ManifestWork{}
+	err := c.Get(ctx, client.ObjectKey{Namespace: hyd.Spec.HostingCluster,
+		Name: hyd.Spec.InfraID}, mw)
+	if apierrors.IsNotFound(err) {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+
+	hasOwnerReferenceConfig := false
+	for _, c := range mw.Spec.ManifestConfigs {
+		if c.ResourceIdentifier.Resource == "hostedclusters" {
+			for _, r := range c.FeedbackRules {
+				if r.Type == workv1.JSONPathsType {
+					for _, p := range r.JsonPaths {
+						if p.Name == "owner" {
+							hasOwnerReferenceConfig = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if hasOwnerReferenceConfig {
+		dpmw := mw.DeepCopy()
+		fakeManifestOwner := "fake-owner"
+		if len(mw.Status.ResourceStatus.Manifests) == 0 {
+			mw.Status.ResourceStatus.Manifests = []workv1.ManifestCondition{
+				{
+					ResourceMeta: workv1.ManifestResourceMeta{
+						Group:     hyp.GroupVersion.Group,
+						Resource:  "hostedclusters",
+						Name:      hyd.Name,
+						Namespace: hyd.Spec.HostingNamespace,
+					},
+					StatusFeedbacks: workv1.StatusFeedbackResult{
+						Values: []workv1.FeedbackValue{
+							{
+								Name: "owner",
+								Value: workv1.FieldValue{
+									Type:   workv1.String,
+									String: &fakeManifestOwner,
+								},
+							},
+						},
+					},
+				},
+			}
+		}
+		patch := client.MergeFrom(dpmw)
+		if err := c.Status().Patch(ctx, mw, patch); err != nil {
+			return false
+		}
+		return true
+	}
+
+	return false
+}
+
 var _ = ginkgo.Describe("Manifest Work", func() {
 	var (
 		hydName        string
@@ -136,6 +198,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			gomega.Eventually(func() bool {
 				hydDeleting := hypdeployment.HypershiftDeployment{}
 				err := mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hydNamespace, Name: hydName}, &hydDeleting)
+				if err == nil {
+					_ = injectStatusFeedBackValues(mgr.GetClient(), hydDeleting)
+				}
+
 				return apierrors.IsNotFound(err)
 			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
 
@@ -387,6 +453,9 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			gomega.Eventually(func() bool {
 				hydDeleting := hypdeployment.HypershiftDeployment{}
 				err := mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hydNamespace, Name: hydName}, &hydDeleting)
+				if err == nil {
+					_ = injectStatusFeedBackValues(mgr.GetClient(), hydDeleting)
+				}
 				return apierrors.IsNotFound(err)
 			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
 
