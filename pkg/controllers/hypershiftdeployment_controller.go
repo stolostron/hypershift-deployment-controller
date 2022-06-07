@@ -57,7 +57,8 @@ type HypershiftDeploymentReconciler struct {
 	ctx           context.Context
 	Log           logr.Logger
 
-	InfraHandler InfraHandler
+	InfraHandler            InfraHandler
+	ValidateClusterSecurity bool
 }
 
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete

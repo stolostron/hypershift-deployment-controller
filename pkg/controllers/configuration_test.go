@@ -138,7 +138,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 	assert.Equal(t, hyp.AESCBC, configTHD.Spec.HostedClusterSpec.SecretEncryption.Type, "secretEncryption should default to AESCBC for configure=T")
 	assert.Equal(t, configTHD.Name+"-etcd-encryption-key", configTHD.Spec.HostedClusterSpec.SecretEncryption.AESCBC.ActiveKey.Name, "AESCBC active key is not set correctly for secret encryption")
 
-	m, err := ScaffoldManifestwork(configTHD)
+	m, err := scaffoldManifestwork(configTHD)
 	assert.Nil(t, err)
 
 	payload := []workv1.Manifest{}
@@ -178,7 +178,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	m, _ = ScaffoldManifestwork(configTHD)
+	m, _ = scaffoldManifestwork(configTHD)
 	payload = []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
@@ -198,7 +198,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	m, _ = ScaffoldManifestwork(configTHD)
+	m, _ = scaffoldManifestwork(configTHD)
 	payload = []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
@@ -221,7 +221,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	m, _ = ScaffoldManifestwork(configTHD)
+	m, _ = scaffoldManifestwork(configTHD)
 	payload = []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
@@ -233,7 +233,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 	configFHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	scaffoldHostedClusterSpec(configFHD)
 	assert.Nil(t, configFHD.Spec.HostedClusterSpec.SecretEncryption, "secretEncryption should be nil for configure=F")
-	m, err = ScaffoldManifestwork(configFHD)
+	m, err = scaffoldManifestwork(configFHD)
 	assert.Nil(t, err)
 
 	payload = []workv1.Manifest{}
@@ -256,7 +256,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 		},
 	}
 	initFakeClient(r, hostedCluster)
-	m, _ = ScaffoldManifestwork(configFHD)
+	m, _ = scaffoldManifestwork(configFHD)
 	payload = []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
@@ -331,7 +331,7 @@ func TestHDEncryptionSecret(t *testing.T) {
 		},
 	}
 	initFakeClient(r, hostedCluster)
-	m, _ = ScaffoldManifestwork(configFHD)
+	m, _ = scaffoldManifestwork(configFHD)
 	payload = []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configFHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
@@ -371,7 +371,7 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	m, err := ScaffoldManifestwork(configTHD)
+	m, err := scaffoldManifestwork(configTHD)
 	assert.Nil(t, err)
 	payload := []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configTHD, &payload)
@@ -422,7 +422,7 @@ func TestHDKmsEncryptionSecret(t *testing.T) {
 			},
 		},
 	}
-	m, _ = ScaffoldManifestwork(configTHD)
+	m, _ = scaffoldManifestwork(configTHD)
 	payload = []workv1.Manifest{}
 	r.appendHostedCluster(ctx)(configTHD, &payload)
 	loadManifest = r.ensureConfiguration(ctx, m)
@@ -471,7 +471,7 @@ func TestNodePoolConfigMaps(t *testing.T) {
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
 
-	m, err := ScaffoldManifestwork(testHD)
+	m, err := scaffoldManifestwork(testHD)
 	assert.Nil(t, err)
 	payload := []workv1.Manifest{}
 	hdr.appendHostedCluster(ctx)(testHD, &payload)
@@ -502,7 +502,7 @@ func TestNodePoolConfigMaps(t *testing.T) {
 	// Add configmap to nodepool
 	testHD.Spec.NodePools[0].Spec.Config = []corev1.LocalObjectReference{{Name: cm.Name}}
 
-	m, err = ScaffoldManifestwork(testHD)
+	m, err = scaffoldManifestwork(testHD)
 	assert.Nil(t, err)
 	payload = []workv1.Manifest{}
 	hdr.appendHostedCluster(ctx)(testHD, &payload)
