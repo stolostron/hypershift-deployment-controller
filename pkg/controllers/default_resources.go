@@ -48,7 +48,9 @@ func getReleaseImagePullSpec() string {
 	if err != nil {
 		return constant.ReleaseImage
 	}
-	return defaultVersion.PullSpec
+	//return defaultVersion.PullSpec
+	// Bug patch: acm-1417 acm-1420
+	return constant.ReleaseImage
 
 }
 
