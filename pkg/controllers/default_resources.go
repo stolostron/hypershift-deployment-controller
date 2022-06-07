@@ -25,7 +25,6 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
-	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -44,12 +43,13 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
+	/* Bug patch: acm-1417 acm-1420
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
 		return constant.ReleaseImage
 	}
-	//return defaultVersion.PullSpec
-	// Bug patch: acm-1417 acm-1420
+	return defaultVersion.PullSpec
+	*/
 	return constant.ReleaseImage
 
 }
