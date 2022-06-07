@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
@@ -52,6 +53,7 @@ var (
 	StatusFlag            = "status"
 	Message               = "message"
 	Progress              = "progress"
+	OwnerReference        = "owner"
 )
 
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
@@ -263,18 +265,64 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	}
 
 	if m.GetDeletionTimestamp().IsZero() {
-		patch := client.MergeFrom(m.DeepCopy())
+		dpm := m.DeepCopy()
 		setManifestWorkSelectivelyDeleteOption(m, hyd)
-		if err := r.Client.Patch(ctx, m, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+		if m.Spec.DeleteOption.PropagationPolicy != workv1.DeletePropagationPolicyTypeOrphan {
+			if !reflect.DeepEqual(dpm.Spec.DeleteOption, m.Spec.DeleteOption) {
+
+				// set manifest config for hosted cluster to check whether the owner reference
+				// AppliedManifestWork exist.
+				// The work agent will add an AppliedManifestWork owner reference to the hosted
+				// cluster to achieve Foreground deletion.
+				for i, c := range m.Spec.ManifestConfigs {
+					if c.ResourceIdentifier.Resource == HostedClusterResource {
+						for j, r := range c.FeedbackRules {
+							if r.Type == workv1.JSONPathsType {
+								m.Spec.ManifestConfigs[i].FeedbackRules[j].JsonPaths = append(r.JsonPaths,
+									workv1.JsonPath{
+										Name: OwnerReference,
+										Path: ".metadata.ownerReferences[?(@.kind==\"AppliedManifestWork\")].name",
+									},
+								)
+							}
+						}
+					}
+				}
+
+				patch := client.MergeFrom(dpm)
+				if err := r.Client.Patch(ctx, m, patch); err != nil {
+					return ctrl.Result{},
+						fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+				}
+
+				r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
+			}
+
+			// Wait for the work agent to add owner reference for the hosted cluster.
+			appliedManifestWorkOwner := ""
+			for _, obj := range m.Status.ResourceStatus.Manifests {
+				rMeta := resourceMeta(obj.ResourceMeta)
+				id := rMeta.ToIdentifier()
+				if id.Resource == HostedClusterResource {
+					for _, v := range obj.StatusFeedbacks.Values {
+						if v.Name == OwnerReference {
+							appliedManifestWorkOwner = string(*v.Value.String)
+						}
+					}
+				}
+			}
+			if len(appliedManifestWorkOwner) == 0 {
+				// Requeue the request, wait for the work agent to consume the delete option changes.
+				return ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, nil
+			}
 		}
-		r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
 
 		if err := r.Delete(ctx, m); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
 			}
 		}
+		r.Log.Info("delete the manifestwork complete")
 	}
 
 	syncManifestworkStatusToHypershiftDeployment(hyd, m)
@@ -446,19 +494,19 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 				JsonPaths: []workv1.JsonPath{
 					{
 						Name: Reason,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].reason"),
+						Path: ".status.conditions[?(@.type==\"Available\")].reason",
 					},
 					{
 						Name: StatusFlag,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].status"),
+						Path: ".status.conditions[?(@.type==\"Available\")].status",
 					},
 					{
 						Name: Message,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].message"),
+						Path: ".status.conditions[?(@.type==\"Available\")].message",
 					},
 					{
 						Name: Progress,
-						Path: fmt.Sprintf(".status.version.history[?(@.state!=\"\")].state"),
+						Path: ".status.version.history[?(@.state!=\"\")].state",
 					},
 				},
 			},
@@ -481,15 +529,15 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 					JsonPaths: []workv1.JsonPath{
 						{
 							Name: Reason,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].reason"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].reason",
 						},
 						{
 							Name: StatusFlag,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].status"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].status",
 						},
 						{
 							Name: Message,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].message"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].message",
 						},
 					},
 				},
@@ -612,17 +660,6 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	}
 
 	return out
-}
-
-func isFeedbackStatusFalse(fbs workv1.StatusFeedbackResult) bool {
-	for _, v := range fbs.Values {
-		//if there's not ready nodepool, report this one
-		if v.Name == StatusFlag && *v.Value.String != "True" {
-			return true
-		}
-	}
-
-	return false
 }
 
 type resourceMeta workv1.ManifestResourceMeta

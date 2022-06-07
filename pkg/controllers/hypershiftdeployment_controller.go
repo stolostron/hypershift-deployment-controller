@@ -329,7 +329,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	}
 
 	if hyd.Spec.Override != hypdeployment.InfraConfigureOnly {
-		log.Info("Removing Manifestwork and wait for hostedclsuter and nodepool to be cleaned up.")
+		log.Info("Removing Manifestwork and wait for hostedcluster and nodepool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
 
 		if stErr := r.Client.Status().Patch(ctx, hyd, client.MergeFrom(inHyd)); stErr != nil {
