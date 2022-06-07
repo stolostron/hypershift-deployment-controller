@@ -26,7 +26,6 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
-	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -45,12 +44,14 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
+	/* TODO: ACM-1420, this comment fixes ACM-14-17
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
 		return constant.ReleaseImage
 	}
 	return defaultVersion.PullSpec
-
+	*/
+	return constant.ReleaseImage
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
@@ -163,6 +164,7 @@ func ScaffoldAzureHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, inf
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.Platform.Azure = ap
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AzurePlatform
+	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
 }
 
 func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
@@ -193,17 +195,6 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	}
 	if hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR == "" {
 		hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR = "172.31.0.0/16"
-	}
-	if reflect.DeepEqual(hyd.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{}) {
-		hyd.Spec.HostedClusterSpec.Services = []hyp.ServicePublishingStrategyMapping{
-			spsMap(hyp.APIServer, hyp.LoadBalancer),
-			spsMap(hyp.OAuthServer, hyp.Route),
-			spsMap(hyp.Konnectivity, hyp.Route),
-			spsMap(hyp.Ignition, hyp.Route),
-		}
-	}
-	if hyd.Spec.HostedClusterSpec.PullSecret.Name == "" {
-		hyd.Spec.HostedClusterSpec.PullSecret.Name = hyd.Name + "-pull-secret"
 	}
 }
 
@@ -248,13 +239,26 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				Release: hyp.Release{
 					Image: getReleaseImagePullSpec(), //.DownloadURL,
 				},
-				Services: []hyp.ServicePublishingStrategyMapping{
-					spsMap(hyp.APIServer, hyp.LoadBalancer),
-					spsMap(hyp.OAuthServer, hyp.Route),
-					spsMap(hyp.Konnectivity, hyp.Route),
-					spsMap(hyp.Ignition, hyp.Route),
-				},
+				Services: []hyp.ServicePublishingStrategyMapping{},
 			}
+	}
+
+	if reflect.DeepEqual(hyd.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{}) {
+		hyd.Spec.HostedClusterSpec.Services = []hyp.ServicePublishingStrategyMapping{
+			spsMap(hyp.APIServer, hyp.LoadBalancer),
+			spsMap(hyp.OAuthServer, hyp.Route),
+			spsMap(hyp.Konnectivity, hyp.Route),
+			spsMap(hyp.Ignition, hyp.Route),
+		}
+	}
+	if hyd.Spec.HostedClusterSpec.PullSecret.Name == "" {
+		hyd.Spec.HostedClusterSpec.PullSecret.Name = hyd.Name + "-pull-secret"
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.PodCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.PodCIDR = "10.132.0.0/14"
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR = "172.31.0.0/16"
 	}
 
 	// For configure=T, if secret encryption is not provided by user, generate it
