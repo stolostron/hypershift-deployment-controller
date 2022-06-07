@@ -26,20 +26,22 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	hydclient "github.com/stolostron/hypershift-deployment-controller/pkg/client"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
@@ -63,7 +65,7 @@ func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
 	return hyd.Spec.InfraID
 }
 
-func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
+func scaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
 
 	// TODO @jnpacker, check for the managedCluster as well, or where we validate ClusterSet
 	if len(hyd.Spec.InfraID) == 0 {
@@ -158,6 +160,68 @@ func syncManifestworkStatusToHypershiftDeployment(
 	}
 }
 
+// validateSecurityConstraints checks the given HypershiftDeployment has the right permission to work on a given hosting cluster
+// return true if all the checks passed or we are skipping validation, return false if any of the check fails
+func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (bool, error) {
+	if !r.ValidateClusterSecurity {
+		r.Log.Info("Skipping validate security constraints.")
+		return true, nil
+	}
+
+	// Check the namespace being used has valid managed cluster set bindings
+	cbg := hydclient.ClusterSetBindingsGetter{
+		Client: r.Client,
+	}
+
+	bindings, err := clusterv1beta1.GetBoundManagedClusterSetBindings(hyd.Namespace, cbg)
+	if err != nil {
+		r.Log.Error(err, hyd.Namespace+" namespace needs at least one bound ManagedClusterSetBinding")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"a bound ManagedClusterSetBinding is required in namespace "+hyd.Namespace+" retrying again after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	if len(bindings) == 0 {
+		r.Log.Error(errors.New("missing a bound ManagedClusterSetBinding in namespace "+hyd.Namespace), hyd.Namespace+" namespace needs at least one bound ManagedClusterSetBinding")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"a bound ManagedClusterSetBinding is required in namespace "+hyd.Namespace+" retrying again after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	clusterSets := sets.NewString()
+
+	for _, binding := range bindings {
+		clusterSets.Insert(binding.Name)
+	}
+
+	// Check the managed cluster exists
+	var managedCluster clusterv1.ManagedCluster
+	err = r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostingCluster}, &managedCluster)
+	switch {
+	case apierrors.IsNotFound(err):
+		r.Log.Error(err, "fail to find ManagedCluster: "+hyd.Spec.HostingCluster)
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			hyd.Spec.HostingCluster+" ManagedCluster is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	case err != nil:
+		r.Log.Error(err, "error while trying to find ManagedCluster: "+hyd.Spec.HostingCluster)
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			hyd.Spec.HostingCluster+" ManagedCluster is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	foundClusterSet, err := helper.IsClusterInClusterSet(r.Client, &managedCluster, clusterSets.List())
+	if err != nil {
+		r.Log.Error(err, "error while trying to determine if ManagedCluster: "+hyd.Spec.HostingCluster+" is in a ManagedClusterSet")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			hyd.Spec.HostingCluster+" ManagedClusterSet is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	if !foundClusterSet {
+		r.Log.Error(errors.New("Spec.HostingCluster is not in a ManagedClusterSet"), "Spec.HostingCluster needs to be a member of a ManagedClusterSet")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	return true, nil
+}
+
 func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
 	// We need a HostingCluster if we use ManifestWork
@@ -179,9 +243,14 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec or HostedClusterRef is required", hypdeployment.MisConfiguredReason)
 	}
 
-	m, err := ScaffoldManifestwork(hyd)
+	passedSecurity, statusUpdateErr := r.validateSecurityConstraints(ctx, hyd)
+	if !passedSecurity {
+		return ctrl.Result{}, statusUpdateErr
+	}
+
+	m, err := scaffoldManifestwork(hyd)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: time.Minute * 1}, err
 	}
 
 	mwCfg := enableManifestStatusFeedback(m, hyd)
@@ -248,7 +317,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-	m, err := ScaffoldManifestwork(hyd)
+	m, err := scaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -391,7 +460,7 @@ func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loa
 					Version:  "v1alpha1",
 					Resource: "nodepools",
 				}
-				unstructNodePool, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, npRef.Name, v1.GetOptions{})
+				unstructNodePool, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, npRef.Name, metav1.GetOptions{})
 				if err != nil {
 					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
 						fmt.Sprintf("NodePoolRef %v:%v is not found", hyd.Namespace, npRef.Name), hypdeployment.MisConfiguredReason)
@@ -582,9 +651,9 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 			// find and set failed nodepool to condition
 			st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
 			if st == nil {
-				meta.SetStatusCondition(&out, npCond)
+				condmeta.SetStatusCondition(&out, npCond)
 			} else if npCond.Status != "True" {
-				meta.SetStatusCondition(&out, npCond)
+				condmeta.SetStatusCondition(&out, npCond)
 			}
 		}
 
@@ -604,7 +673,7 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	// if there's nodepool condition and it's not false, then all nodepool are ready
 	st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
 	if st != nil && st.Status == "True" {
-		meta.SetStatusCondition(&out, metav1.Condition{
+		condmeta.SetStatusCondition(&out, metav1.Condition{
 			Type:   string(hypdeployment.Nodepool),
 			Status: "True",
 			Reason: hypdeployment.NodePoolProvision,

@@ -28,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -93,6 +95,8 @@ func initClient() client.Client {
 	hyp.AddToScheme(scheme)
 	corev1.AddToScheme(scheme)
 	workv1.AddToScheme(scheme)
+	clusterv1.AddToScheme(scheme)
+	clusterv1beta1.AddToScheme(scheme)
 
 	var logger logr.Logger
 
@@ -645,7 +649,7 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	testHD.Spec.NodePoolsRef = []corev1.LocalObjectReference{{Name: np.Name}}
 
-	m, err := ScaffoldManifestwork(testHD)
+	m, err := scaffoldManifestwork(testHD)
 	assert.Nil(t, err, "is nil if scaffold manifestwork successfully")
 	payload := &m.Spec.Workload.Manifests
 

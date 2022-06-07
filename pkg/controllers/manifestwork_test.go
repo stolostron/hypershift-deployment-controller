@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"testing"
 
@@ -25,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,6 +48,39 @@ func getHDforManifestWork() *hyd.HypershiftDeployment {
 	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 	return testHD
+}
+
+func getClusterSetBinding(namespace string) *clusterv1beta1.ManagedClusterSetBinding {
+	return &clusterv1beta1.ManagedClusterSetBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "dev",
+			Namespace: namespace,
+		},
+		Spec: clusterv1beta1.ManagedClusterSetBindingSpec{
+			ClusterSet: "dev",
+		},
+	}
+}
+
+func getClusterSet() *clusterv1beta1.ManagedClusterSet {
+	return &clusterv1beta1.ManagedClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "dev",
+		},
+		Spec: clusterv1beta1.ManagedClusterSetSpec{},
+	}
+}
+
+func getCluster(name string) *clusterv1.ManagedCluster {
+	return &clusterv1.ManagedCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"vendor": "openshift",
+			},
+		},
+		Spec: clusterv1.ManagedClusterSpec{},
+	}
 }
 
 type manifestworkChecker struct {
@@ -1336,4 +1372,98 @@ func TestManifestWorkHostedClusterAttributes(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is invalid", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is invalid")
+}
+
+func TestValidateSecurityConstraints(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client:                  client,
+		Log:                     ctrl.Log.WithName("tester"),
+		ValidateClusterSecurity: false,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-cluster"
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	passed, err := hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when HypershiftDeploymentReconciler ValidateClusterSecurity is false")
+	assert.True(t, passed, "when HypershiftDeploymentReconciler ValidateClusterSecurity is false")
+
+	hdr.ValidateClusterSecurity = true
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	var resultHD hyd.HypershiftDeployment
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "a bound ManagedClusterSetBinding is required in namespace"), "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	binding := getClusterSetBinding(testHD.Namespace)
+	client.Create(ctx, binding)
+	defer client.Delete(ctx, binding)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "a bound ManagedClusterSetBinding is required in namespace"), "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	binding.Status = clusterv1beta1.ManagedClusterSetBindingStatus{
+		Conditions: []metav1.Condition{
+			{
+				Type:   clusterv1beta1.ClusterSetBindingBoundType,
+				Status: metav1.ConditionTrue,
+			},
+		},
+	}
+	client.Status().Update(ctx, binding)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating ManagedCluster exist")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "ManagedCluster is required"), "when validating ManagedCluster exist")
+
+	cluster := getCluster(testHD.Spec.HostingCluster)
+	client.Create(ctx, cluster)
+	defer client.Delete(ctx, cluster)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "is a member of a ManagedClusterSet"), "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+
+	clusterSet := getClusterSet()
+	client.Create(ctx, clusterSet)
+	defer client.Delete(ctx, clusterSet)
+
+	cluster.ObjectMeta.Labels = map[string]string{
+		clusterv1beta1.ClusterSetLabel: "dev",
+	}
+	client.Update(ctx, cluster)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.True(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
 }
