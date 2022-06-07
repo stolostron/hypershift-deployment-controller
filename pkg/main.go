@@ -34,6 +34,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	mcv1 "open-cluster-management.io/api/cluster/v1"
+	mcv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -58,6 +59,8 @@ func init() {
 	utilruntime.Must(workv1.AddToScheme(scheme))
 
 	utilruntime.Must(mcv1.AddToScheme(scheme))
+
+	utilruntime.Must(mcv1beta1.AddToScheme(scheme))
 
 	//+kubebuilder:scaffold:scheme
 }

@@ -245,12 +245,12 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	passedSecurity, statusUpdateErr := r.validateSecurityConstraints(ctx, hyd)
 	if !passedSecurity {
-		return ctrl.Result{}, statusUpdateErr
+		return ctrl.Result{RequeueAfter: time.Minute * 1}, statusUpdateErr
 	}
 
 	m, err := scaffoldManifestwork(hyd)
 	if err != nil {
-		return ctrl.Result{RequeueAfter: time.Minute * 1}, err
+		return ctrl.Result{}, err
 	}
 
 	mwCfg := enableManifestStatusFeedback(m, hyd)
