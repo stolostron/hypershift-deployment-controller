@@ -51,10 +51,10 @@ spec:
             maxUnavailable: 0
           strategy: RollingUpdate
         upgradeType: Replace
-     platform:
-        aws:
-          instanceType: t3.large
-        type: AWS
+       platform:
+         aws:
+           instanceType: t3.large
+         type: AWS
       release:
         image: quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64 # Default
       replicas: 2
