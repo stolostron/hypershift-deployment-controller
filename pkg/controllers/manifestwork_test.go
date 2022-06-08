@@ -1426,15 +1426,19 @@ func TestHostedClusterAndNodePoolValidationsWithObjectRef(t *testing.T) {
 	client.Create(ctx, hostedCluster)
 	defer client.Delete(ctx, hostedCluster)
 
-	// Test validate - Release mismatch between nodepool and hostedcluster
+	// Test validate - ClusterName in nodepool does not reference the hostedCluster
+	npRef := []corev1.LocalObjectReference{}
 	nps := getNodePools(testHD)
 	for _, np := range nps {
-		np.Spec.Release = hyp.Release{}
+		np.Spec.ClusterName = "wrongCluster"
 		client.Create(ctx, np)
 		defer client.Delete(ctx, np)
+
+		npRef = append(npRef, corev1.LocalObjectReference{Name: np.Name})
 	}
 
 	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
+	testHD.Spec.NodePoolsRef = npRef
 	client.Create(ctx, testHD)
 	defer client.Delete(ctx, testHD)
 
@@ -1446,23 +1450,6 @@ func TestHostedClusterAndNodePoolValidationsWithObjectRef(t *testing.T) {
 	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
-	assert.Equal(t, "Release.Image value mismatch", c.Message, "is equal when Release.Image is mismatched")
-
-	// Test validate - ClusterName in nodepool does not reference the hostedCluster
-	nps = getNodePools(testHD)
-	for _, np := range nps {
-		client.Get(ctx, types.NamespacedName{Namespace: np.Namespace, Name: np.Name}, np)
-		np.Spec.ClusterName = "wrongCluster"
-		client.Update(ctx, np)
-	}
-
-	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
-	assert.Nil(t, err, "err nil when reconcile was successfull")
-
-	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
-	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
-
-	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	assert.Equal(t, "incorrect Spec.ClusterName in NodePool", c.Message, "is equal when clusterName is incorrect")
 
 	// Test validate - Platform.Type for NodePool does not match HostedCluster
@@ -1532,6 +1519,7 @@ func TestHostedClusterAndNodePoolValidations(t *testing.T) {
 	// Test validate - Release mismatch between nodepool and hostedcluster
 	client.Get(ctx, types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, testHD)
 	testHD.Spec.HostedClusterSpec.Release = hyp.Release{}
+	testHD.Spec.NodePools[0].Spec.ClusterName = "wrongCluster"
 	client.Update(ctx, testHD)
 
 	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
@@ -1542,7 +1530,22 @@ func TestHostedClusterAndNodePoolValidations(t *testing.T) {
 	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
-	assert.Equal(t, "Release.Image value mismatch", c.Message, "is equal when Release.Image is mismatched")
+	assert.Equal(t, "incorrect Spec.ClusterName in NodePool", c.Message, "is equal when Spec.ClusterName in NodePool is incorrect")
+
+	// Test validate - Platform.Type for NodePool does not match HostedCluster
+	client.Get(ctx, types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, testHD)
+	testHD.Spec.NodePools[0].Spec.ClusterName = testHD.Name
+	testHD.Spec.NodePools[0].Spec.Platform.Type = hyp.NonePlatform
+	client.Update(ctx, testHD)
+
+	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "Platform.Type value mismatch", c.Message, "is equal when Spec.ClusterName in NodePool is incorrect")
 }
 
 func TestValidateSecurityConstraints(t *testing.T) {

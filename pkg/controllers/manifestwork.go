@@ -175,8 +175,7 @@ func (r *HypershiftDeploymentReconciler) validateHostedClusterAndNodePool(ctx co
 
 	// Release.Image in NodePool matches the HostedCluster
 	if npSpec.Release.Image != hcSpec.Release.Image {
-		r.Log.Error(errors.New("Release.Image value mismatch"), "Release.Image in node pool(s) does not match value in HostedClusterSpec")
-		return errors.New("Release.Image value mismatch")
+		r.Log.Info("Release.Image in node pool(s) does not match value in HostedClusterSpec")
 	}
 
 	return nil
