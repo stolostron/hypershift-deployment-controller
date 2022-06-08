@@ -25,7 +25,6 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
-	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -44,11 +43,14 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
+	/* Bug patch: acm-1417 acm-1420
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
 		return constant.ReleaseImage
 	}
 	return defaultVersion.PullSpec
+	*/
+	return constant.ReleaseImage
 
 }
 
@@ -162,6 +164,7 @@ func ScaffoldAzureHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, inf
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.Platform.Azure = ap
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AzurePlatform
+	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
 }
 
 func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
