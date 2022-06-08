@@ -73,7 +73,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					Type: hyp.NonePlatform,
 				},
 				Release: hyp.Release{
-					Image: "mockImage", //.DownloadURL,,
+					Image: constant.ReleaseImage, //.DownloadURL,,
 				},
 			},
 		}
@@ -122,6 +122,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			err := mgr.GetClient().Create(ctx, cloudProviderSecret)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
+			np.Spec.Platform = hyp.NodePoolPlatform{Type: hyp.AWSPlatform}
 			err = mgr.GetClient().Create(ctx, np)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
@@ -373,6 +374,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			err = mgr.GetClient().Create(ctx, cloudProviderSecret)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
+			np.Spec.Platform = hyp.NodePoolPlatform{Type: hyp.AzurePlatform}
 			err = mgr.GetClient().Create(ctx, np)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})

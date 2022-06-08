@@ -160,6 +160,27 @@ func syncManifestworkStatusToHypershiftDeployment(
 	}
 }
 
+func (r *HypershiftDeploymentReconciler) validateHostedClusterAndNodePool(ctx context.Context, hcName string, hcSpec hyp.HostedClusterSpec, npSpec hyp.NodePoolSpec) error {
+	// Platform.Type in NodePool matches the HostedCluster
+	if npSpec.Platform.Type != hcSpec.Platform.Type {
+		r.Log.Error(errors.New("Platform.Type value mismatch"), "Platform.Type in node pool(s) does not match value in HostedClusterSpec")
+		return errors.New("Platform.Type value mismatch")
+	}
+
+	// NodePool references the correct hostedCluster
+	if npSpec.ClusterName != hcName {
+		r.Log.Error(errors.New("incorrect Spec.ClusterName in NodePool"), "Spec.ClusterName in NodePool needs to match the referenced hostedCluster")
+		return errors.New("incorrect Spec.ClusterName in NodePool")
+	}
+
+	// Release.Image in NodePool matches the HostedCluster
+	if npSpec.Release.Image != hcSpec.Release.Image {
+		r.Log.Info("Release.Image in node pool(s) does not match value in HostedClusterSpec")
+	}
+
+	return nil
+}
+
 // validateSecurityConstraints checks the given HypershiftDeployment has the right permission to work on a given hosting cluster
 // return true if all the checks passed or we are skipping validation, return false if any of the check fails
 func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (bool, error) {
@@ -241,6 +262,37 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 	if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) == 0 && hyd.Spec.HostedClusterSpec == nil {
 		r.Log.Error(errors.New("missing value = nil"), "hypershiftDeployment.Spec.HostedClusterSpec and hypershiftDeployment.Spec.HostedClusterRef are nil")
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec or HostedClusterRef is required", hypdeployment.MisConfiguredReason)
+	}
+
+	// Check hostedClusterRef and NodePoolRefs exist and their platform.type matches
+	if len(hyd.Spec.HostedClusterRef.Name) != 0 && len(hyd.Spec.NodePoolsRef) != 0 {
+		// OK to use typed client since it's just for validation
+		hc := &hyp.HostedCluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: hyd.Namespace, Name: hyd.Spec.HostedClusterRef.Name}, hc); err != nil {
+			r.Log.Error(errors.New("hostedCluster not found"), "hostedCluster %v is expected in namespace %v", hyd.Spec.HostedClusterRef.Name, hyd.Namespace)
+			return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "hostedCluster not found", hypdeployment.MisConfiguredReason)
+		}
+
+		for _, npRef := range hyd.Spec.NodePoolsRef {
+			np := &hyp.NodePool{}
+			if err := r.Get(ctx, client.ObjectKey{Namespace: hyd.Namespace, Name: npRef.Name}, np); err != nil {
+				r.Log.Error(errors.New("nodePool not found"), "nodePool %v is expected in namespace %v", npRef.Name, hyd.Namespace)
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "nodePool not found", hypdeployment.MisConfiguredReason)
+			}
+
+			if err := r.validateHostedClusterAndNodePool(ctx, hc.Name, hc.Spec, np.Spec); err != nil {
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+			}
+		}
+	}
+
+	// For hostedClusterSpec and nodePoolSpec, check that the platform.type matches
+	if hyd.Spec.HostedClusterSpec != nil && len(hyd.Spec.NodePools) != 0 {
+		for _, np := range hyd.Spec.NodePools {
+			if err := r.validateHostedClusterAndNodePool(ctx, hyd.Name, *hyd.Spec.HostedClusterSpec, np.Spec); err != nil {
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+			}
+		}
 	}
 
 	passedSecurity, statusUpdateErr := r.validateSecurityConstraints(ctx, hyd)
