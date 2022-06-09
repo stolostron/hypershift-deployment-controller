@@ -109,7 +109,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	managementClusterName := helper.GetHostingCluster(&hyd)
 	// ManagedCluster
-	managedCluster, err := ensureManagedCluster(r, req.NamespacedName, managedClusterName, managementClusterName)
+	managedCluster, err := ensureManagedCluster(r, req.NamespacedName, managedClusterName, managementClusterName, hyd.Spec.HostedClusterSetLabels)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -190,7 +190,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
-	managedClusterName, managementClusterName string) (*mcv1.ManagedCluster, error) {
+	managedClusterName, managementClusterName string, clusterSetLabels map[string]string) (*mcv1.ManagedCluster, error) {
 	log := r.Log.WithValues("managedClusterName", managedClusterName)
 	ctx := context.Background()
 
@@ -213,9 +213,16 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		mc.Spec.HubAcceptsClient = true
 
 		mc.ObjectMeta.Labels = map[string]string{
-			mcv1beta1.ClusterSetLabel: helper.GetClusterSetName(managementCluster),
-			"vendor":                  "OpenShift",   // This is always true
-			"cloud":                   "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
+			"vendor": "OpenShift",   // This is always true
+			"cloud":  "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
+		}
+
+		if len(clusterSetLabels) == 0 {
+			mc.ObjectMeta.Labels[mcv1beta1.ClusterSetLabel] = helper.GetClusterSetName(managementCluster)
+		} else {
+			for k, v := range clusterSetLabels {
+				mc.ObjectMeta.Labels[k] = v
+			}
 		}
 
 		mc.ObjectMeta.Annotations = map[string]string{

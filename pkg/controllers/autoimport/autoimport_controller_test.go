@@ -145,6 +145,10 @@ func assertContainFinalizer(t *testing.T, ctx context.Context, client crclient.C
 
 func TestReconcileCreate(t *testing.T) {
 	hyd := GetHypershiftDeployment(HYD_NAMESPACE, HYD_NAME, "id1", HYD_NAMESPACE)
+	hydWithClusterSetLabels := hyd.DeepCopy()
+	hydWithClusterSetLabels.Spec.HostedClusterSetLabels = map[string]string{
+		"cs1": "cs1",
+	}
 	managementCluster := GetManagedCluster(HYD_NAMESPACE)
 
 	cases := []struct {
@@ -187,7 +191,7 @@ func TestReconcileCreate(t *testing.T) {
 		{
 			name:              "create managed cluster and secret",
 			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
-			hyd:               hyd.DeepCopy(),
+			hyd:               hydWithClusterSetLabels.DeepCopy(),
 			managementCluster: managementCluster.DeepCopy(),
 			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
 				var mc mcv1.ManagedCluster
@@ -197,6 +201,8 @@ func TestReconcileCreate(t *testing.T) {
 				var autoImportSecret corev1.Secret
 				err = client.Get(ctx, getNamespaceName(mc.Name, "auto-import-secret"), &autoImportSecret)
 				assert.Nil(t, err, "secret resource is retrieved")
+				assert.Equal(t, "cs1",
+					mc.Labels["cs1"], "assert management cluster managed cluster set label")
 
 				assertAnnoCreateMCFalse(t, ctx, client)
 			},

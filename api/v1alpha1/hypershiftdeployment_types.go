@@ -115,6 +115,10 @@ type HypershiftDeploymentSpec struct {
 	// +optional
 	HostedClusterSpec *hypv1alpha1.HostedClusterSpec `json:"hostedClusterSpec,omitempty"`
 
+	// HostedClusterSetLabels specify the ManagedClusterSet labels for the newly imported  hosted cluster to the hub cluster.
+	// +optional
+	HostedClusterSetLabels map[string]string `json:"hostedClusterSetLabels,omitempty"`
+
 	// Reference to a HostedCluster on the HyperShift deployment namespace that will be applied to the
 	// ManagementCluster by ACM, if omitted, it will be generated
 	// required if InfraSpec.Configure is false

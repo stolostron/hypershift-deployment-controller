@@ -161,6 +161,13 @@ func (in *HypershiftDeploymentSpec) DeepCopyInto(out *HypershiftDeploymentSpec) 
 		*out = new(apiv1alpha1.HostedClusterSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.HostedClusterSetLabels != nil {
+		in, out := &in.HostedClusterSetLabels, &out.HostedClusterSetLabels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	out.HostedClusterRef = in.HostedClusterRef
 	if in.NodePools != nil {
 		in, out := &in.NodePools, &out.NodePools
