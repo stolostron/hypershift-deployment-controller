@@ -27,7 +27,6 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -269,26 +268,6 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 		setManifestWorkSelectivelyDeleteOption(m, hyd)
 		if m.Spec.DeleteOption.PropagationPolicy != workv1.DeletePropagationPolicyTypeOrphan {
 			if !reflect.DeepEqual(dpm.Spec.DeleteOption, m.Spec.DeleteOption) {
-
-				// set manifest config for hosted cluster to check whether the owner reference
-				// AppliedManifestWork exist.
-				// The work agent will add an AppliedManifestWork owner reference to the hosted
-				// cluster to achieve Foreground deletion.
-				for i, c := range m.Spec.ManifestConfigs {
-					if c.ResourceIdentifier.Resource == HostedClusterResource {
-						for j, r := range c.FeedbackRules {
-							if r.Type == workv1.JSONPathsType {
-								m.Spec.ManifestConfigs[i].FeedbackRules[j].JsonPaths = append(r.JsonPaths,
-									workv1.JsonPath{
-										Name: OwnerReference,
-										Path: ".metadata.ownerReferences[?(@.kind==\"AppliedManifestWork\")].name",
-									},
-								)
-							}
-						}
-					}
-				}
-
 				patch := client.MergeFrom(dpm)
 				if err := r.Client.Patch(ctx, m, patch); err != nil {
 					return ctrl.Result{},
@@ -298,20 +277,8 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 				r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
 			}
 
-			// Wait for the work agent to add owner reference for the hosted cluster.
-			appliedManifestWorkOwner := ""
-			for _, obj := range m.Status.ResourceStatus.Manifests {
-				rMeta := resourceMeta(obj.ResourceMeta)
-				id := rMeta.ToIdentifier()
-				if id.Resource == HostedClusterResource {
-					for _, v := range obj.StatusFeedbacks.Values {
-						if v.Name == OwnerReference {
-							appliedManifestWorkOwner = string(*v.Value.String)
-						}
-					}
-				}
-			}
-			if len(appliedManifestWorkOwner) == 0 {
+			cond := condmeta.FindStatusCondition(m.Status.Conditions, string(workv1.WorkAvailable))
+			if cond == nil || cond.ObservedGeneration != m.Generation || cond.Status != metav1.ConditionTrue {
 				// Requeue the request, wait for the work agent to consume the delete option changes.
 				return ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, nil
 			}
@@ -630,9 +597,9 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 			// find and set failed nodepool to condition
 			st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
 			if st == nil {
-				meta.SetStatusCondition(&out, npCond)
+				condmeta.SetStatusCondition(&out, npCond)
 			} else if npCond.Status != "True" {
-				meta.SetStatusCondition(&out, npCond)
+				condmeta.SetStatusCondition(&out, npCond)
 			}
 		}
 
@@ -652,7 +619,7 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	// if there's nodepool condition and it's not false, then all nodepool are ready
 	st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
 	if st != nil && st.Status == "True" {
-		meta.SetStatusCondition(&out, metav1.Condition{
+		condmeta.SetStatusCondition(&out, metav1.Condition{
 			Type:   string(hypdeployment.Nodepool),
 			Status: "True",
 			Reason: hypdeployment.NodePoolProvision,
