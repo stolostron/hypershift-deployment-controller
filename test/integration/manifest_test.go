@@ -8,6 +8,7 @@ import (
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -20,6 +21,32 @@ import (
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 )
+
+func injectManifestWorkAvailableCond(c client.Client, hyd hypdeployment.HypershiftDeployment) bool {
+	mw := &workv1.ManifestWork{}
+	err := c.Get(ctx, client.ObjectKey{Namespace: hyd.Spec.HostingCluster,
+		Name: hyd.Spec.InfraID}, mw)
+	if apierrors.IsNotFound(err) {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+
+	patch := client.MergeFrom(mw.DeepCopy())
+	meta.SetStatusCondition(&mw.Status.Conditions, metav1.Condition{
+		Type:               string(workv1.WorkAvailable),
+		Status:             metav1.ConditionTrue,
+		Reason:             "ResourcesAvailable",
+		ObservedGeneration: mw.Generation,
+		Message:            "All resources are available",
+	})
+
+	if err := c.Status().Patch(ctx, mw, patch); err != nil {
+		return false
+	}
+	return true
+}
 
 var _ = ginkgo.Describe("Manifest Work", func() {
 	var (
@@ -137,6 +164,10 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			gomega.Eventually(func() bool {
 				hydDeleting := hypdeployment.HypershiftDeployment{}
 				err := mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hydNamespace, Name: hydName}, &hydDeleting)
+				if err == nil {
+					_ = injectManifestWorkAvailableCond(mgr.GetClient(), hydDeleting)
+				}
+
 				return apierrors.IsNotFound(err)
 			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
 
@@ -389,6 +420,9 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			gomega.Eventually(func() bool {
 				hydDeleting := hypdeployment.HypershiftDeployment{}
 				err := mgr.GetClient().Get(ctx, client.ObjectKey{Namespace: hydNamespace, Name: hydName}, &hydDeleting)
+				if err == nil {
+					_ = injectManifestWorkAvailableCond(mgr.GetClient(), hydDeleting)
+				}
 				return apierrors.IsNotFound(err)
 			}, eventuallyTimeout, eventuallyInterval).Should(gomega.BeTrue())
 

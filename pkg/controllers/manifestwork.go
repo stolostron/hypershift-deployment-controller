@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
@@ -54,6 +55,7 @@ var (
 	StatusFlag            = "status"
 	Message               = "message"
 	Progress              = "progress"
+	OwnerReference        = "owner"
 )
 
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
@@ -384,18 +386,32 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	}
 
 	if m.GetDeletionTimestamp().IsZero() {
-		patch := client.MergeFrom(m.DeepCopy())
+		dpm := m.DeepCopy()
 		setManifestWorkSelectivelyDeleteOption(m, hyd)
-		if err := r.Client.Patch(ctx, m, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+		if m.Spec.DeleteOption.PropagationPolicy != workv1.DeletePropagationPolicyTypeOrphan {
+			if !reflect.DeepEqual(dpm.Spec.DeleteOption, m.Spec.DeleteOption) {
+				patch := client.MergeFrom(dpm)
+				if err := r.Client.Patch(ctx, m, patch); err != nil {
+					return ctrl.Result{},
+						fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+				}
+
+				r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
+			}
+
+			cond := condmeta.FindStatusCondition(m.Status.Conditions, string(workv1.WorkAvailable))
+			if cond == nil || cond.ObservedGeneration != m.Generation || cond.Status != metav1.ConditionTrue {
+				// Requeue the request, wait for the work agent to consume the delete option changes.
+				return ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, nil
+			}
 		}
-		r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
 
 		if err := r.Delete(ctx, m); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
 			}
 		}
+		r.Log.Info("delete the manifestwork complete")
 	}
 
 	syncManifestworkStatusToHypershiftDeployment(hyd, m)
@@ -567,19 +583,19 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 				JsonPaths: []workv1.JsonPath{
 					{
 						Name: Reason,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].reason"),
+						Path: ".status.conditions[?(@.type==\"Available\")].reason",
 					},
 					{
 						Name: StatusFlag,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].status"),
+						Path: ".status.conditions[?(@.type==\"Available\")].status",
 					},
 					{
 						Name: Message,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].message"),
+						Path: ".status.conditions[?(@.type==\"Available\")].message",
 					},
 					{
 						Name: Progress,
-						Path: fmt.Sprintf(".status.version.history[?(@.state!=\"\")].state"),
+						Path: ".status.version.history[?(@.state!=\"\")].state",
 					},
 				},
 			},
@@ -602,15 +618,15 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 					JsonPaths: []workv1.JsonPath{
 						{
 							Name: Reason,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].reason"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].reason",
 						},
 						{
 							Name: StatusFlag,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].status"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].status",
 						},
 						{
 							Name: Message,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].message"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].message",
 						},
 					},
 				},
@@ -733,17 +749,6 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	}
 
 	return out
-}
-
-func isFeedbackStatusFalse(fbs workv1.StatusFeedbackResult) bool {
-	for _, v := range fbs.Values {
-		//if there's not ready nodepool, report this one
-		if v.Name == StatusFlag && *v.Value.String != "True" {
-			return true
-		}
-	}
-
-	return false
 }
 
 type resourceMeta workv1.ManifestResourceMeta
