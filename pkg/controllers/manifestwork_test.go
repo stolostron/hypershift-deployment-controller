@@ -1666,8 +1666,9 @@ func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
 	rqst, err := hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
 	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
 	assert.EqualValues(t, ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, rqst, "request requeue should be 1s")
-
 	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.Equal(t, workv1.DeletePropagationPolicyTypeSelectivelyOrphan, mw.Spec.DeleteOption.PropagationPolicy,
+		"set selectivelyOrphan and not orphan")
 	mw.Status.Conditions = []metav1.Condition{
 		metav1.Condition{
 			Type:               string(workv1.WorkAvailable),
@@ -1675,7 +1676,7 @@ func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 		},
 	}
-	err = client.Update(ctx, mw)
+	err = client.Status().Update(ctx, mw)
 	assert.Nil(t, err, "is nil when condition is added")
 
 	rqst, err = hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
