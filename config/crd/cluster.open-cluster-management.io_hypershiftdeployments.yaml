@@ -1204,6 +1204,11 @@ spec:
                 - services
                 - sshKey
                 type: object
+              hostedManagedClusterSet:
+                description: HostedManagedClusterSet is the ManagedClusterSet the
+                  hosted cluster should belong to. If omitted, the default is the
+                  hosting cluster's cluster set
+                type: string
               hostingCluster:
                 description: HostingCluster only applies to ManifestWork, and specifies
                   which managedCluster's namespace the manifestwork will be applied
