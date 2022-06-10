@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
-	github.com/openshift/hypershift v0.0.0-20220530194701-151246fd8480
+	github.com/openshift/hypershift v0.0.0-20220607131543-f684373220da
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1

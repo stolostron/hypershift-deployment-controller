@@ -1,6 +1,20 @@
 # Provision Hypershift Clusters by MCE
 
-The multicluster-engine(MCE) has been installed and at least one OCP managed cluster(e.g. `hypershift-management-cluster`, If you want the hub cluster to act as a hypershift management cluster, you can also use `local-cluster`) has been imported. We will make this OCP managed cluster a hypershift management cluster.
+The multicluster-engine(MCE) has been installed and at least one OCP managed cluster. We will make this OCP managed cluster a hypershift management cluster. It is possible to use the hub cluster to act as a hypershift management cluster, however, this requires importing the hub cluster as an OCP managed cluster called `local-cluster`:
+
+```bash
+$ oc apply -f - <<EOF
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  labels:
+    local-cluster: "true"
+  name: local-cluster
+spec:
+  hubAcceptsClient: true
+  leaseDurationSeconds: 60
+EOF
+```
 
 ## Enable the hypershift related components on the hub cluster
 

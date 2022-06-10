@@ -33,13 +33,13 @@ jobs:
         with:
           payload: |
             {
-              "text": ":warning::warning: Announcement: `HypershiftDeployment` CRD compare result: ${{ job.status }} :warning::warning:\n${{ github.event.pull_request.html_url || github.event.type }}",
+              "text": ":alert-siren: Announcement: `HypershiftDeployment` CRD compare result: ${{ job.status }} \n${{ github.event.pull_request.html_url || github.event.type }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":warning::warning: Announcement: `HypershiftDeployment` CRD compare result: ${{ job.status }} :warning::warning:\n${{ github.event.pull_request.html_url || github.event.type }}"
+                    "text": ":alert-siren: Announcement: `HypershiftDeployment` CRD compare result: ${{ job.status }} \n${{ github.event.pull_request.html_url || github.event.type }}"
                   }
                 }
               ]
