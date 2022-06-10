@@ -19,6 +19,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1667,6 +1668,7 @@ func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
 	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
 	assert.EqualValues(t, ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, rqst, "request requeue should be 1s")
 	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.False(t, apierrors.IsNotFound(err), "false when ManifestWork exists")
 	assert.Equal(t, workv1.DeletePropagationPolicyTypeSelectivelyOrphan, mw.Spec.DeleteOption.PropagationPolicy,
 		"set selectivelyOrphan and not orphan")
 	mw.Status.Conditions = []metav1.Condition{
@@ -1678,8 +1680,10 @@ func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
 	}
 	err = client.Status().Update(ctx, mw)
 	assert.Nil(t, err, "is nil when condition is added")
-
+	// 2nd pass
 	rqst, err = hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
 	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
 	assert.EqualValues(t, ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, rqst, "request requeue should be 20s")
+	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.True(t, apierrors.IsNotFound(err), "true when ManifestWork is removed")
 }
