@@ -5,6 +5,7 @@ import (
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	hydclient "github.com/stolostron/hypershift-deployment-controller/pkg/client"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
@@ -17,6 +18,12 @@ func GetHostingCluster(hyd *hypdeployment.HypershiftDeployment) string {
 	}
 
 	return hyd.Spec.HostingCluster
+}
+
+func GetHostingClusterKey(hyd *hypdeployment.HypershiftDeployment) types.NamespacedName {
+	return types.NamespacedName{
+		Name: GetHostingCluster(hyd),
+	}
 }
 
 func GetHostingNamespace(hyd *hypdeployment.HypershiftDeployment) string {

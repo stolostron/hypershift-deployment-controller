@@ -12,14 +12,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/hypershift/api/fixtures"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
-	workv1 "open-cluster-management.io/api/work/v1"
-
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
+	workv1 "open-cluster-management.io/api/work/v1"
 )
 
 func injectManifestWorkAvailableCond(c client.Client, hyd hypdeployment.HypershiftDeployment) bool {
@@ -54,6 +54,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		hydNamespace   string
 		hyd            *hypdeployment.HypershiftDeployment
 		hc             *hyp.HostedCluster
+		mc             *clusterv1.ManagedCluster
 		np             *hyp.NodePool
 		infraID        string
 		s3bucketSecret *corev1.Secret
@@ -73,6 +74,20 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hydName,
 				Namespace: hydNamespace,
+			},
+		}
+
+		mc = &clusterv1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+			},
+			Status: clusterv1.ManagedClusterStatus{
+				ClusterClaims: []clusterv1.ManagedClusterClaim{
+					clusterv1.ManagedClusterClaim{
+						Name:  "version.openshift.io",
+						Value: "4.10.15",
+					},
+				},
 			},
 		}
 
@@ -117,9 +132,13 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 		}
 		err := mgr.GetClient().Create(ctx, s3bucketSecret)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		err = mgr.GetClient().Create(ctx, mc)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	})
 	ginkgo.AfterEach(func() {
 		err := mgr.GetClient().Delete(ctx, s3bucketSecret)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		err = mgr.GetClient().Delete(ctx, mc)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	})
 	ginkgo.Context("aws", func() {

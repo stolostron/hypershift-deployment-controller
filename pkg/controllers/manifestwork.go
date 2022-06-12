@@ -216,8 +216,7 @@ func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context
 	}
 
 	// Check the managed cluster exists
-	var managedCluster clusterv1.ManagedCluster
-	err = r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostingCluster}, &managedCluster)
+	managedCluster, err := r.getManagedCluster(ctx, hyd)
 	switch {
 	case apierrors.IsNotFound(err):
 		r.Log.Error(err, "fail to find ManagedCluster: "+hyd.Spec.HostingCluster)
@@ -229,7 +228,7 @@ func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context
 			hyd.Spec.HostingCluster+" ManagedCluster is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
 	}
 
-	foundClusterSet, err := helper.IsClusterInClusterSet(r.Client, &managedCluster, clusterSets.List())
+	foundClusterSet, err := helper.IsClusterInClusterSet(r.Client, managedCluster, clusterSets.List())
 	if err != nil {
 		r.Log.Error(err, "error while trying to determine if ManagedCluster: "+hyd.Spec.HostingCluster+" is in a ManagedClusterSet")
 		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
@@ -819,4 +818,40 @@ func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*hyp.NodePool
 	}
 
 	return nodePools
+}
+
+func (r *HypershiftDeploymentReconciler) getManagedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*clusterv1.ManagedCluster, error) {
+	var mc clusterv1.ManagedCluster
+	err := r.Client.Get(ctx, helper.GetHostingClusterKey(hyd), &mc)
+	return &mc, err
+}
+
+func (r *HypershiftDeploymentReconciler) annotateManagedClusterVersion(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) error {
+
+	// Exit early if the annotation is already defined,
+	if hyd.Annotations == nil {
+		hyd.Annotations = map[string]string{}
+	}
+	if _, ok := hyd.Annotations[constant.AnnoHostingVersion]; ok {
+		return nil
+	}
+	if len(hyd.Spec.HostingCluster) == 0 {
+		r.Log.Error(errors.New(constant.HostingClusterMissing), "Spec.HostingCluster needs a ManagedCluster name")
+		return errors.New(constant.HostingClusterMissing)
+	}
+	managedCluster, err := r.getManagedCluster(ctx, hyd)
+	if err != nil {
+		r.Log.Error(err, "ManagedCluster with name from Spec.HostingCluster was not found")
+		return errors.New(constant.HostingManagedClusterMissing)
+	}
+	hyd.Annotations[constant.AnnoHostingVersion] = constant.ReleaseImage
+	if len(managedCluster.Status.ClusterClaims) > 0 {
+		for _, cc := range managedCluster.Status.ClusterClaims {
+			r.Log.Info(cc.Name)
+			if cc.Name == "version.openshift.io" {
+				hyd.Annotations[constant.AnnoHostingVersion] = string(constant.ReleaseImageUrl + cc.Value + "-x86_64")
+			}
+		}
+	}
+	return nil
 }

@@ -3,11 +3,14 @@ package constant
 const (
 	AnnoHypershiftDeployment = "cluster.open-cluster-management.io/hypershiftdeployment"
 
+	AnnoHostingVersion = "hosting.cluster.open-cluster-management.io/initialversion"
+
 	NamespaceNameSeperator = "/"
 
 	ManagedClusterCleanupFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"
 
-	ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64"
+	ReleaseImageUrl = "quay.io/openshift-release-dev/ocp-release:"
+	ReleaseImage    = ReleaseImageUrl + "4.10.15-x86_64"
 
 	// DestroyFinalizer makes sure infrastructure is cleaned up before it is removed
 	DestroyFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
@@ -23,6 +26,9 @@ const (
 
 	// HostingClusterMissing message
 	HostingClusterMissing = "spec.hostingCluster value is missing"
+
+	// HostingManagedClusterMissing message. The managedCluster is not found
+	HostingManagedClusterMissing = "the managedCluster defined by spec.hostingCluster was not found"
 
 	// CreatedByHypershiftDeployment is an annotation that is used to show ownership via infra-ids
 	CreatedByHypershiftDeployment = "hypershift-deployment.open-cluster-management.io/created-by"

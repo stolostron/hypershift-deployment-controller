@@ -153,7 +153,7 @@ func TestScaffoldHostedClusterSpec(t *testing.T) {
 		// Defaults for all platforms
 		PullSecret: corev1.LocalObjectReference{Name: ""},
 		Release: hyp.Release{
-			Image: getReleaseImagePullSpec(), //.DownloadURL,
+			Image: constant.ReleaseImage, //.DownloadURL,
 		},
 		Services: []hyp.ServicePublishingStrategyMapping{},
 	}

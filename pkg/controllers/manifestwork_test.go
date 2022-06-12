@@ -1641,3 +1641,83 @@ func TestValidateSecurityConstraints(t *testing.T) {
 	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
 	assert.True(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
 }
+
+func TestAnnotateManagedClusterVersion(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client:                  client,
+		Log:                     ctrl.Log.WithName("tester"),
+		ValidateClusterSecurity: false,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Annotations = nil
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	err := hdr.annotateManagedClusterVersion(ctx, testHD)
+	assert.Equal(t, map[string]string{}, testHD.Annotations, "annotations is an empty map")
+	assert.Equal(t,
+		"spec.hostingCluster value is missing",
+		err.Error(),
+		"should fail with missing spec.hostingcluster")
+
+	testHD.Spec.HostingCluster = "local-cluster"
+	err = hdr.annotateManagedClusterVersion(ctx, testHD)
+	assert.Equal(t,
+		"the managedCluster defined by spec.hostingCluster was not found",
+		err.Error(),
+		"should fail with managedcluster not found")
+
+	mc := &clusterv1.ManagedCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "local-cluster",
+		},
+		Status: clusterv1.ManagedClusterStatus{},
+	}
+	client.Create(ctx, mc)
+	err = hdr.annotateManagedClusterVersion(ctx, testHD)
+	assert.Nil(t, err, "is not nil when annotation create for version")
+	assert.Equal(t, "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
+		testHD.Annotations[constant.AnnoHostingVersion], "version is 4.10.15")
+
+}
+
+func TestAnnotateManagedClusterVersionSuccess(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client:                  client,
+		Log:                     ctrl.Log.WithName("tester"),
+		ValidateClusterSecurity: false,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Annotations = nil
+	testHD.Spec.HostingCluster = "local-cluster"
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	mc := &clusterv1.ManagedCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "local-cluster",
+		},
+		Status: clusterv1.ManagedClusterStatus{
+			ClusterClaims: []clusterv1.ManagedClusterClaim{
+				clusterv1.ManagedClusterClaim{
+					Name:  "version.openshift.io",
+					Value: "4.10.99",
+				},
+			},
+		},
+	}
+
+	client.Create(ctx, mc)
+	err := hdr.annotateManagedClusterVersion(ctx, testHD)
+	assert.Nil(t, err, "is nil when annotation created for version")
+	assert.Equal(t, "quay.io/openshift-release-dev/ocp-release:4.10.99-x86_64",
+		testHD.Annotations[constant.AnnoHostingVersion], "version should be 4.10.99")
+}

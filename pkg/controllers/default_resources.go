@@ -42,18 +42,6 @@ import (
 
 var resLog = ctrl.Log.WithName("resource-render")
 
-func getReleaseImagePullSpec() string {
-
-	/* TODO: ACM-1420, this comment fixes ACM-14-17
-	defaultVersion, err := version.LookupDefaultOCPVersion()
-	if err != nil {
-		return constant.ReleaseImage
-	}
-	return defaultVersion.PullSpec
-	*/
-	return constant.ReleaseImage
-}
-
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
 	hostedCluster := &unstructured.Unstructured{}
 	hostedCluster.SetAPIVersion(hyp.GroupVersion.String())
@@ -237,7 +225,7 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				// Defaults for all platforms
 				PullSecret: corev1.LocalObjectReference{Name: hyd.Name + "-pull-secret"},
 				Release: hyp.Release{
-					Image: getReleaseImagePullSpec(), //.DownloadURL,
+					Image: hyd.Annotations[constant.AnnoHostingVersion], //.DownloadURL,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{},
 			}
@@ -363,13 +351,12 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 						Type: hyp.NonePlatform,
 					},
 					Release: hyp.Release{
-						Image: getReleaseImagePullSpec(), //.DownloadURL,,
+						Image: hyd.Annotations[constant.AnnoHostingVersion], //.DownloadURL,,
 					},
 				},
 			},
 		}
 	}
-
 	for _, np := range hyd.Spec.NodePools {
 		if np.Spec.ClusterName != hyd.Name {
 			np.Spec.ClusterName = hyd.Name

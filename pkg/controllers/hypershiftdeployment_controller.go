@@ -141,7 +141,19 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 
 	if configureInfra {
 		if hyd.Spec.Infrastructure.Platform == nil {
-			return ctrl.Result{}, r.updateMissingInfrastructureParameterCondition(&hyd, "Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
+			return ctrl.Result{},
+				r.updateMissingInfrastructureParameterCondition(&hyd,
+					"Missing value HypershiftDeployment.Spec.Infrastructure.Platform")
+		}
+
+		err = r.annotateManagedClusterVersion(ctx, &hyd)
+		if err != nil {
+			return ctrl.Result{},
+				r.updateStatusConditionsOnChange(&hyd,
+					hypdeployment.WorkConfigured,
+					metav1.ConditionFalse,
+					err.Error(),
+					hypdeployment.MisConfiguredReason)
 		}
 
 		if hyd.Spec.Infrastructure.Platform.AWS != nil {
@@ -154,6 +166,7 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 				return requeue, err
 			}
 		}
+		delete(hyd.Annotations, constant.AnnoHostingVersion)
 	} else {
 		_ = r.updateStatusConditionsOnChange(&hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Platform IAM configuration is not applicable for Spec.Infrastructure.Configure=False", hypdeployment.NotApplicableReason)
 
