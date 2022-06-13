@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1640,4 +1642,48 @@ func TestValidateSecurityConstraints(t *testing.T) {
 	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
 	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
 	assert.True(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+}
+
+func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
+
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client:                  client,
+		Log:                     ctrl.Log.WithName("tester"),
+		ValidateClusterSecurity: false,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-cluster"
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	mw, _ := scaffoldManifestwork(testHD)
+	client.Create(ctx, mw)
+	defer client.Delete(ctx, mw)
+
+	rqst, err := hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
+	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
+	assert.EqualValues(t, ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, rqst, "request requeue should be 1s")
+	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.False(t, apierrors.IsNotFound(err), "false when ManifestWork exists")
+	assert.Equal(t, workv1.DeletePropagationPolicyTypeSelectivelyOrphan, mw.Spec.DeleteOption.PropagationPolicy,
+		"set selectivelyOrphan and not orphan")
+	mw.Status.Conditions = []metav1.Condition{
+		metav1.Condition{
+			Type:               string(workv1.WorkAvailable),
+			ObservedGeneration: mw.Generation,
+			Status:             metav1.ConditionTrue,
+		},
+	}
+	err = client.Status().Update(ctx, mw)
+	assert.Nil(t, err, "is nil when condition is added")
+	// 2nd pass
+	rqst, err = hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
+	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
+	assert.EqualValues(t, ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, rqst, "request requeue should be 20s")
+	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.True(t, apierrors.IsNotFound(err), "true when ManifestWork is removed")
 }
