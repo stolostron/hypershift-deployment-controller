@@ -168,7 +168,7 @@ type InfraSpec struct {
 	Platform *Platforms `json:"platform,omitempty"`
 
 	// CloudProvider secret, contains the Cloud credenetial, Pull Secret and Base Domain
-	CloudProvider corev1.LocalObjectReference `json:"cloudProvider"`
+	CloudProvider corev1.LocalObjectReference `json:"cloudProvider,omitempty"`
 }
 
 type Platforms struct {
