@@ -60,7 +60,7 @@ func getHostedCluster(hyd *hyd.HypershiftDeployment) *hyp.HostedCluster {
 				Type: hyp.AWSPlatform,
 			},
 			Networking: hyp.ClusterNetworking{
-				NetworkType: hyp.OpenShiftSDN,
+				NetworkType: hyp.OVNKubernetes,
 			},
 			Services: []hyp.ServicePublishingStrategyMapping{},
 			Release: hyp.Release{

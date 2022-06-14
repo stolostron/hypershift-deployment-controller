@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/openshift/hypershift/api/v1alpha1"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
@@ -148,12 +149,50 @@ func TestScaffoldHostedClusterSpec(t *testing.T) {
 			ServiceCIDR: "",
 			PodCIDR:     "",
 			MachineCIDR: "", //This is overwritten below
-			NetworkType: hyp.OpenShiftSDN,
+			NetworkType: hyp.OVNKubernetes,
 		},
 		// Defaults for all platforms
 		PullSecret: corev1.LocalObjectReference{Name: ""},
 		Release: hyp.Release{
 			Image: getReleaseImagePullSpec(), //.DownloadURL,
+		},
+		Services: []hyp.ServicePublishingStrategyMapping{},
+	}
+
+	scaffoldHostedClusterSpec(testHD)
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.PullSecret.Name,
+		"test1-pull-secret", "Equal when pull secret name is populated")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Release.Image,
+		getReleaseImagePullSpec(),
+		"The image we update at release time as stable")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.ServiceCIDR,
+		"172.31.0.0/16", "default serviceCIDR")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.PodCIDR,
+		"10.132.0.0/14", "default podCIDR")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "",
+		"if code above ran, this will be empty")
+	assert.NotEqual(t, testHD.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{},
+		"services should not be an empty list")
+	assert.Equal(t, v1alpha1.NetworkType("OVNKubernetes"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+		"is OVNKubernetes when release is not 4.10")
+}
+
+func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
+
+	t.Log("Testing AWS scaffolding")
+	testHD := getHypershiftDeployment("default", "test1", false)
+	testHD.Spec.HostedClusterSpec = &hyp.HostedClusterSpec{
+		//IssuerURL: iamOut.IssuerURL,
+		Networking: hyp.ClusterNetworking{
+			ServiceCIDR: "",
+			PodCIDR:     "",
+			MachineCIDR: "", //This is overwritten below
+			NetworkType: hyp.OVNKubernetes,
+		},
+		// Defaults for all platforms
+		PullSecret: corev1.LocalObjectReference{Name: ""},
+		Release: hyp.Release{
+			Image: "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
 		},
 		Services: []hyp.ServicePublishingStrategyMapping{},
 	}
@@ -172,6 +211,8 @@ func TestScaffoldHostedClusterSpec(t *testing.T) {
 		"if code above ran, this will be empty")
 	assert.NotEqual(t, testHD.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{},
 		"services should not be an empty list")
+	assert.Equal(t, v1alpha1.NetworkType("OpenShiftSDN"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+		"is OVNKubernetes when release is not 4.10")
 }
 
 func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
@@ -645,7 +686,7 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 				Type: hyp.AWSPlatform,
 			},
 			Networking: hyp.ClusterNetworking{
-				NetworkType: hyp.OpenShiftSDN,
+				NetworkType: hyp.OVNKubernetes,
 			},
 			Services: []hyp.ServicePublishingStrategyMapping{},
 			Release: hyp.Release{
