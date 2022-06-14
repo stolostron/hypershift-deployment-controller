@@ -29,7 +29,7 @@ true
 We call the cluster with the hypershift operator installed as the hypershift management cluster. In this section, we will use hypershift-addon to install a hypershift operator to one of the managed cluster.
 
 
-1. If you plan to provision hosted clusters on AWS platform, create an oidc S3 credentials secret for the hypershift operator, name is `hypershift-operator-oidc-provider-s3-credentials` in the `hypershift-management-cluster` namespace, which one you want to install hypershift operator.
+1. If you plan to provision hosted clusters on the AWS platform, create an oidc S3 credentials secret for the hypershift operator, name is `hypershift-operator-oidc-provider-s3-credentials` in the `hypershift-management-cluster` namespace, which one you want to install hypershift operator.
 
 The secret must contain 3 fields:
 - `bucket`: An S3 bucket with public access to host OIDC discovery documents for your hypershift clusters
