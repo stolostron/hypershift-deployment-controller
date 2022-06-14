@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/openshift/hypershift/api/fixtures"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
+	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -44,14 +46,11 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
-	/* TODO: ACM-1420, this comment fixes ACM-14-17
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
 		return constant.ReleaseImage
 	}
 	return defaultVersion.PullSpec
-	*/
-	return constant.ReleaseImage
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
@@ -232,7 +231,7 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 					ServiceCIDR: "172.31.0.0/16",
 					PodCIDR:     "10.132.0.0/14",
 					MachineCIDR: "", //This is overwritten below
-					NetworkType: hyp.OpenShiftSDN,
+					NetworkType: hyp.OVNKubernetes,
 				},
 				// Defaults for all platforms
 				PullSecret: corev1.LocalObjectReference{Name: hyd.Name + "-pull-secret"},
@@ -271,6 +270,10 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				},
 			},
 		}
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.NetworkType == hyp.OVNKubernetes &&
+		strings.Contains(hyd.Spec.HostedClusterSpec.Release.Image, ":4.10.") {
+		hyd.Spec.HostedClusterSpec.Networking.NetworkType = hyp.OpenShiftSDN
 	}
 }
 

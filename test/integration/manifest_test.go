@@ -198,7 +198,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 						Type: hyp.AWSPlatform,
 					},
 					Networking: hyp.ClusterNetworking{
-						NetworkType: hyp.OpenShiftSDN,
+						NetworkType: hyp.OVNKubernetes,
 					},
 					Services: []hyp.ServicePublishingStrategyMapping{},
 					Release: hyp.Release{
@@ -235,7 +235,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					Type: hyp.AWSPlatform,
 				},
 				Networking: hyp.ClusterNetworking{
-					NetworkType: hyp.OpenShiftSDN,
+					NetworkType: hyp.OVNKubernetes,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{},
 				Release: hyp.Release{
@@ -284,7 +284,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					Type: hyp.AWSPlatform,
 				},
 				Networking: hyp.ClusterNetworking{
-					NetworkType: hyp.OpenShiftSDN,
+					NetworkType: hyp.OVNKubernetes,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{},
 				Release: hyp.Release{
@@ -445,7 +445,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					Type: hyp.AzurePlatform,
 				},
 				Networking: hyp.ClusterNetworking{
-					NetworkType: hyp.OpenShiftSDN,
+					NetworkType: hyp.OVNKubernetes,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{},
 				Release: hyp.Release{
@@ -495,7 +495,7 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					Type: hyp.AzurePlatform,
 				},
 				Networking: hyp.ClusterNetworking{
-					NetworkType: hyp.OpenShiftSDN,
+					NetworkType: hyp.OVNKubernetes,
 				},
 				Services: []hyp.ServicePublishingStrategyMapping{},
 				Release: hyp.Release{
