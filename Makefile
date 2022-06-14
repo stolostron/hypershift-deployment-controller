@@ -173,12 +173,12 @@ create-a-policy:
 .PHONY: test-sd
 test-sd: install-hypershift-addon create-a-hosted-cluster create-a-policy
 
-#COMMIT_SHA := $(shell cat go.mod | grep github.com/openshift/hypershift | sed -En 's/.* v.*-//p')
+COMMIT_SHA := $(shell cat go.mod | grep github.com/openshift/hypershift | sed -En 's/.* v.*-//p')
 .PHONY: get-hypershift-crds
 get-hypershift-crds:
-	@echo Using main; \
-	curl https://raw.githubusercontent.com/openshift/hypershift/main/cmd/install/assets/hypershift-operator/hypershift.openshift.io_hostedclusters.yaml > ./config/crd/hypershift.openshift.io_hostedclusters.yaml;
-	curl https://raw.githubusercontent.com/openshift/hypershift/main/cmd/install/assets/hypershift-operator/hypershift.openshift.io_nodepools.yaml > ./config/crd/hypershift.openshift.io_nodepools.yaml;
+	@echo Using SHA ${COMMIT_SHA}; \
+	curl https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_hostedclusters.yaml > ./config/crd/hypershift.openshift.io_hostedclusters.yaml;
+	curl https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_nodepools.yaml > ./config/crd/hypershift.openshift.io_nodepools.yaml;
 
 .PHONY: validate-crds
 validate-crds:
