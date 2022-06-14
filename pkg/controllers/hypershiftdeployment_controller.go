@@ -98,6 +98,16 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	configureInfra := hyd.Spec.Infrastructure.Configure
 	if configureInfra ||
 		(hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.Azure != nil) {
+		if hyd.Spec.Infrastructure.CloudProvider.Name == "" {
+			log.Error(err, "spec.infrastructure.cloudProvider is required for configuring infrastructure")
+			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
+				r.updateStatusConditionsOnChange(&hyd,
+					hypdeployment.ProviderSecretConfigured,
+					metav1.ConditionFalse,
+					"spec.infrastructure.cloudProvider is required for configuring infrastructure",
+					hypdeployment.MisConfiguredReason)
+		}
+
 		secretName := hyd.Spec.Infrastructure.CloudProvider.Name
 		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: secretName}, &providerSecret)
 		if err != nil {
