@@ -57,7 +57,8 @@ type HypershiftDeploymentReconciler struct {
 	ctx           context.Context
 	Log           logr.Logger
 
-	InfraHandler InfraHandler
+	InfraHandler            InfraHandler
+	ValidateClusterSecurity bool
 }
 
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=hypershiftdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -144,12 +145,12 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 
 		if hyd.Spec.Infrastructure.Platform.AWS != nil {
-			if requeue, err := r.createAWSInfra(&hyd, &providerSecret); err != nil {
+			if requeue, err := r.createAWSInfra(&hyd, &providerSecret); err != nil || requeue.Requeue {
 				return requeue, err
 			}
 		}
 		if hyd.Spec.Infrastructure.Platform.Azure != nil {
-			if requeue, err := r.createAzureInfra(&hyd, &providerSecret); err != nil {
+			if requeue, err := r.createAzureInfra(&hyd, &providerSecret); err != nil || requeue.Requeue {
 				return requeue, err
 			}
 		}
@@ -329,7 +330,7 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 	}
 
 	if hyd.Spec.Override != hypdeployment.InfraConfigureOnly {
-		log.Info("Removing Manifestwork and wait for hostedclsuter and nodepool to be cleaned up.")
+		log.Info("Removing Manifestwork and wait for hostedcluster and nodepool to be cleaned up.")
 		res, err := r.deleteManifestworkWaitCleanUp(ctx, hyd)
 
 		if stErr := r.Client.Status().Patch(ctx, hyd, client.MergeFrom(inHyd)); stErr != nil {
@@ -350,12 +351,12 @@ func (r *HypershiftDeploymentReconciler) destroyHypershift(hyd *hypdeployment.Hy
 		hyd.Spec.Infrastructure.Configure {
 		// Infrastructure is the last step
 		if hyd.Spec.Infrastructure.Platform.AWS != nil {
-			if result, err := r.destroyAWSInfrastructure(hyd, providerSecret); err != nil {
+			if result, err := r.destroyAWSInfrastructure(hyd, providerSecret); err != nil || result.Requeue {
 				return result, nil // destroyAWSInfrastructure uses requeue times, switch to nil
 			}
 		}
 		if hyd.Spec.Infrastructure.Platform.Azure != nil {
-			if result, err := r.destroyAzureInfrastructure(hyd, providerSecret); err != nil {
+			if result, err := r.destroyAzureInfrastructure(hyd, providerSecret); err != nil || result.Requeue {
 				return result, nil // destroyAzureInfrastructure uses requeue times, switch to nil
 			}
 		}

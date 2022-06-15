@@ -62,6 +62,10 @@ If there is problem, looking at the `HypershiftDeployment.Status.Conditions[].me
 ## Customizing your hosted resource
 You can customize the values for HostedCluster (bring your own) or in combination with `Spec.Infrastructure.Configure: True`.
 
+The following shows a customized version of `hypershiftDeployment` where you can tweak the control plane as well as the Worker nodes found in the `nodePools`.
+
+[./samples/aws.cluster.custom.yaml](samples/aws.cluster.custom.yaml)
+
 ## Bring your own infrastructure
 If `Spec.Infrastructure.Configure: False` you must provide a complete `Spec.HostedClusterSpec` and `Spec.NodePools` definition.  Otherwise the two resources will not successfully complete and you will not get a Hypershift cluster.
 

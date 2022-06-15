@@ -106,7 +106,8 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 					metav1.ConditionFalse,
 					iamErr.Error(),
 					hypdeployment.MisConfiguredReason)
-				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, iamErr
+				log.Error(iamErr, "aws iam creator error")
+				return ctrl.Result{RequeueAfter: 1 * time.Minute, Requeue: true}, nil
 			}
 
 			hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
@@ -128,11 +129,24 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 				return ctrl.Result{}, err
 			}
 			log.Info("IAM configured")
+		} else {
+			log.Error(iamErr, "oidc discovery url could not be generated")
+			//TODO @jnpacker When Get configMap fails in oidcDiscoveryURL we should requeue
+			return ctrl.Result{},
+				r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured,
+					metav1.ConditionFalse,
+					iamErr.Error(),
+					hypdeployment.MisConfiguredReason)
 		}
 	}
 
 	if hyd.Spec.HostedClusterSpec.Platform.Type == "AWS" && (hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Credentials.AWS", hypdeployment.MisConfiguredReason)
+		return ctrl.Result{},
+			r.updateStatusConditionsOnChange(hyd,
+				hypdeployment.PlatformIAMConfigured,
+				metav1.ConditionFalse,
+				"Missing Spec.Credentials.AWS",
+				hypdeployment.MisConfiguredReason)
 	}
 	return ctrl.Result{}, nil
 }
@@ -156,7 +170,7 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		string(providerSecret.Data["baseDomain"]),
 	)(ctx); err != nil {
 		log.Error(err, "there was a problem destroying infrastructure on the provider, retrying in 30s")
-		return ctrl.Result{RequeueAfter: 30 * time.Second},
+		return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
 			r.updateStatusConditionsOnChange(
 				hyd, hypdeployment.PlatformConfigured,
 				metav1.ConditionFalse,
@@ -174,7 +188,7 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 		hyd.Spec.InfraID,
 	)(ctx); err != nil {
 		log.Error(err, "failed to delete IAM on provider")
-		return ctrl.Result{RequeueAfter: 30 * time.Second},
+		return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
 			r.updateStatusConditionsOnChange(
 				hyd, hypdeployment.PlatformIAMConfigured,
 				metav1.ConditionFalse,
@@ -188,9 +202,7 @@ func (r *HypershiftDeploymentReconciler) destroyAWSInfrastructure(hyd *hypdeploy
 func oidcDiscoveryURL(r *HypershiftDeploymentReconciler, hyd *hypdeployment.HypershiftDeployment) (string, string, error) {
 
 	if len(hyd.Spec.HostingCluster) == 0 {
-		err := errors.New(constant.HostingClusterMissing)
-		r.Log.Error(err, "Spec.HostingCluster needs a ManagedCluster name")
-		return "", "", err
+		return "", "", errors.New(constant.HostingClusterMissing)
 	}
 
 	// If the override is manifestwork that means we are using the hypershift created by mce hypershift-addon,

@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	mcv1 "open-cluster-management.io/api/cluster/v1"
+	mcv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
@@ -193,16 +194,28 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 	log := r.Log.WithValues("managedClusterName", managedClusterName)
 	ctx := context.Background()
 
+	var managementCluster mcv1.ManagedCluster
+	err := r.Get(ctx, types.NamespacedName{Name: managementClusterName}, &managementCluster)
+	switch {
+	case k8serrors.IsNotFound(err):
+		log.V(ERROR).Info("Could not find ManagedCluster resource", "error", err)
+		return nil, err
+	case err != nil:
+		log.V(WARN).Info("Error when attempting to retreive the ManagedCluster resource", "error", err)
+		return nil, err
+	}
+
 	var mc mcv1.ManagedCluster
-	err := r.Get(ctx, types.NamespacedName{Name: managedClusterName}, &mc)
+	err = r.Get(ctx, types.NamespacedName{Name: managedClusterName}, &mc)
 	if k8serrors.IsNotFound(err) {
 		log.V(INFO).Info("Create a new ManagedCluster resource")
 		mc.Name = managedClusterName
 		mc.Spec.HubAcceptsClient = true
 
 		mc.ObjectMeta.Labels = map[string]string{
-			"vendor": "OpenShift",   // This is always true
-			"cloud":  "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
+			mcv1beta1.ClusterSetLabel: helper.GetClusterSetName(managementCluster),
+			"vendor":                  "OpenShift",   // This is always true
+			"cloud":                   "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
 		}
 
 		mc.ObjectMeta.Annotations = map[string]string{

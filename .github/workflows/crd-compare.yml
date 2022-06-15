@@ -1,0 +1,49 @@
+name: 'Validate HostedCluster & NodePool CRDs'
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '00 21 * * *' # 1700EST
+    - cron: '00 13 * * *' # 0900EST
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  validate-crds:
+    runs-on: ${{ fromJSON('["ubuntu-latest", "self-hosted"]')[github.repository == 'github/stolostron/hypershift-deployment-controller'] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # For verification
+      - name: Compare CRDs (HostedCluster & NodePool)
+        run: |
+          make validate-crds
+      - name: Send a slack message on failure
+        uses: slackapi/slack-github-action@v1.19.0
+        if: failure()
+        with:
+          payload: |
+            {
+              "text": ":alert-siren: Announcement: `HypershiftDeployment` CRD compare result: ${{ job.status }} \n${{ github.event.pull_request.html_url || github.event.type }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":alert-siren: Announcement: `HypershiftDeployment` CRD compare result: ${{ job.status }} \n${{ github.event.pull_request.html_url || github.event.type }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
