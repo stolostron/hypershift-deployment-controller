@@ -4,7 +4,7 @@ curCrd=$(mktemp)
 tmpCrd=$(mktemp)
 
 
-COMMIT_SHA =`cat go.mod | grep github.com/openshift/hypershift | sed -En 's/.* v.*-//p'`
+COMMIT_SHA=`cat go.mod | grep github.com/openshift/hypershift | sed -En 's/.* v.*-//p'`
 echo Using SHA ${COMMIT_SHA}
 
 printf "*****\n  Checking HostedCluster CRD\n"
