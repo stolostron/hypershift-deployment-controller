@@ -21,25 +21,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
+	hydclient "github.com/stolostron/hypershift-deployment-controller/pkg/client"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 )
@@ -52,6 +55,7 @@ var (
 	StatusFlag            = "status"
 	Message               = "message"
 	Progress              = "progress"
+	OwnerReference        = "owner"
 )
 
 //loadManifest will get hostedclsuter's crs and put them to the manifest array
@@ -63,7 +67,7 @@ func generateManifestName(hyd *hypdeployment.HypershiftDeployment) string {
 	return hyd.Spec.InfraID
 }
 
-func ScaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
+func scaffoldManifestwork(hyd *hypdeployment.HypershiftDeployment) (*workv1.ManifestWork, error) {
 
 	// TODO @jnpacker, check for the managedCluster as well, or where we validate ClusterSet
 	if len(hyd.Spec.InfraID) == 0 {
@@ -158,6 +162,89 @@ func syncManifestworkStatusToHypershiftDeployment(
 	}
 }
 
+func (r *HypershiftDeploymentReconciler) validateHostedClusterAndNodePool(ctx context.Context, hcName string, hcSpec hyp.HostedClusterSpec, npSpec hyp.NodePoolSpec) error {
+	// Platform.Type in NodePool matches the HostedCluster
+	if npSpec.Platform.Type != hcSpec.Platform.Type {
+		r.Log.Error(errors.New("Platform.Type value mismatch"), "Platform.Type in node pool(s) does not match value in HostedClusterSpec")
+		return errors.New("Platform.Type value mismatch")
+	}
+
+	// NodePool references the correct hostedCluster
+	if npSpec.ClusterName != hcName {
+		r.Log.Error(errors.New("incorrect Spec.ClusterName in NodePool"), "Spec.ClusterName in NodePool needs to match the referenced hostedCluster")
+		return errors.New("incorrect Spec.ClusterName in NodePool")
+	}
+
+	// Release.Image in NodePool matches the HostedCluster
+	if npSpec.Release.Image != hcSpec.Release.Image {
+		r.Log.Info("Release.Image in node pool(s) does not match value in HostedClusterSpec")
+	}
+
+	return nil
+}
+
+// validateSecurityConstraints checks the given HypershiftDeployment has the right permission to work on a given hosting cluster
+// return true if all the checks passed or we are skipping validation, return false if any of the check fails
+func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (bool, error) {
+	if !r.ValidateClusterSecurity {
+		r.Log.Info("Skipping validate security constraints.")
+		return true, nil
+	}
+
+	// Check the namespace being used has valid managed cluster set bindings
+	cbg := hydclient.ClusterSetBindingsGetter{
+		Client: r.Client,
+	}
+
+	bindings, err := clusterv1beta1.GetBoundManagedClusterSetBindings(hyd.Namespace, cbg)
+	if err != nil {
+		r.Log.Error(err, hyd.Namespace+" namespace needs at least one bound ManagedClusterSetBinding")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"a bound ManagedClusterSetBinding is required in namespace "+hyd.Namespace+" retrying again after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	if len(bindings) == 0 {
+		r.Log.Error(errors.New("missing a bound ManagedClusterSetBinding in namespace "+hyd.Namespace), hyd.Namespace+" namespace needs at least one bound ManagedClusterSetBinding")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"a bound ManagedClusterSetBinding is required in namespace "+hyd.Namespace+" retrying again after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	clusterSets := sets.NewString()
+
+	for _, binding := range bindings {
+		clusterSets.Insert(binding.Name)
+	}
+
+	// Check the managed cluster exists
+	var managedCluster clusterv1.ManagedCluster
+	err = r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostingCluster}, &managedCluster)
+	switch {
+	case apierrors.IsNotFound(err):
+		r.Log.Error(err, "fail to find ManagedCluster: "+hyd.Spec.HostingCluster)
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			hyd.Spec.HostingCluster+" ManagedCluster is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	case err != nil:
+		r.Log.Error(err, "error while trying to find ManagedCluster: "+hyd.Spec.HostingCluster)
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			hyd.Spec.HostingCluster+" ManagedCluster is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	foundClusterSet, err := helper.IsClusterInClusterSet(r.Client, &managedCluster, clusterSets.List())
+	if err != nil {
+		r.Log.Error(err, "error while trying to determine if ManagedCluster: "+hyd.Spec.HostingCluster+" is in a ManagedClusterSet")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			hyd.Spec.HostingCluster+" ManagedClusterSet is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	if !foundClusterSet {
+		r.Log.Error(errors.New("Spec.HostingCluster is not in a ManagedClusterSet"), "Spec.HostingCluster needs to be a member of a ManagedClusterSet")
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	return true, nil
+}
+
 func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.Context, req ctrl.Request, hyd *hypdeployment.HypershiftDeployment, providerSecret *corev1.Secret) (ctrl.Result, error) {
 
 	// We need a HostingCluster if we use ManifestWork
@@ -179,7 +266,43 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "HostedClusterSpec or HostedClusterRef is required", hypdeployment.MisConfiguredReason)
 	}
 
-	m, err := ScaffoldManifestwork(hyd)
+	// Check hostedClusterRef and NodePoolRefs exist and their platform.type matches
+	if len(hyd.Spec.HostedClusterRef.Name) != 0 && len(hyd.Spec.NodePoolsRef) != 0 {
+		// OK to use typed client since it's just for validation
+		hc := &hyp.HostedCluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: hyd.Namespace, Name: hyd.Spec.HostedClusterRef.Name}, hc); err != nil {
+			r.Log.Error(errors.New("hostedCluster not found"), "hostedCluster %v is expected in namespace %v", hyd.Spec.HostedClusterRef.Name, hyd.Namespace)
+			return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "hostedCluster not found", hypdeployment.MisConfiguredReason)
+		}
+
+		for _, npRef := range hyd.Spec.NodePoolsRef {
+			np := &hyp.NodePool{}
+			if err := r.Get(ctx, client.ObjectKey{Namespace: hyd.Namespace, Name: npRef.Name}, np); err != nil {
+				r.Log.Error(errors.New("nodePool not found"), "nodePool %v is expected in namespace %v", npRef.Name, hyd.Namespace)
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, "nodePool not found", hypdeployment.MisConfiguredReason)
+			}
+
+			if err := r.validateHostedClusterAndNodePool(ctx, hc.Name, hc.Spec, np.Spec); err != nil {
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+			}
+		}
+	}
+
+	// For hostedClusterSpec and nodePoolSpec, check that the platform.type matches
+	if hyd.Spec.HostedClusterSpec != nil && len(hyd.Spec.NodePools) != 0 {
+		for _, np := range hyd.Spec.NodePools {
+			if err := r.validateHostedClusterAndNodePool(ctx, hyd.Name, *hyd.Spec.HostedClusterSpec, np.Spec); err != nil {
+				return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse, err.Error(), hypdeployment.MisConfiguredReason)
+			}
+		}
+	}
+
+	passedSecurity, statusUpdateErr := r.validateSecurityConstraints(ctx, hyd)
+	if !passedSecurity {
+		return ctrl.Result{RequeueAfter: time.Minute * 1}, statusUpdateErr
+	}
+
+	m, err := scaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -248,7 +371,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 }
 
 func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (ctrl.Result, error) {
-	m, err := ScaffoldManifestwork(hyd)
+	m, err := scaffoldManifestwork(hyd)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -263,18 +386,32 @@ func (r *HypershiftDeploymentReconciler) deleteManifestworkWaitCleanUp(ctx conte
 	}
 
 	if m.GetDeletionTimestamp().IsZero() {
-		patch := client.MergeFrom(m.DeepCopy())
+		dpm := m.DeepCopy()
 		setManifestWorkSelectivelyDeleteOption(m, hyd)
-		if err := r.Client.Patch(ctx, m, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+		if m.Spec.DeleteOption.PropagationPolicy != workv1.DeletePropagationPolicyTypeOrphan {
+			if !reflect.DeepEqual(dpm.Spec.DeleteOption, m.Spec.DeleteOption) {
+				patch := client.MergeFrom(dpm)
+				if err := r.Client.Patch(ctx, m, patch); err != nil {
+					return ctrl.Result{},
+						fmt.Errorf("failed to delete manifestwork, set selectively delete option err: %v", err)
+				}
+
+				r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
+			}
+
+			cond := condmeta.FindStatusCondition(m.Status.Conditions, string(workv1.WorkAvailable))
+			if cond == nil || cond.ObservedGeneration != m.Generation || cond.Status != metav1.ConditionTrue {
+				// Requeue the request, wait for the work agent to consume the delete option changes.
+				return ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, nil
+			}
 		}
-		r.Log.Info("pre delete the manifestwork, selectively delete option setting complete")
 
 		if err := r.Delete(ctx, m); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, fmt.Errorf("failed to delete manifestwork, err: %v", err)
 			}
 		}
+		r.Log.Info("delete the manifestwork complete")
 	}
 
 	syncManifestworkStatusToHypershiftDeployment(hyd, m)
@@ -391,7 +528,7 @@ func (r *HypershiftDeploymentReconciler) appendNodePool(ctx context.Context) loa
 					Version:  "v1alpha1",
 					Resource: "nodepools",
 				}
-				unstructNodePool, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, npRef.Name, v1.GetOptions{})
+				unstructNodePool, err := r.DynamicClient.Resource(gvr).Namespace(hyd.Namespace).Get(ctx, npRef.Name, metav1.GetOptions{})
 				if err != nil {
 					_ = r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
 						fmt.Sprintf("NodePoolRef %v:%v is not found", hyd.Namespace, npRef.Name), hypdeployment.MisConfiguredReason)
@@ -446,19 +583,19 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 				JsonPaths: []workv1.JsonPath{
 					{
 						Name: Reason,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].reason"),
+						Path: ".status.conditions[?(@.type==\"Available\")].reason",
 					},
 					{
 						Name: StatusFlag,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].status"),
+						Path: ".status.conditions[?(@.type==\"Available\")].status",
 					},
 					{
 						Name: Message,
-						Path: fmt.Sprintf(".status.conditions[?(@.type==\"Available\")].message"),
+						Path: ".status.conditions[?(@.type==\"Available\")].message",
 					},
 					{
 						Name: Progress,
-						Path: fmt.Sprintf(".status.version.history[?(@.state!=\"\")].state"),
+						Path: ".status.version.history[?(@.state!=\"\")].state",
 					},
 				},
 			},
@@ -481,15 +618,15 @@ func getManifestWorkConfigs(hyd *hypdeployment.HypershiftDeployment) map[workv1.
 					JsonPaths: []workv1.JsonPath{
 						{
 							Name: Reason,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].reason"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].reason",
 						},
 						{
 							Name: StatusFlag,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].status"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].status",
 						},
 						{
 							Name: Message,
-							Path: fmt.Sprintf(".status.conditions[?(@.type==\"Ready\")].message"),
+							Path: ".status.conditions[?(@.type==\"Ready\")].message",
 						},
 					},
 				},
@@ -582,9 +719,9 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 			// find and set failed nodepool to condition
 			st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
 			if st == nil {
-				meta.SetStatusCondition(&out, npCond)
+				condmeta.SetStatusCondition(&out, npCond)
 			} else if npCond.Status != "True" {
-				meta.SetStatusCondition(&out, npCond)
+				condmeta.SetStatusCondition(&out, npCond)
 			}
 		}
 
@@ -604,7 +741,7 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	// if there's nodepool condition and it's not false, then all nodepool are ready
 	st := condmeta.FindStatusCondition(out, string(hypdeployment.Nodepool))
 	if st != nil && st.Status == "True" {
-		meta.SetStatusCondition(&out, metav1.Condition{
+		condmeta.SetStatusCondition(&out, metav1.Condition{
 			Type:   string(hypdeployment.Nodepool),
 			Status: "True",
 			Reason: hypdeployment.NodePoolProvision,
@@ -612,17 +749,6 @@ func getStatusFeedbackAsCondition(m *workv1.ManifestWork, hyd *hypdeployment.Hyp
 	}
 
 	return out
-}
-
-func isFeedbackStatusFalse(fbs workv1.StatusFeedbackResult) bool {
-	for _, v := range fbs.Values {
-		//if there's not ready nodepool, report this one
-		if v.Name == StatusFlag && *v.Value.String != "True" {
-			return true
-		}
-	}
-
-	return false
 }
 
 type resourceMeta workv1.ManifestResourceMeta

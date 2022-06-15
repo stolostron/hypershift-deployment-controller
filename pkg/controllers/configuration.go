@@ -224,18 +224,12 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			if secret == nil {
 				// 2. Use existing secret in manifestwork payload
 				secret, err = getManifestPayloadSecretByName(&manifestwork.Spec.Workload.Manifests, se.secretRef.Name)
-				if err != nil {
-					r.Log.Info(fmt.Sprintf("did not get secret %s from manifestwork: %s", se.secretRef.Name, err.Error()))
-				}
 
 				if secret == nil &&
 					hyd.Spec.Infrastructure.Configure &&
 					se.createSecretFunc != nil {
 					// 3. For configure=T - Generate secret
 					secret, err = se.createSecretFunc()
-					if err != nil {
-						r.Log.Error(err, fmt.Sprintf("failed to create secret %s", se.secretRef.Name))
-					}
 				}
 			}
 

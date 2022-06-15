@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/openshift/hypershift/api/v1alpha1"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
@@ -28,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -93,6 +96,8 @@ func initClient() client.Client {
 	hyp.AddToScheme(scheme)
 	corev1.AddToScheme(scheme)
 	workv1.AddToScheme(scheme)
+	clusterv1.AddToScheme(scheme)
+	clusterv1beta1.AddToScheme(scheme)
 
 	var logger logr.Logger
 
@@ -132,6 +137,82 @@ func scaffoldTestNodePool(hyd *hypdeployment.HypershiftDeployment, npName string
 		},
 		Spec: npSpec,
 	}
+}
+
+func TestScaffoldHostedClusterSpec(t *testing.T) {
+
+	t.Log("Testing AWS scaffolding")
+	testHD := getHypershiftDeployment("default", "test1", false)
+	testHD.Spec.HostedClusterSpec = &hyp.HostedClusterSpec{
+		//IssuerURL: iamOut.IssuerURL,
+		Networking: hyp.ClusterNetworking{
+			ServiceCIDR: "",
+			PodCIDR:     "",
+			MachineCIDR: "", //This is overwritten below
+			NetworkType: hyp.OVNKubernetes,
+		},
+		// Defaults for all platforms
+		PullSecret: corev1.LocalObjectReference{Name: ""},
+		Release: hyp.Release{
+			Image: getReleaseImagePullSpec(), //.DownloadURL,
+		},
+		Services: []hyp.ServicePublishingStrategyMapping{},
+	}
+
+	scaffoldHostedClusterSpec(testHD)
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.PullSecret.Name,
+		"test1-pull-secret", "Equal when pull secret name is populated")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Release.Image,
+		getReleaseImagePullSpec(),
+		"The image we update at release time as stable")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.ServiceCIDR,
+		"172.31.0.0/16", "default serviceCIDR")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.PodCIDR,
+		"10.132.0.0/14", "default podCIDR")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "",
+		"if code above ran, this will be empty")
+	assert.NotEqual(t, testHD.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{},
+		"services should not be an empty list")
+	assert.Equal(t, v1alpha1.NetworkType("OVNKubernetes"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+		"is OVNKubernetes when release is not 4.10")
+}
+
+func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
+
+	t.Log("Testing AWS scaffolding")
+	testHD := getHypershiftDeployment("default", "test1", false)
+	testHD.Spec.HostedClusterSpec = &hyp.HostedClusterSpec{
+		//IssuerURL: iamOut.IssuerURL,
+		Networking: hyp.ClusterNetworking{
+			ServiceCIDR: "",
+			PodCIDR:     "",
+			MachineCIDR: "", //This is overwritten below
+			NetworkType: hyp.OVNKubernetes,
+		},
+		// Defaults for all platforms
+		PullSecret: corev1.LocalObjectReference{Name: ""},
+		Release: hyp.Release{
+			Image: "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
+		},
+		Services: []hyp.ServicePublishingStrategyMapping{},
+	}
+
+	scaffoldHostedClusterSpec(testHD)
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.PullSecret.Name,
+		"test1-pull-secret", "Equal when pull secret name is populated")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Release.Image,
+		"quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
+		"The image we update at release time as stable")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.ServiceCIDR,
+		"172.31.0.0/16", "default serviceCIDR")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.PodCIDR,
+		"10.132.0.0/14", "default podCIDR")
+	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "",
+		"if code above ran, this will be empty")
+	assert.NotEqual(t, testHD.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{},
+		"services should not be an empty list")
+	assert.Equal(t, v1alpha1.NetworkType("OpenShiftSDN"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+		"is OVNKubernetes when release is not 4.10")
 }
 
 func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
@@ -605,7 +686,7 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 				Type: hyp.AWSPlatform,
 			},
 			Networking: hyp.ClusterNetworking{
-				NetworkType: hyp.OpenShiftSDN,
+				NetworkType: hyp.OVNKubernetes,
 			},
 			Services: []hyp.ServicePublishingStrategyMapping{},
 			Release: hyp.Release{
@@ -645,7 +726,7 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
 	testHD.Spec.NodePoolsRef = []corev1.LocalObjectReference{{Name: np.Name}}
 
-	m, err := ScaffoldManifestwork(testHD)
+	m, err := scaffoldManifestwork(testHD)
 	assert.Nil(t, err, "is nil if scaffold manifestwork successfully")
 	payload := &m.Spec.Workload.Manifests
 
@@ -660,20 +741,4 @@ func TestLocalObjectReferencesForHCandNP(t *testing.T) {
 	nps := getNodePoolsInManifestPayload(payload)
 	assert.Len(t, nps, 1, "nodepool is added in manifestwork from hypershiftdeployment nodePoolRef")
 	assert.Equal(t, nps[0].GetNamespace(), testHD.Spec.HostingNamespace)
-
-	// Error if HostedClusterRef not found
-	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: "not_exist"}
-	r.Create(ctx, testHD)
-	defer r.Delete(ctx, testHD)
-
-	_, err = r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}})
-	assert.NotNil(t, err, "is not nil when HostedClusterRef is not found")
-	assert.Contains(t, err.Error(), "failed to get HostedClusterRef: default:not_exist", "error contains HostedClusterRef is not found message")
-
-	var resultHD hyd.HypershiftDeployment
-	err = r.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
-	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
-
-	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
-	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is not found", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is missing")
 }
