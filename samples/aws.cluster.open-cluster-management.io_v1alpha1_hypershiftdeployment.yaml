@@ -1,8 +1,22 @@
+# This is an example Hypershift deployment for AWS using us-east-1 region and fully configuring two t3.large worker nodes.
+
+# The following values need to be set:
+# metadata.name - The name given to the Hosted Control Plane cluster and its resources (Hosted Cluster, Node Pool ...)
+# spec.cloudProvider.name - The name of the Provider Credential secret created by ACM/MCE
+# spec.hostingCluster - The name of the cluster where the Hosted Control Plane cluster will be provisioned
+# spec.hostingNamespace - Then namespace on the hosting cluster where the hosted cluster, node pool and secret resources will be created
+# spec.infrastructure.platform.aws.region - Which reagion to create the Hosted Control Plane cluster
+
+# Other fields can be customized as well, but the "configure: true" setting may overwrite them
+#
+
 apiVersion: cluster.open-cluster-management.io/v1alpha1
 kind: HypershiftDeployment
 metadata:
   name: aws-sample
 spec:
+  hostingCluster: local-cluster
+  hostingNamespace: clusters
   infrastructure:
     cloudProvider:
       name: my-cloud-provider-secret

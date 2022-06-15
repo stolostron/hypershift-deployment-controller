@@ -1,0 +1,57 @@
+# This is an example Hypershift deployment for Azure using centralus location and fully configuring two t3.large worker nodes.
+
+# The following values need to be set:
+# metadata.name - The name given to the Hosted Control Plane cluster and its resources (Hosted Cluster, Node Pool ...)
+# spec.cloudProvider.name - The name of the Provider Credential secret created by ACM/MCE
+# spec.hostingCluster - The name of the cluster where the Hosted Control Plane cluster will be provisioned
+# spec.hostingNamespace - Then namespace on the hosting cluster where the hosted cluster, node pool and secret resources will be created
+# spec.infrastructure.platform.azure.location - Which reagion to create the Hosted Control Plane cluster
+
+# Other fields can be customized as well, but the "configure: true" setting may overwrite them
+#
+
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: CLUSTER_NAME      # The name for the cluster
+  namespace: default      # The namespace to hold your cluster definition
+spec:
+  hostingCluster: local-cluster     # The name of the Hosting Cluster
+  hostingNamespace: clusters        # The default namesapce for HostedCluster and NodePool definitions on the Hosting Cluster
+  infrastructure:
+    cloudProvider:
+      name: CLOUD_PROVIDER          # The name of the Cloud Provider secret created by ACM/MCE
+    configure: true
+    platform:
+      azure:
+        location: centralus
+  hostedClusterSpec:
+    networking:
+      networkType: OVNKubernetes
+      machineCIDR: ""           # Can be left empty, when configure: true
+      podCIDR: ""               # Can be left empty, when configure: true
+      serviceCIDR: ""           # Can be left empty, when configure: true
+    platform:
+      type: Azure
+    pullSecret: {}
+    services: []
+    sshKey: {}
+    release:
+      image: quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64   # Release version to use
+  nodePools:
+  - name: CLUSTER_NAME             # Unique name for the pool
+    spec:
+      clusterName: CLUSTER_NAME
+      management:
+        autoRepair: false
+        replace:
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+          strategy: RollingUpdate
+        upgradeType: Replace
+      platform:
+        type: Azure
+      replicas: 2
+      release:
+        image: quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64   # Release version to use

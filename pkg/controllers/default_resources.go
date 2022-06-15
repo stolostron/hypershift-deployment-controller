@@ -19,12 +19,15 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/openshift/hypershift/api/fixtures"
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
+	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -43,15 +46,11 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
-	/* Bug patch: acm-1417 acm-1420
 	defaultVersion, err := version.LookupDefaultOCPVersion()
 	if err != nil {
 		return constant.ReleaseImage
 	}
 	return defaultVersion.PullSpec
-	*/
-	return constant.ReleaseImage
-
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
@@ -189,6 +188,19 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	hyd.Spec.HostedClusterSpec.Platform.AWS = ap
 	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scaffoldCloudProviderConfig(infraOut)
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AWSPlatform
+	//Fill in missing values if present from infraOut
+	if hyd.Spec.HostedClusterSpec.Networking.PodCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.PodCIDR = "10.132.0.0/14"
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR = "172.31.0.0/16"
+	}
+}
+
+func replaceWhenNilOrEmpty(o interface{}, value interface{}) {
+	if o == nil || o == "" {
+		o = value
+	}
 }
 
 func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
@@ -219,20 +231,33 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 					ServiceCIDR: "172.31.0.0/16",
 					PodCIDR:     "10.132.0.0/14",
 					MachineCIDR: "", //This is overwritten below
-					NetworkType: hyp.OpenShiftSDN,
+					NetworkType: hyp.OVNKubernetes,
 				},
 				// Defaults for all platforms
 				PullSecret: corev1.LocalObjectReference{Name: hyd.Name + "-pull-secret"},
 				Release: hyp.Release{
 					Image: getReleaseImagePullSpec(), //.DownloadURL,
 				},
-				Services: []hyp.ServicePublishingStrategyMapping{
-					spsMap(hyp.APIServer, hyp.LoadBalancer),
-					spsMap(hyp.OAuthServer, hyp.Route),
-					spsMap(hyp.Konnectivity, hyp.Route),
-					spsMap(hyp.Ignition, hyp.Route),
-				},
+				Services: []hyp.ServicePublishingStrategyMapping{},
 			}
+	}
+
+	if reflect.DeepEqual(hyd.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{}) {
+		hyd.Spec.HostedClusterSpec.Services = []hyp.ServicePublishingStrategyMapping{
+			spsMap(hyp.APIServer, hyp.LoadBalancer),
+			spsMap(hyp.OAuthServer, hyp.Route),
+			spsMap(hyp.Konnectivity, hyp.Route),
+			spsMap(hyp.Ignition, hyp.Route),
+		}
+	}
+	if hyd.Spec.HostedClusterSpec.PullSecret.Name == "" {
+		hyd.Spec.HostedClusterSpec.PullSecret.Name = hyd.Name + "-pull-secret"
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.PodCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.PodCIDR = "10.132.0.0/14"
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR == "" {
+		hyd.Spec.HostedClusterSpec.Networking.ServiceCIDR = "172.31.0.0/16"
 	}
 
 	// For configure=T, if secret encryption is not provided by user, generate it
@@ -245,6 +270,10 @@ func scaffoldHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment) {
 				},
 			},
 		}
+	}
+	if hyd.Spec.HostedClusterSpec.Networking.NetworkType == hyp.OVNKubernetes &&
+		strings.Contains(hyd.Spec.HostedClusterSpec.Release.Image, ":4.10.") {
+		hyd.Spec.HostedClusterSpec.Networking.NetworkType = hyp.OpenShiftSDN
 	}
 }
 
@@ -273,15 +302,21 @@ func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut
 		if np.Spec.Platform.Azure == nil {
 			np.Spec.Platform.Azure = &hyp.AzureNodePoolPlatform{
 				VMSize:     "Standard_D4s_v4",
-				ImageID:    infraOut.BootImageID,
 				DiskSizeGB: int32(120),
 			}
+		}
+		// this code only runs when configure: true, inserts above, even if missing
+		if np.Spec.Platform.Azure.ImageID == "" {
+			np.Spec.Platform.Azure.ImageID = infraOut.BootImageID
 		}
 	}
 }
 
 func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 	ScaffoldNodePoolSpec(hyd)
+	// TODO @jnpacker, this code should be moved outside this function and be called whenever NodePools
+	//      get reconciled.  Also need to store the SCG somehwere for use on NEW nodePools, the subnet is
+	//      available via the HostedClusterSpec.
 	for _, np := range hyd.Spec.NodePools {
 		np.Spec.Platform.Type = hyp.AWSPlatform
 		if np.Spec.Platform.AWS == nil {

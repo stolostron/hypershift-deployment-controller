@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"testing"
 
@@ -17,6 +19,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	condmeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,6 +50,39 @@ func getHDforManifestWork() *hyd.HypershiftDeployment {
 	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
 	ScaffoldAWSNodePoolSpec(testHD, infraOut)
 	return testHD
+}
+
+func getClusterSetBinding(namespace string) *clusterv1beta1.ManagedClusterSetBinding {
+	return &clusterv1beta1.ManagedClusterSetBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "dev",
+			Namespace: namespace,
+		},
+		Spec: clusterv1beta1.ManagedClusterSetBindingSpec{
+			ClusterSet: "dev",
+		},
+	}
+}
+
+func getClusterSet() *clusterv1beta1.ManagedClusterSet {
+	return &clusterv1beta1.ManagedClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "dev",
+		},
+		Spec: clusterv1beta1.ManagedClusterSetSpec{},
+	}
+}
+
+func getCluster(name string) *clusterv1.ManagedCluster {
+	return &clusterv1.ManagedCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"vendor": "openshift",
+			},
+		},
+		Spec: clusterv1.ManagedClusterSpec{},
+	}
 }
 
 type manifestworkChecker struct {
@@ -227,12 +265,17 @@ func TestManifestWorkFlowBaseCaseWithObjectRef(t *testing.T) {
 	testHD.Spec.HostingCluster = "local-cluster"
 
 	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	var fakeObjList []runtime.Object
 	fakeObjList = append(fakeObjList, hostedCluster)
 
 	nps := getNodePools(testHD)
 	for _, np := range nps {
 		fakeObjList = append(fakeObjList, np)
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
 	}
 	initFakeClient(hdr, fakeObjList...)
 
@@ -481,12 +524,17 @@ func TestManifestWorkFlowWithExtraConfigurationsAndObjectRef(t *testing.T) {
 		}}
 	}
 	insertConfigSecretAndConfigMap()
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	var fakeObjList []runtime.Object
 	fakeObjList = append(fakeObjList, hostedCluster)
 
 	nps := getNodePools(testHD)
 	for _, np := range nps {
 		fakeObjList = append(fakeObjList, np)
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
 	}
 	initFakeClient(hdr, fakeObjList...)
 
@@ -647,12 +695,17 @@ func TestManifestWorkFlowWithSSHKey(t *testing.T) {
 
 	hostedCluster := getHostedClusterForManifestworkTest(testHD)
 	hostedCluster.Spec.SSHKey.Name = sshKeySecretName
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	var fakeObjList []runtime.Object
 	fakeObjList = append(fakeObjList, hostedCluster)
 
 	nps := getNodePools(testHD)
 	for _, np := range nps {
 		fakeObjList = append(fakeObjList, np)
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
 	}
 	initFakeClient(hdr, fakeObjList...)
 
@@ -759,12 +812,17 @@ func TestManifestWorkSecrets(t *testing.T) {
 	testHD.Spec.HostingCluster = "local-cluster"
 
 	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	var fakeObjList []runtime.Object
 	fakeObjList = append(fakeObjList, hostedCluster)
 
 	nps := getNodePools(testHD)
 	for _, np := range nps {
 		fakeObjList = append(fakeObjList, np)
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
 	}
 	initFakeClient(hdr, fakeObjList...)
 
@@ -907,12 +965,17 @@ func TestManifestWorkCustomSecretNamesWithObjectRef(t *testing.T) {
 	hostedCluster.Spec.Platform.AWS.ControlPlaneOperatorCreds.Name = "my-control"
 	hostedCluster.Spec.Platform.AWS.KubeCloudControllerCreds.Name = "kube-creds-for-here"
 	hostedCluster.Spec.Platform.AWS.NodePoolManagementCreds.Name = "node-cred-may-i-use"
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	var fakeObjList []runtime.Object
 	fakeObjList = append(fakeObjList, hostedCluster)
 
 	nps := getNodePools(testHD)
 	for _, np := range nps {
 		fakeObjList = append(fakeObjList, np)
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
 	}
 	initFakeClient(hdr, fakeObjList...)
 
@@ -989,12 +1052,17 @@ func TestManifestWorkStatusUpsertToHypershiftDeployment(t *testing.T) {
 	testHD.Spec.HostingNamespace = "multicluster-engine"
 
 	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	clt.Create(ctx, hostedCluster)
+	defer clt.Delete(ctx, hostedCluster)
+
 	var fakeObjList []runtime.Object
 	fakeObjList = append(fakeObjList, hostedCluster)
 
 	nps := getNodePools(testHD)
 	for _, np := range nps {
 		fakeObjList = append(fakeObjList, np)
+		clt.Create(ctx, np)
+		defer clt.Delete(ctx, np)
 	}
 	initFakeClient(hdr, fakeObjList...)
 
@@ -1260,6 +1328,9 @@ func TestManifestWorkHostedClusterAttributes(t *testing.T) {
 
 	// Add a new attribute in the unstructured HostedCluster.Spec
 	hostedCluster := getHostedClusterForManifestworkTest(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
 	mapHc, err := runtime.DefaultUnstructuredConverter.ToUnstructured(hostedCluster)
 	assert.Nil(t, err, "err nil when hosted cluster is successfully converted to unstructured")
 	usHcSpec := mapHc["spec"].(map[string]interface{})
@@ -1273,6 +1344,9 @@ func TestManifestWorkHostedClusterAttributes(t *testing.T) {
 	// Add a new attribute in the unstructured NodePool.Spec
 	nps := getNodePools(testHD)
 	for _, np := range nps {
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
+
 		mapNp, err := runtime.DefaultUnstructuredConverter.ToUnstructured(np)
 		assert.Nil(t, err, "err nil when node pool is successfully converted to unstructured")
 		usNpSpec := mapNp["spec"].(map[string]interface{})
@@ -1336,4 +1410,280 @@ func TestManifestWorkHostedClusterAttributes(t *testing.T) {
 
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	assert.Equal(t, fmt.Sprintf("HostedClusterRef %v:%v is invalid", testHD.Namespace, testHD.Spec.HostedClusterRef.Name), c.Message, "is equal when hostingCluster is invalid")
+}
+
+func TestHostedClusterAndNodePoolValidationsWithObjectRef(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+		Log:    ctrl.Log.WithName("tester"),
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-host"
+	testHD.Spec.HostingNamespace = "multicluster-engine"
+
+	hostedCluster := getHostedCluster(testHD)
+	client.Create(ctx, hostedCluster)
+	defer client.Delete(ctx, hostedCluster)
+
+	// Test validate - ClusterName in nodepool does not reference the hostedCluster
+	npRef := []corev1.LocalObjectReference{}
+	nps := getNodePools(testHD)
+	for _, np := range nps {
+		np.Spec.ClusterName = "wrongCluster"
+		client.Create(ctx, np)
+		defer client.Delete(ctx, np)
+
+		npRef = append(npRef, corev1.LocalObjectReference{Name: np.Name})
+	}
+
+	testHD.Spec.HostedClusterRef = corev1.LocalObjectReference{Name: hostedCluster.Name}
+	testHD.Spec.NodePoolsRef = npRef
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	var resultHD hyd.HypershiftDeployment
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "incorrect Spec.ClusterName in NodePool", c.Message, "is equal when clusterName is incorrect")
+
+	// Test validate - Platform.Type for NodePool does not match HostedCluster
+	nps = getNodePools(testHD)
+	for _, np := range nps {
+		client.Get(ctx, types.NamespacedName{Namespace: np.Namespace, Name: np.Name}, np)
+		np.Spec.Platform.Type = hyp.NonePlatform
+		client.Update(ctx, np)
+	}
+
+	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "Platform.Type value mismatch", c.Message, "is equal when Platform.Type is mismatched")
+
+	// Test validate - Node Pool doesn't exist
+	nps = getNodePools(testHD)
+	for _, np := range nps {
+		client.Get(ctx, types.NamespacedName{Namespace: np.Namespace, Name: np.Name}, np)
+		err = client.Delete(ctx, np)
+	}
+
+	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "nodePool not found", c.Message, "is equal when nodePool is not found")
+
+	// Test validate - HostedCluster doesn't exist
+	client.Delete(ctx, hostedCluster)
+
+	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "hostedCluster not found", c.Message, "is equal when hostedCluster is not found")
+}
+
+func TestHostedClusterAndNodePoolValidations(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-cluster"
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	pullSecret := getPullSecret(testHD)
+	client.Create(ctx, pullSecret)
+	defer client.Delete(ctx, pullSecret)
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+		Log:    ctrl.Log.WithName("tester"),
+	}
+
+	// Test validate - Release mismatch between nodepool and hostedcluster
+	client.Get(ctx, types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, testHD)
+	testHD.Spec.HostedClusterSpec.Release = hyp.Release{}
+	testHD.Spec.NodePools[0].Spec.ClusterName = "wrongCluster"
+	client.Update(ctx, testHD)
+
+	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	var resultHD hyd.HypershiftDeployment
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "incorrect Spec.ClusterName in NodePool", c.Message, "is equal when Spec.ClusterName in NodePool is incorrect")
+
+	// Test validate - Platform.Type for NodePool does not match HostedCluster
+	client.Get(ctx, types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, testHD)
+	testHD.Spec.NodePools[0].Spec.ClusterName = testHD.Name
+	testHD.Spec.NodePools[0].Spec.Platform.Type = hyp.NonePlatform
+	client.Update(ctx, testHD)
+
+	_, err = hdr.Reconcile(ctx, ctrl.Request{NamespacedName: getNN})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	err = hdr.Get(context.Background(), types.NamespacedName{Namespace: testHD.Namespace, Name: testHD.Name}, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.Equal(t, "Platform.Type value mismatch", c.Message, "is equal when Spec.ClusterName in NodePool is incorrect")
+}
+
+func TestValidateSecurityConstraints(t *testing.T) {
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client:                  client,
+		Log:                     ctrl.Log.WithName("tester"),
+		ValidateClusterSecurity: false,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-cluster"
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	passed, err := hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when HypershiftDeploymentReconciler ValidateClusterSecurity is false")
+	assert.True(t, passed, "when HypershiftDeploymentReconciler ValidateClusterSecurity is false")
+
+	hdr.ValidateClusterSecurity = true
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	var resultHD hyd.HypershiftDeployment
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "a bound ManagedClusterSetBinding is required in namespace"), "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	binding := getClusterSetBinding(testHD.Namespace)
+	client.Create(ctx, binding)
+	defer client.Delete(ctx, binding)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "a bound ManagedClusterSetBinding is required in namespace"), "when validating namespace needs at least one bound ManagedClusterSetBinding")
+
+	binding.Status = clusterv1beta1.ManagedClusterSetBindingStatus{
+		Conditions: []metav1.Condition{
+			{
+				Type:   clusterv1beta1.ClusterSetBindingBoundType,
+				Status: metav1.ConditionTrue,
+			},
+		},
+	}
+	client.Status().Update(ctx, binding)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating ManagedCluster exist")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "ManagedCluster is required"), "when validating ManagedCluster exist")
+
+	cluster := getCluster(testHD.Spec.HostingCluster)
+	client.Create(ctx, cluster)
+	defer client.Delete(ctx, cluster)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "is a member of a ManagedClusterSet"), "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+
+	clusterSet := getClusterSet()
+	client.Create(ctx, clusterSet)
+	defer client.Delete(ctx, clusterSet)
+
+	cluster.ObjectMeta.Labels = map[string]string{
+		clusterv1beta1.ClusterSetLabel: "dev",
+	}
+	client.Update(ctx, cluster)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.True(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+}
+
+func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
+
+	client := initClient()
+	ctx := context.Background()
+	hdr := &HypershiftDeploymentReconciler{
+		Client:                  client,
+		Log:                     ctrl.Log.WithName("tester"),
+		ValidateClusterSecurity: false,
+	}
+
+	testHD := getHDforManifestWork()
+	testHD.Spec.HostingCluster = "local-cluster"
+
+	client.Create(ctx, testHD)
+	defer client.Delete(ctx, testHD)
+
+	mw, _ := scaffoldManifestwork(testHD)
+	client.Create(ctx, mw)
+	defer client.Delete(ctx, mw)
+
+	rqst, err := hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
+	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
+	assert.EqualValues(t, ctrl.Result{RequeueAfter: 1 * time.Second, Requeue: true}, rqst, "request requeue should be 1s")
+	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.False(t, apierrors.IsNotFound(err), "false when ManifestWork exists")
+	assert.Equal(t, workv1.DeletePropagationPolicyTypeSelectivelyOrphan, mw.Spec.DeleteOption.PropagationPolicy,
+		"set selectivelyOrphan and not orphan")
+	mw.Status.Conditions = []metav1.Condition{
+		metav1.Condition{
+			Type:               string(workv1.WorkAvailable),
+			ObservedGeneration: mw.Generation,
+			Status:             metav1.ConditionTrue,
+		},
+	}
+	err = client.Status().Update(ctx, mw)
+	assert.Nil(t, err, "is nil when condition is added")
+	// 2nd pass
+	rqst, err = hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
+	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
+	assert.EqualValues(t, ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, rqst, "request requeue should be 20s")
+	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
+	assert.True(t, apierrors.IsNotFound(err), "true when ManifestWork is removed")
 }
