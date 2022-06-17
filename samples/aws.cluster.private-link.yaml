@@ -1,0 +1,75 @@
+# This is an example Hypershift deployment for AWS using us-east-1 region and fully configuring two t3.large worker nodes.
+
+# The following values need to be set:
+# metadata.name - The name given to the Hosted Control Plane cluster and its resources (Hosted Cluster, Node Pool ...)
+# spec.cloudProvider.name - The name of the Provider Credential secret created by ACM/MCE
+# spec.hostingCluster - The name of the cluster where the Hosted Control Plane cluster will be provisioned
+# spec.hostingNamespace - Then namespace on the hosting cluster where the hosted cluster, node pool and secret resources will be created
+# spec.infrastructure.platform.aws.region - Which reagion to create the Hosted Control Plane cluster
+
+# Other fields can be customized as well, but the "configure: true" setting may overwrite them
+#
+
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: aws-custom-sample
+spec:
+  hostingCluster: local-cluster
+  hostingNamespace: clusters
+  infrastructure:
+    cloudProvider:
+      name:  my-cloud-provider-secret
+    configure: True                   # infrastructure in the provider will be configured
+    platform:
+      aws:
+        region: us-west-1
+  hostedClusterSpec:
+    etcd:
+      managed:
+        storage:
+          persistentVolume:
+            size: 4Gi
+          type: PersistentVolume
+      managementType: Managed
+    controllerAvailabilityPolicy: SingleReplica
+    #controllerAvailabilityPolicy: HighlyAvailable
+    release:
+      image: quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64
+    networking:
+      networkType: OpenShiftSDN
+      machineCIDR: ""           # Can be left empty, when configure: true
+      podCIDR: ""               # Can be left empty, when configure: true
+      serviceCIDR: ""           # Can be left empty, when configure: true
+    platform:
+      type: AWS
+      aws:
+        endpointAccess: Private
+        kubeCloudControllerCreds: {}
+        nodePoolManagementCreds: {}
+        controlPlaneOperatorCreds: {}
+    pullSecret: {}  # Can be left empty, when configure: true
+    sshKey: {}      # Can be left empty, when configure: true
+    services: []    # Can be left empty, when configure: true
+  nodePools:
+  - name: aws-custom-sample
+    spec:
+      clusterName: aws-custom-sample
+      management:
+        autoRepair: false
+        replace:
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+          strategy: RollingUpdate
+        upgradeType: Replace
+      nodeCount: 2
+      platform:
+        aws:
+          instanceType: t3.large
+          rootVolume:
+            size: 35
+            type: gp3
+        type: AWS
+      release:
+        image: quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64

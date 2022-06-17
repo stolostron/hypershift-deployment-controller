@@ -171,21 +171,34 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
 	hyd.Spec.HostedClusterSpec.Networking.MachineCIDR = infraOut.ComputeCIDR
-	ap := &hyp.AWSPlatformSpec{
-		Region:                    hyd.Spec.Infrastructure.Platform.AWS.Region,
-		ControlPlaneOperatorCreds: corev1.LocalObjectReference{Name: hyd.Name + "-cpo-creds"},
-		KubeCloudControllerCreds:  corev1.LocalObjectReference{Name: hyd.Name + "-cloud-ctrl-creds"},
-		NodePoolManagementCreds:   corev1.LocalObjectReference{Name: hyd.Name + "-node-mgmt-creds"},
-		EndpointAccess:            hyp.Public,
-		ResourceTags: []hyp.AWSResourceTag{
-			//set the resource tags to prevent the work always updating the hostedcluster resource on the hosting cluster.
-			{
-				Key:   "kubernetes.io/cluster/" + hyd.Spec.HostedClusterSpec.InfraID,
-				Value: "owned",
-			},
-		},
+
+	if hyd.Spec.HostedClusterSpec.Platform.AWS == nil {
+		hyd.Spec.HostedClusterSpec.Platform.AWS = &hyp.AWSPlatformSpec{}
 	}
-	hyd.Spec.HostedClusterSpec.Platform.AWS = ap
+	aws := hyd.Spec.HostedClusterSpec.Platform.AWS.DeepCopy()
+	if aws.Region == "" {
+		aws.Region = hyd.Spec.Infrastructure.Platform.AWS.Region
+	}
+	if aws.ControlPlaneOperatorCreds.Name == "" {
+		aws.ControlPlaneOperatorCreds.Name = hyd.Name + "-cpo-creds"
+	}
+	if aws.KubeCloudControllerCreds.Name == "" {
+		aws.KubeCloudControllerCreds.Name = hyd.Name + "-cloud-ctrl-creds"
+	}
+	if aws.NodePoolManagementCreds.Name == "" {
+		aws.NodePoolManagementCreds.Name = hyd.Name + "-node-mgmt-creds"
+	}
+	if aws.ResourceTags == nil {
+		aws.ResourceTags = []hyp.AWSResourceTag{}
+	}
+	//set the resource tags to prevent the work always updating the hostedcluster resource on the hosting cluster.
+	aws.ResourceTags = append(aws.ResourceTags,
+		hyp.AWSResourceTag{
+			Key:   "kubernetes.io/cluster/" + hyd.Spec.HostedClusterSpec.InfraID,
+			Value: "owned",
+		},
+	)
+	hyd.Spec.HostedClusterSpec.Platform.AWS = aws.DeepCopy()
 	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scaffoldCloudProviderConfig(infraOut)
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AWSPlatform
 	//Fill in missing values if present from infraOut
