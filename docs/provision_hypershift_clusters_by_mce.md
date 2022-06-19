@@ -144,30 +144,251 @@ Upon scaling up a NodePool, a Machine will be created, and the CAPI provider wil
 
 Upon scaling down a NodePool, Agents will be unbound from the corresponding cluster. However, you must boot them with the Discovery Image once again before reusing them.
 
-To use the Agent platform, the Infrastructure Operator must first be installed. Please see [here](https://hypershift-docs.netlify.app/how-to/agent/create-agent-cluster/) for details.
+To use the Agent platform, the Assisted Service component must be enabled in the multiclusterengine resource on MCE or ACM hub cluster to install the infrastructure operator. Then infrastructure environment and bare metal host agents need to be configured prior to provisioning a hosted cluster. It is recommended to use the `local-cluster` managed cluster on MCE/ACM hub cluster as the hosting cluster so that all agent platform information is available to MCE/ACM hub cluster.
 
-When creating the HostedCluster resource, set spec.platform.type to "Agent" and spec.platform.agent.agentNamespace to the namespace containing the Agent CRs you would like to use. For NodePools, set spec.platform.type to "Agent", and optionally specify a label selector for selecting the Agent CRs to in spec.platform.agent.agentLabelSelector.
+If you want to use other MCE/ACM managed cluster as the hosting cluster, Infrastructure Operator must first be installed on the managed cluster. Please see [here](https://hypershift-docs.netlify.app/how-to/agent/create-agent-cluster/) for details. Then infrastructure environment and bare metal host agents need to be configured on the cluster prior to provisioning a hosted cluster.
 
-The HypershiftDeployment would look like:
+###### Enable assisted service on hosting cluster on MCE/ACM hub cluster
+
+1. Create two persistent volumes for assisted service.
+- `Capacity`: 10Gi
+- `Access modes`: ReadWriteOnce
+- `Volume mode`: Filesystem
+- `StorageClass`: None
+
+2. Enable the Infrastructure Operator.
 ```bash
-$ oc apply -f - <<EOF
+$ oc patch multiclusterengine <mce_name> --type=merge -p '{"spec":{"overrides":{"components":[{"name":"assisted-service","enabled": true}]}}}'
+```
+
+3. Create the agentserviceconfig object. Double check the `ISO_URL` at https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/${OCP_VERSION}/latest.
+```bash
+export DB_VOLUME_SIZE="10Gi"
+export FS_VOLUME_SIZE="10Gi"
+export OCP_VERSION="4.10"
+export ARCH="x86_64"
+export OCP_RELEASE_VERSION=$(curl -s https://mirror.openshift.com/pub/openshift-v4/${ARCH}/clients/ocp/latest-${OCP_VERSION}/release.txt | awk '/machine-os / { print $2 }')
+export ISO_URL="https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/${OCP_VERSION}/latest/rhcos-${OCP_VERSION}.3-${ARCH}-live.${ARCH}.iso"
+export ROOT_FS_URL="https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/${OCP_VERSION}/latest/rhcos-live-rootfs.${ARCH}.img"
+
+envsubst <<"EOF" | oc apply -f -
+apiVersion: agent-install.openshift.io/v1beta1
+kind: AgentServiceConfig
+metadata:
+ name: agent
+spec:
+  databaseStorage:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${DB_VOLUME_SIZE}
+  filesystemStorage:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${FS_VOLUME_SIZE}
+  osImages:
+    - openshiftVersion: "${OCP_VERSION}"
+      version: "${OCP_RELEASE_VERSION}"
+      url: "${ISO_URL}"
+      rootFSUrl: "${ROOT_FS_URL}"
+      cpuArchitecture: "${ARCH}"
+EOF
+```
+
+4. Wait for the assisted-service pod to be ready.
+```bash
+until oc wait -n multicluster-engine $(oc get pods -n multicluster-engine -l app=assisted-service -o name) --for condition=Ready --timeout 10s >/dev/null 2>&1 ; do sleep 1 ; done
+```
+
+###### Create bare metal host and agent to be used as a worker node on hosting cluster
+
+The number of `BareMetalHost` resources should match the `agent` namespace should match the number of replica in `NodePool`. Follow https://github.com/openshift/hypershift/blob/main/docs/content/how-to/agent/create-agent-cluster.md#adding-a-bare-metal-worker for creating `BareMetalHost` and `agent` resources. Stop when `agent` resources are created. Skip updating the nodepool part of the documentation. Note the namespce for the `agent` resources. This namespace will be used as `agentNamespace` in `HostedCluster` resource in the next section.
+
+
+###### Provision a hosted cluster on local-cluster hosting cluster (MCE/ACM hub cluster)
+
+Create `HostedCluster` and `NodePool` on the MCE cluster. These will be referenced by `HypershiftDeployment` to provision the hosted cluster on the target hosting cluster. We are going to create the `HostedCluster`, `NodePool` and  `HypershiftDeployment` all in `default` namespace on the MCE cluster. On the hosting cluster, hypershift deployment will create `HostedCluster` and `NodePool` in `clusters` namespace.
+
+**Note: If you are provisioning this hosted cluster on `local-cluster` hosting cluster, do not create `HostedCluster` and `NodePool` resources and reference them because the hypershift operator on MCE cluster for `local-cluster` hosting cluster will reconcile them to create a hosted cluster. Instead, use HypershiftDeployment `spec.hostedClusterSpec` and `spec.nodePools`.
+
+
+1. Create SSH key secret for `HostedCluster`.
+```bash
+envsubst <<"EOF" | oc apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: agent-demo-ssh-key
+  namespace: default
+stringData:
+  id_rsa.pub: <SSH public key content>
+EOF
+```
+
+2. Create pull secret for `HostedCluster`.
+```bash
+export PS64=$(echo -n <PULL_SECRET_CONTENT> | base64 -w0)
+envsubst <<"EOF" | oc apply -f -
+apiVersion: v1
+data:
+ .dockerconfigjson: ${PS64}
+kind: Secret
+metadata:
+ name: agent-demo-pull-secret
+ namespace: default
+type: kubernetes.io/dockerconfigjson
+EOF
+```
+
+3. Prepare `HostedCluster` spec. 
+```bash
+  dns:
+    baseDomain: <BASE_DOMAIN>
+  infraID: agent-demo
+  networking:
+    machineCIDR: ""
+    networkType: OpenShiftSDN
+    podCIDR: 10.132.0.0/14
+    serviceCIDR: 172.32.0.0/16
+  platform:
+    agent:
+      agentNamespace: <AGENT_NS_FROM_PREVIOUS_SECTION>
+    type: Agent
+  pullSecret:
+    name: agent-demo-pull-secret
+  release:
+    image: quay.io/openshift-release-dev/ocp-release:4.10.16-x86_64
+  services:
+  - service: APIServer
+    servicePublishingStrategy:
+      nodePort:
+        address: <NODE_IP>
+      type: NodePort
+  - service: OAuthServer
+    servicePublishingStrategy:
+      nodePort:
+        address: <NODE_IP>
+      type: NodePort
+  - service: OIDC
+    servicePublishingStrategy:
+      nodePort:
+        address: <NODE_IP>
+      type: None
+  - service: Konnectivity
+    servicePublishingStrategy:
+      nodePort:
+        address: <NODE_IP>
+      type: NodePort
+  - service: Ignition
+    servicePublishingStrategy:
+      nodePort:
+        address: <NODE_IP>
+      type: NodePort
+  sshKey:
+    name: agent-demo-ssh-key
+```
+
+4. Prepare one or more `NodePool` specs.
+```bash
+name: nodepool1
+spec:
+  clusterName: agent-demo
+  management:
+    autoRepair: false
+    replace:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      strategy: RollingUpdate
+    upgradeType: Replace
+  platform:
+    type: Agent
+  release:
+    image: quay.io/openshift-release-dev/ocp-release:4.10.16-x86_64
+  replicas: 1
+```
+
+5. Create `HypershiftDeployment`. Use the `HostedCluster` spec from step 3 and the `NodePool` specs from step 4 and insert them into `spec.hostedClusterSpec` and `spec.NodePools`.
+```bash
 apiVersion: cluster.open-cluster-management.io/v1alpha1
 kind: HypershiftDeployment
 metadata:
-  name: hypershift-demo
+  name: agent-demo
   namespace: default
 spec:
-  hostingCluster: hypershift-management-cluster     # the hypershift management cluster name.
-  hostingNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
+  hostingCluster: <HOSTING_CLUSTER_NAMESPACE>
+  hostingNamespace: clusters
   infrastructure:
-    configure: True
+    configure: false 
+  hostedClusterSpec:
+    dns:
+      baseDomain: <BASE_DOMAIN>
+    infraID: agent-demo
+    networking:
+      machineCIDR: ""
+      networkType: OpenShiftSDN
+      podCIDR: 10.132.0.0/14
+      serviceCIDR: 172.32.0.0/16
     platform:
-  platform:
-    agent:
-      agentNamespace: ${AGENT_NS}
-    type: Agent
-EOF
+      agent:
+        agentNamespace: <AGENT_NS_FROM_PREVIOUS_SECTION>
+      type: Agent
+    pullSecret:
+      name: agent-demo-pull-secret
+    release:
+      image: quay.io/openshift-release-dev/ocp-release:4.10.16-x86_64
+    services:
+    - service: APIServer
+      servicePublishingStrategy:
+        nodePort:
+          address: <NODE_IP>
+        type: NodePort
+    - service: OAuthServer
+      servicePublishingStrategy:
+        nodePort:
+          address: <NODE_IP>
+        type: NodePort
+    - service: OIDC
+      servicePublishingStrategy:
+        nodePort:
+          address: <NODE_IP>
+        type: None
+    - service: Konnectivity
+      servicePublishingStrategy:
+        nodePort:
+          address: <NODE_IP>
+        type: NodePort
+    - service: Ignition
+      servicePublishingStrategy:
+        nodePort:
+          address: <NODE_IP>
+        type: NodePort
+    sshKey:
+      name: agent-demo-ssh-key
+  nodePools:
+  - name: nodepool1
+    spec:
+      clusterName: agent-demo
+      management:
+        autoRepair: false
+        replace:
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+          strategy: RollingUpdate
+        upgradeType: Replace
+      platform:
+        type: Agent
+      release:
+        image: quay.io/openshift-release-dev/ocp-release:4.10.16-x86_64
+      replicas: 1
 ```
+
+6. Apply the `HypershiftDeployment` to provision the hosted cluster on the hosting cluster.
+
 
 ## Access the hosted cluster
 
