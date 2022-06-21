@@ -128,9 +128,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			log.V(INFO).Info("Wait for the hosted cluster kubeconfig to be created", "secret", secretNamespaceName.String())
 			return ctrl.Result{}, nil
 		}
-		if err := ensureAutoImportSecret(r, managedClusterName, &kubeconfig); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	// Make sure we don't create the ManagedCluster if it is detached
