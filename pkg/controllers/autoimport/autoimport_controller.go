@@ -128,9 +128,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			log.V(INFO).Info("Wait for the hosted cluster kubeconfig to be created", "secret", secretNamespaceName.String())
 			return ctrl.Result{}, nil
 		}
-		if err := ensureAutoImportSecret(r, managedClusterName, &kubeconfig); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	// Make sure we don't create the ManagedCluster if it is detached
@@ -243,35 +240,6 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 	}
 
 	return &mc, nil
-}
-
-func ensureAutoImportSecret(r *Reconciler, managedClusterName string, kubeSecret *corev1.Secret) error {
-	log := r.Log.WithValues("managedClusterName", managedClusterName)
-	ctx := context.Background()
-
-	var secret corev1.Secret
-	/* #nosec */
-	secretName := "auto-import-secret"
-	err := r.Get(ctx, types.NamespacedName{Namespace: managedClusterName, Name: secretName}, &secret)
-	if k8serrors.IsNotFound(err) {
-
-		log.V(INFO).Info("Create a new auto import secret resource")
-		secret.Name = secretName
-		secret.Namespace = managedClusterName
-		secret.Data = kubeSecret.Data
-
-		if err := r.Create(ctx, &secret, &client.CreateOptions{}); err != nil {
-			log.V(ERROR).Info("Could not create auto import secret", "error", err)
-			return err
-		}
-		return nil
-	}
-	if err != nil {
-		log.V(WARN).Info("Error when attempting to retreive the auto import secret", "error", err)
-		return err
-	}
-
-	return nil
 }
 
 func ensureCreateManagedClusterAnnotationFalse(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {
