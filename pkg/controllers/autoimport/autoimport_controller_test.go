@@ -185,23 +185,6 @@ func TestReconcileCreate(t *testing.T) {
 			},
 		},
 		{
-			name:              "create managed cluster and secret",
-			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
-			hyd:               hyd.DeepCopy(),
-			managementCluster: managementCluster.DeepCopy(),
-			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
-				var mc mcv1.ManagedCluster
-				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
-				assert.Nil(t, err, "managedCluster resource is retrieved")
-
-				var autoImportSecret corev1.Secret
-				err = client.Get(ctx, getNamespaceName(mc.Name, "auto-import-secret"), &autoImportSecret)
-				assert.Nil(t, err, "secret resource is retrieved")
-
-				assertAnnoCreateMCFalse(t, ctx, client)
-			},
-		},
-		{
 			name:              "should not create managed cluster, annotation false",
 			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
 			hyd:               setAnnotationHYD(hyd.DeepCopy(), map[string]string{createManagedClusterAnnotation: "false"}),
