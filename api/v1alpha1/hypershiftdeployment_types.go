@@ -200,7 +200,7 @@ type AWSPlatform struct {
 	// name is suffixed by the zone name.
 	//
 	// +optional
-	Zones []string `json:"zones"`
+	Zones []string `json:"zones,omitempty"`
 }
 
 // HypershiftDeploymentStatus defines the observed state of HypershiftDeployment
