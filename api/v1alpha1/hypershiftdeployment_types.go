@@ -195,7 +195,7 @@ type AWSPlatform struct {
 	// +immutable
 	Region string `json:"region"`
 
-	// Zones are availability dones in the AWS region.
+	// Zones are availability zones in the AWS region.
 	// NodePool resource is created in each zone and the NodePool
 	// name is suffixed by the zone name.
 	//

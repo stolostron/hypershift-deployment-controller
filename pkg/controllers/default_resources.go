@@ -358,7 +358,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{}
 
 		if infraOut == nil {
-			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodepoolSpec(hyd.Name, hyd.Name))
+			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodePoolSpec(hyd.Name, hyd.Name))
 		} else {
 			for _, zone := range infraOut.Zones {
 				nodePoolSpecName := hyd.Name
@@ -368,7 +368,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 					nodePoolSpecName = hyd.Name + "-" + zone.Name
 				}
 
-				nodePoolSpec := getNodepoolSpec(nodePoolSpecName, hyd.Name)
+				nodePoolSpec := getNodePoolSpec(nodePoolSpecName, hyd.Name)
 
 				hyd.Spec.NodePools = append(hyd.Spec.NodePools, nodePoolSpec)
 			}
@@ -382,7 +382,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 	}
 }
 
-func getNodepoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePools {
+func getNodePoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePools {
 	replicas := int32(2)
 
 	return &hypdeployment.HypershiftNodePools{
