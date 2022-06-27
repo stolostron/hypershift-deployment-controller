@@ -139,6 +139,9 @@ spec:
     platform:
       aws:
         region: <region>
+        zones:
+        - <availability-zone-1>
+        - <availability-zone-2>
 EOF
 ```
 

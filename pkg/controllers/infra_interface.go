@@ -29,7 +29,7 @@ import (
 )
 
 type InfraHandler interface {
-	AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsCreateInfra
+	AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string, zones []string) AwsCreateInfra
 	AwsInfraDestroyer(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsDestroyInfra
 	AwsIAMCreator(awsKey, awsSecretKey, region, infraID, s3BucketName, s3Region, privateZoneID, publicZoneID, localZoneID string) AwsCreateIAM
 	AwsIAMDestroyer(awsKey, awsSecretKey, region, infraID string) AwsDestroyIAM
@@ -49,11 +49,12 @@ var _ InfraHandler = &DefaultInfraHandler{}
 
 type DefaultInfraHandler struct{}
 
-func (h *DefaultInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsCreateInfra {
+func (h *DefaultInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string, zones []string) AwsCreateInfra {
 	o := &aws.CreateInfraOptions{
 		AWSKey:       awsKey,
 		AWSSecretKey: awsSecretKey,
 		Region:       region,
+		Zones:        zones,
 		InfraID:      infraID,
 		Name:         name,
 		BaseDomain:   baseDomain,
@@ -130,13 +131,17 @@ type FakeInfraHandler struct{}
 
 type FakeInfraHandlerFailure struct{}
 
-func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsCreateInfra {
+func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string, zones []string) AwsCreateInfra {
 	return func(ctx context.Context) (*aws.CreateInfraOutput, error) {
 		return &aws.CreateInfraOutput{
 			Zones: []*aws.CreateInfraOutputZone{
 				{
 					Name:     "us-east-1a",
 					SubnetID: "subnet-0123456789abcdefg",
+				},
+				{
+					Name:     "us-east-1b",
+					SubnetID: "subnet-00000011111222233",
 				},
 			},
 			VPCID:           "vpc-abcdefg0123456789",
@@ -150,7 +155,7 @@ func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID
 	}
 }
 
-func (h *FakeInfraHandlerFailure) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string) AwsCreateInfra {
+func (h *FakeInfraHandlerFailure) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string, zones []string) AwsCreateInfra {
 	return func(ctx context.Context) (*aws.CreateInfraOutput, error) {
 		return nil, errors.New("failed to create aws infrastructure")
 	}

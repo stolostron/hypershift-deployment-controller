@@ -198,6 +198,17 @@ func TestCreateAwsInfra(t *testing.T) {
 	assert.NotNil(t, c, "not nil, when condition is found")
 	assert.Equal(t, metav1.ConditionTrue, c.Status, "true, when region is provided")
 
+	t.Log("Test AwsInfraCreator success when region and zones are added")
+	hyd.Spec.Infrastructure.Platform.AWS.Region = "us-east-1"
+	hyd.Spec.Infrastructure.Platform.AWS.Zones = []string{"us-east-1a", "us-east-1b"}
+	meta.RemoveStatusCondition(&hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))
+
+	_, err = r.createAWSInfra(hyd, getProviderSecret())
+	assert.Nil(t, err, "nil, when no problem occurs")
+	c = meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformConfigured))
+	assert.NotNil(t, c, "not nil, when condition is found")
+	assert.Equal(t, metav1.ConditionTrue, c.Status, "true, when region is provided")
+
 	t.Log("Test AwsInfraCreator infrastructure function failure")
 	r.InfraHandler = &FakeInfraHandlerFailure{}
 	hyd.Spec.Infrastructure.Platform.AWS.Region = "us-east-1"
