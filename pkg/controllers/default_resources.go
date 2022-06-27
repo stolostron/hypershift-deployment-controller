@@ -309,7 +309,7 @@ func scaffoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudP
 }
 
 func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *azure.CreateInfraOutput) {
-	ScaffoldNodePoolSpec(hyd)
+	ScaffoldNodePoolSpec(hyd, nil)
 	for _, np := range hyd.Spec.NodePools {
 		np.Spec.Platform.Type = hyp.AzurePlatform
 		if np.Spec.Platform.Azure == nil {
@@ -326,11 +326,11 @@ func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut
 }
 
 func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
-	ScaffoldNodePoolSpec(hyd)
+	ScaffoldNodePoolSpec(hyd, infraOut)
 	// TODO @jnpacker, this code should be moved outside this function and be called whenever NodePools
 	//      get reconciled.  Also need to store the SCG somehwere for use on NEW nodePools, the subnet is
 	//      available via the HostedClusterSpec.
-	for _, np := range hyd.Spec.NodePools {
+	for count, np := range hyd.Spec.NodePools {
 		np.Spec.Platform.Type = hyp.AWSPlatform
 		if np.Spec.Platform.AWS == nil {
 			np.Spec.Platform.AWS = scaffoldAWSNodePoolPlatform(infraOut)
@@ -340,7 +340,7 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 		}
 		if np.Spec.Platform.AWS.Subnet == nil {
 			np.Spec.Platform.AWS.Subnet = &hyp.AWSResourceReference{
-				ID: &infraOut.Zones[0].SubnetID,
+				ID: &infraOut.Zones[count].SubnetID,
 			}
 		}
 		if np.Spec.Platform.AWS.SecurityGroups == nil {
@@ -353,36 +353,25 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 	}
 }
 
-func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
-
-	replicas := int32(2)
-
+func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 	if len(hyd.Spec.NodePools) == 0 {
-		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{
-			{
-				Name: hyd.Name,
-				Spec: hyp.NodePoolSpec{
-					ClusterName: hyd.Name,
-					Management: hyp.NodePoolManagement{
-						AutoRepair: false,
-						Replace: &hyp.ReplaceUpgrade{
-							RollingUpdate: &hyp.RollingUpdate{
-								MaxSurge:       &intstr.IntOrString{IntVal: 1},
-								MaxUnavailable: &intstr.IntOrString{IntVal: 0},
-							},
-							Strategy: hyp.UpgradeStrategyRollingUpdate,
-						},
-						UpgradeType: hyp.UpgradeTypeReplace,
-					},
-					Replicas: &replicas,
-					Platform: hyp.NodePoolPlatform{
-						Type: hyp.NonePlatform,
-					},
-					Release: hyp.Release{
-						Image: getReleaseImagePullSpec(), //.DownloadURL,,
-					},
-				},
-			},
+		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{}
+
+		if infraOut == nil {
+			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodepoolSpec(hyd.Name, hyd.Name))
+		} else {
+			for _, zone := range infraOut.Zones {
+				nodePoolSpecName := hyd.Name
+
+				if len(infraOut.Zones) > 1 {
+					// If there are multiple zones, name node pools differently
+					nodePoolSpecName = hyd.Name + "-" + zone.Name
+				}
+
+				nodePoolSpec := getNodepoolSpec(nodePoolSpecName, hyd.Name)
+
+				hyd.Spec.NodePools = append(hyd.Spec.NodePools, nodePoolSpec)
+			}
 		}
 	}
 
@@ -390,6 +379,35 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 		if np.Spec.ClusterName != hyd.Name {
 			np.Spec.ClusterName = hyd.Name
 		}
+	}
+}
+
+func getNodepoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePools {
+	replicas := int32(2)
+
+	return &hypdeployment.HypershiftNodePools{
+		Name: name,
+		Spec: hyp.NodePoolSpec{
+			ClusterName: clusterName,
+			Management: hyp.NodePoolManagement{
+				AutoRepair: false,
+				Replace: &hyp.ReplaceUpgrade{
+					RollingUpdate: &hyp.RollingUpdate{
+						MaxSurge:       &intstr.IntOrString{IntVal: 1},
+						MaxUnavailable: &intstr.IntOrString{IntVal: 0},
+					},
+					Strategy: hyp.UpgradeStrategyRollingUpdate,
+				},
+				UpgradeType: hyp.UpgradeTypeReplace,
+			},
+			Replicas: &replicas,
+			Platform: hyp.NodePoolPlatform{
+				Type: hyp.NonePlatform,
+			},
+			Release: hyp.Release{
+				Image: getReleaseImagePullSpec(), //.DownloadURL,,
+			},
+		},
 	}
 }
 

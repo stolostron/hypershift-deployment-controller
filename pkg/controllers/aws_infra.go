@@ -58,6 +58,7 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			hyd.Spec.InfraID,
 			hyd.GetName(),
 			string(providerSecret.Data["baseDomain"]),
+			hyd.Spec.Infrastructure.Platform.AWS.Zones,
 		)(ctx)
 		if err != nil {
 			log.Error(err, "Could not create infrastructure")
