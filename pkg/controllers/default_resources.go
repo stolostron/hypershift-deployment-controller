@@ -27,7 +27,6 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
-	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -46,11 +45,11 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
-	defaultVersion, err := version.LookupDefaultOCPVersion()
-	if err != nil {
-		return constant.ReleaseImage
-	}
-	return defaultVersion.PullSpec
+	//defaultVersion, err := version.LookupDefaultOCPVersion()
+	//if err != nil {
+	return constant.ReleaseImage
+	//}
+	//return defaultVersion.PullSpec
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
@@ -171,21 +170,34 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
 	hyd.Spec.HostedClusterSpec.Networking.MachineCIDR = infraOut.ComputeCIDR
-	ap := &hyp.AWSPlatformSpec{
-		Region:                    hyd.Spec.Infrastructure.Platform.AWS.Region,
-		ControlPlaneOperatorCreds: corev1.LocalObjectReference{Name: hyd.Name + "-cpo-creds"},
-		KubeCloudControllerCreds:  corev1.LocalObjectReference{Name: hyd.Name + "-cloud-ctrl-creds"},
-		NodePoolManagementCreds:   corev1.LocalObjectReference{Name: hyd.Name + "-node-mgmt-creds"},
-		EndpointAccess:            hyp.Public,
-		ResourceTags: []hyp.AWSResourceTag{
-			//set the resource tags to prevent the work always updating the hostedcluster resource on the hosting cluster.
-			{
-				Key:   "kubernetes.io/cluster/" + hyd.Spec.HostedClusterSpec.InfraID,
-				Value: "owned",
-			},
-		},
+
+	if hyd.Spec.HostedClusterSpec.Platform.AWS == nil {
+		hyd.Spec.HostedClusterSpec.Platform.AWS = &hyp.AWSPlatformSpec{}
 	}
-	hyd.Spec.HostedClusterSpec.Platform.AWS = ap
+	aws := hyd.Spec.HostedClusterSpec.Platform.AWS.DeepCopy()
+	if aws.Region == "" {
+		aws.Region = hyd.Spec.Infrastructure.Platform.AWS.Region
+	}
+	if aws.ControlPlaneOperatorCreds.Name == "" {
+		aws.ControlPlaneOperatorCreds.Name = hyd.Name + "-cpo-creds"
+	}
+	if aws.KubeCloudControllerCreds.Name == "" {
+		aws.KubeCloudControllerCreds.Name = hyd.Name + "-cloud-ctrl-creds"
+	}
+	if aws.NodePoolManagementCreds.Name == "" {
+		aws.NodePoolManagementCreds.Name = hyd.Name + "-node-mgmt-creds"
+	}
+	if aws.ResourceTags == nil {
+		aws.ResourceTags = []hyp.AWSResourceTag{}
+	}
+	//set the resource tags to prevent the work always updating the hostedcluster resource on the hosting cluster.
+	aws.ResourceTags = append(aws.ResourceTags,
+		hyp.AWSResourceTag{
+			Key:   "kubernetes.io/cluster/" + hyd.Spec.HostedClusterSpec.InfraID,
+			Value: "owned",
+		},
+	)
+	hyd.Spec.HostedClusterSpec.Platform.AWS = aws.DeepCopy()
 	hyd.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig = scaffoldCloudProviderConfig(infraOut)
 	hyd.Spec.HostedClusterSpec.Platform.Type = hyp.AWSPlatform
 	//Fill in missing values if present from infraOut
@@ -296,7 +308,7 @@ func scaffoldCloudProviderConfig(infraOut *aws.CreateInfraOutput) *hyp.AWSCloudP
 }
 
 func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *azure.CreateInfraOutput) {
-	ScaffoldNodePoolSpec(hyd)
+	ScaffoldNodePoolSpec(hyd, nil)
 	for _, np := range hyd.Spec.NodePools {
 		np.Spec.Platform.Type = hyp.AzurePlatform
 		if np.Spec.Platform.Azure == nil {
@@ -313,11 +325,11 @@ func ScaffoldAzureNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut
 }
 
 func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
-	ScaffoldNodePoolSpec(hyd)
+	ScaffoldNodePoolSpec(hyd, infraOut)
 	// TODO @jnpacker, this code should be moved outside this function and be called whenever NodePools
 	//      get reconciled.  Also need to store the SCG somehwere for use on NEW nodePools, the subnet is
 	//      available via the HostedClusterSpec.
-	for _, np := range hyd.Spec.NodePools {
+	for count, np := range hyd.Spec.NodePools {
 		np.Spec.Platform.Type = hyp.AWSPlatform
 		if np.Spec.Platform.AWS == nil {
 			np.Spec.Platform.AWS = scaffoldAWSNodePoolPlatform(infraOut)
@@ -327,7 +339,7 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 		}
 		if np.Spec.Platform.AWS.Subnet == nil {
 			np.Spec.Platform.AWS.Subnet = &hyp.AWSResourceReference{
-				ID: &infraOut.Zones[0].SubnetID,
+				ID: &infraOut.Zones[count].SubnetID,
 			}
 		}
 		if np.Spec.Platform.AWS.SecurityGroups == nil {
@@ -340,36 +352,25 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 	}
 }
 
-func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
-
-	replicas := int32(2)
-
+func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
 	if len(hyd.Spec.NodePools) == 0 {
-		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{
-			{
-				Name: hyd.Name,
-				Spec: hyp.NodePoolSpec{
-					ClusterName: hyd.Name,
-					Management: hyp.NodePoolManagement{
-						AutoRepair: false,
-						Replace: &hyp.ReplaceUpgrade{
-							RollingUpdate: &hyp.RollingUpdate{
-								MaxSurge:       &intstr.IntOrString{IntVal: 1},
-								MaxUnavailable: &intstr.IntOrString{IntVal: 0},
-							},
-							Strategy: hyp.UpgradeStrategyRollingUpdate,
-						},
-						UpgradeType: hyp.UpgradeTypeReplace,
-					},
-					Replicas: &replicas,
-					Platform: hyp.NodePoolPlatform{
-						Type: hyp.NonePlatform,
-					},
-					Release: hyp.Release{
-						Image: getReleaseImagePullSpec(), //.DownloadURL,,
-					},
-				},
-			},
+		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{}
+
+		if infraOut == nil {
+			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodePoolSpec(hyd.Name, hyd.Name))
+		} else {
+			for _, zone := range infraOut.Zones {
+				nodePoolSpecName := hyd.Name
+
+				if len(infraOut.Zones) > 1 {
+					// If there are multiple zones, name node pools differently
+					nodePoolSpecName = hyd.Name + "-" + zone.Name
+				}
+
+				nodePoolSpec := getNodePoolSpec(nodePoolSpecName, hyd.Name)
+
+				hyd.Spec.NodePools = append(hyd.Spec.NodePools, nodePoolSpec)
+			}
 		}
 	}
 
@@ -377,6 +378,35 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment) {
 		if np.Spec.ClusterName != hyd.Name {
 			np.Spec.ClusterName = hyd.Name
 		}
+	}
+}
+
+func getNodePoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePools {
+	replicas := int32(2)
+
+	return &hypdeployment.HypershiftNodePools{
+		Name: name,
+		Spec: hyp.NodePoolSpec{
+			ClusterName: clusterName,
+			Management: hyp.NodePoolManagement{
+				AutoRepair: false,
+				Replace: &hyp.ReplaceUpgrade{
+					RollingUpdate: &hyp.RollingUpdate{
+						MaxSurge:       &intstr.IntOrString{IntVal: 1},
+						MaxUnavailable: &intstr.IntOrString{IntVal: 0},
+					},
+					Strategy: hyp.UpgradeStrategyRollingUpdate,
+				},
+				UpgradeType: hyp.UpgradeTypeReplace,
+			},
+			Replicas: &replicas,
+			Platform: hyp.NodePoolPlatform{
+				Type: hyp.NonePlatform,
+			},
+			Release: hyp.Release{
+				Image: getReleaseImagePullSpec(), //.DownloadURL,,
+			},
+		},
 	}
 }
 

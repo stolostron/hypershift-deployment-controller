@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	"fmt"
 	"os"
@@ -173,8 +174,14 @@ func TestScaffoldHostedClusterSpec(t *testing.T) {
 		"if code above ran, this will be empty")
 	assert.NotEqual(t, testHD.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{},
 		"services should not be an empty list")
-	assert.Equal(t, v1alpha1.NetworkType("OVNKubernetes"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
-		"is OVNKubernetes when release is not 4.10")
+	if strings.Contains(testHD.Spec.HostedClusterSpec.Release.Image, "4.10.") {
+		assert.Equal(t, v1alpha1.NetworkType("OpenShiftSDN"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+			"is OpenShiftSDN when release is 4.10")
+	} else {
+		assert.Equal(t, v1alpha1.NetworkType("OVNKubernetes"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+			"is OVNKubernetes when release is > 4.10")
+	}
+
 }
 
 func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
@@ -192,7 +199,7 @@ func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
 		// Defaults for all platforms
 		PullSecret: corev1.LocalObjectReference{Name: ""},
 		Release: hyp.Release{
-			Image: "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
+			Image: "quay.io/openshift-release-dev/ocp-release:4.10.18-x86_64",
 		},
 		Services: []hyp.ServicePublishingStrategyMapping{},
 	}
@@ -201,7 +208,7 @@ func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
 	assert.Equal(t, testHD.Spec.HostedClusterSpec.PullSecret.Name,
 		"test1-pull-secret", "Equal when pull secret name is populated")
 	assert.Equal(t, testHD.Spec.HostedClusterSpec.Release.Image,
-		"quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
+		"quay.io/openshift-release-dev/ocp-release:4.10.18-x86_64",
 		"The image we update at release time as stable")
 	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.ServiceCIDR,
 		"172.31.0.0/16", "default serviceCIDR")
