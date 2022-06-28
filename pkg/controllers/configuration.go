@@ -218,18 +218,23 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			k := genKey(se.secretRef, hyd)
 			secret, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetHostingNamespace(hyd)))
 			if err != nil {
-				r.Log.Info(fmt.Sprintf("did not find and copy secret %s: %s", k, err.Error()))
+				r.Log.V(4).Info(fmt.Sprintf("did not find and copy secret %s: %s", k, err.Error()))
 			}
 
 			if secret == nil {
 				// 2. Use existing secret in manifestwork payload
 				secret, err = getManifestPayloadSecretByName(&manifestwork.Spec.Workload.Manifests, se.secretRef.Name)
-
+				if err != nil {
+					r.Log.V(4).Info(fmt.Sprintf("did not get secret %s from manifestwork: %s", se.secretRef.Name, err.Error()))
+				}
 				if secret == nil &&
 					hyd.Spec.Infrastructure.Configure &&
 					se.createSecretFunc != nil {
 					// 3. For configure=T - Generate secret
 					secret, err = se.createSecretFunc()
+					if err != nil {
+						r.Log.V(4).Info(fmt.Sprintf("failed to create secret %s: %s", se.secretRef.Name, err.Error()))
+					}
 				}
 			}
 

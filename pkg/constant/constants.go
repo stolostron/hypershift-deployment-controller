@@ -32,4 +32,8 @@ const (
 
 	// HypershiftBucketSecretName is the secret name used to work with the AWS s3 credential
 	HypershiftBucketSecretName = "hypershift-operator-oidc-provider-s3-credentials"
+
+	// Provider secret fields
+	SSHPrivateKey = "ssh-privatekey"
+	SSHPublicKey  = "ssh-publickey"
 )
