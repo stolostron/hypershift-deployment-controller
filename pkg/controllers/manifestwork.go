@@ -477,12 +477,12 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			}
 
 			refSecrets = append(refSecrets, s)
-		} else {
+		} else if providerSecret != nil {
 			sshPublicKey := providerSecret.Data[constant.SSHPublicKey]
 			sshPrivateKey := providerSecret.Data[constant.SSHPrivateKey]
 
 			if sshPrivateKey != nil && sshPublicKey != nil {
-				r.Log.V(4).Info("Use SSH key found in provider secret")
+				r.Log.Info("Use SSH key found in provider secret")
 				s := scaffoldSSHCredential(hyd, sshPublicKey, sshPrivateKey)
 				refSecrets = append(refSecrets, s)
 				setSSHKeyInHostedCluster(payload, s.Name)
