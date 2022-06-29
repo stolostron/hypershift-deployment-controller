@@ -497,3 +497,20 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 		},
 	}
 }
+
+func scaffoldSSHCredential(hyd *hypdeployment.HypershiftDeployment, sshPublicKey, sshPrivateKey []byte) *corev1.Secret {
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hyd.Name + "-ssh-key",
+			Namespace: helper.GetHostingNamespace(hyd),
+		},
+		Data: map[string][]byte{
+			"id_rsa.pub": sshPublicKey,
+			"id_rsa":     sshPrivateKey,
+		},
+	}
+}

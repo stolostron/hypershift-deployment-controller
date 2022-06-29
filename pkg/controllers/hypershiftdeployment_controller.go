@@ -95,10 +95,11 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 	var providerSecret corev1.Secret
 	var err error
 
+	providerSecretName := hyd.Spec.Infrastructure.CloudProvider.Name
 	configureInfra := hyd.Spec.Infrastructure.Configure
 	if configureInfra ||
 		(hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.Azure != nil) {
-		if hyd.Spec.Infrastructure.CloudProvider.Name == "" {
+		if providerSecretName == "" {
 			log.Error(err, "spec.infrastructure.cloudProvider is required for configuring infrastructure")
 			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
 				r.updateStatusConditionsOnChange(&hyd,
@@ -108,19 +109,23 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 					hypdeployment.MisConfiguredReason)
 		}
 
-		secretName := hyd.Spec.Infrastructure.CloudProvider.Name
-		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: secretName}, &providerSecret)
+		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: providerSecretName}, &providerSecret)
 		if err != nil {
 			log.Error(err, "Could not retrieve the provider secret")
 			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
 				r.updateStatusConditionsOnChange(&hyd,
 					hypdeployment.ProviderSecretConfigured,
 					metav1.ConditionFalse,
-					"The secret "+secretName+" could not be retreived from namespace "+hyd.Namespace,
+					"The secret "+providerSecretName+" could not be retreived from namespace "+hyd.Namespace,
 					hypdeployment.MisConfiguredReason)
 		}
-		if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+secretName, string(hypdeployment.AsExpectedReason)); err != nil {
+		if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+providerSecretName, string(hypdeployment.AsExpectedReason)); err != nil {
 			return ctrl.Result{}, err
+		}
+	} else if providerSecretName != "" {
+		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: providerSecretName}, &providerSecret)
+		if err != nil {
+			log.V(1).Info("Could not retrieve the provider secret")
 		}
 	}
 

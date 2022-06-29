@@ -463,6 +463,8 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			refSecrets = append(refSecrets, ScaffoldAzureCloudCredential(hyd, creds))
 		}
 
+		// SSH key is optional. Use SSH key in hcSpec if provided. If it's not provided, use key in
+		// the provider secret if it is provided.
 		sshKey := hcSpec.SSHKey
 		if len(sshKey.Name) != 0 {
 			s, err := r.generateSecret(ctx,
@@ -475,6 +477,16 @@ func (r *HypershiftDeploymentReconciler) appendHostedClusterReferenceSecrets(ctx
 			}
 
 			refSecrets = append(refSecrets, s)
+		} else if providerSecret != nil {
+			sshPublicKey := providerSecret.Data[constant.SSHPublicKey]
+			sshPrivateKey := providerSecret.Data[constant.SSHPrivateKey]
+
+			if sshPrivateKey != nil && sshPublicKey != nil {
+				r.Log.Info("Use SSH key found in provider secret")
+				s := scaffoldSSHCredential(hyd, sshPublicKey, sshPrivateKey)
+				refSecrets = append(refSecrets, s)
+				setSSHKeyInHostedCluster(payload, s.Name)
+			}
 		}
 
 		for _, s := range refSecrets {
@@ -819,4 +831,19 @@ func getNodePoolsInManifestPayload(manifests *[]workv1.Manifest) []*hyp.NodePool
 	}
 
 	return nodePools
+}
+
+// Update the SSH Key in the HostedCluster.Spec
+func setSSHKeyInHostedCluster(manifests *[]workv1.Manifest, sshKeySecretName string) {
+	for _, v := range *manifests {
+		if v.Object.GetObjectKind().GroupVersionKind().Kind == "HostedCluster" {
+			uSSHKey := make(map[string]interface{})
+			uSSHKey["name"] = sshKeySecretName
+			uHc := v.Object.(*unstructured.Unstructured).UnstructuredContent()
+			uHc["spec"].(map[string]interface{})["sshKey"] = uSSHKey
+			return
+		}
+	}
+
+	mLog.Info("failed to find hostedCluster in manifestwork payload to add SSH key")
 }
