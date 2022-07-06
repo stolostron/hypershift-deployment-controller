@@ -52,22 +52,22 @@ func getHDforManifestWork() *hyd.HypershiftDeployment {
 	return testHD
 }
 
-func getClusterSetBinding(namespace string) *clusterv1beta1.ManagedClusterSetBinding {
+func getClusterSetBinding(namespace, name string) *clusterv1beta1.ManagedClusterSetBinding {
 	return &clusterv1beta1.ManagedClusterSetBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "dev",
+			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: clusterv1beta1.ManagedClusterSetBindingSpec{
-			ClusterSet: "dev",
+			ClusterSet: name,
 		},
 	}
 }
 
-func getClusterSet() *clusterv1beta1.ManagedClusterSet {
+func getClusterSet(name string) *clusterv1beta1.ManagedClusterSet {
 	return &clusterv1beta1.ManagedClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "dev",
+			Name: name,
 		},
 		Spec: clusterv1beta1.ManagedClusterSetSpec{},
 	}
@@ -1678,7 +1678,7 @@ func TestValidateSecurityConstraints(t *testing.T) {
 	c := meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	assert.True(t, strings.Contains(c.Message, "a bound ManagedClusterSetBinding is required in namespace"), "when validating namespace needs at least one bound ManagedClusterSetBinding")
 
-	binding := getClusterSetBinding(testHD.Namespace)
+	binding := getClusterSetBinding(testHD.Namespace, "dev")
 	client.Create(ctx, binding)
 	defer client.Delete(ctx, binding)
 
@@ -1726,7 +1726,7 @@ func TestValidateSecurityConstraints(t *testing.T) {
 	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
 	assert.True(t, strings.Contains(c.Message, "is a member of a ManagedClusterSet"), "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
 
-	clusterSet := getClusterSet()
+	clusterSet := getClusterSet("dev")
 	client.Create(ctx, clusterSet)
 	defer client.Delete(ctx, clusterSet)
 
@@ -1738,6 +1738,40 @@ func TestValidateSecurityConstraints(t *testing.T) {
 	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
 	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
 	assert.True(t, passed, "when validating HostingCluster needs to be a ManagedCluster that is a member of a ManagedClusterSet")
+
+	testHD.Spec.HostedManagedClusterSet = "not-exist-cluster-set"
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating HostingCluster Spec HostedManagedClusterSet")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "ManagedClusterSet is not found"), "when validating HostingCluster Spec HostedManagedClusterSet")
+
+	clusterSet = getClusterSet("qa")
+	client.Create(ctx, clusterSet)
+	defer client.Delete(ctx, clusterSet)
+
+	testHD.Spec.HostedManagedClusterSet = "qa"
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.False(t, passed, "when validating HostingCluster Spec HostedManagedClusterSet")
+
+	err = client.Get(context.Background(), getNN, &resultHD)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	c = meta.FindStatusCondition(resultHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "a bound ManagedClusterSetBinding is required"), "when validating HostingCluster Spec HostedManagedClusterSet")
+
+	binding = getClusterSetBinding(testHD.Namespace, "qa")
+	client.Create(ctx, binding)
+	defer client.Delete(ctx, binding)
+
+	passed, err = hdr.validateSecurityConstraints(ctx, testHD)
+	assert.Nil(t, err, "is nil when validating HypershiftDeploymentReconciler security constraints")
+	assert.True(t, passed, "when validating namespace needs at least one bound ManagedClusterSetBinding")
 }
 
 func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
@@ -1768,7 +1802,7 @@ func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
 	assert.Equal(t, workv1.DeletePropagationPolicyTypeSelectivelyOrphan, mw.Spec.DeleteOption.PropagationPolicy,
 		"set selectivelyOrphan and not orphan")
 	mw.Status.Conditions = []metav1.Condition{
-		metav1.Condition{
+		{
 			Type:               string(workv1.WorkAvailable),
 			ObservedGeneration: mw.Generation,
 			Status:             metav1.ConditionTrue,
@@ -1779,6 +1813,9 @@ func TestDeleteManifestworkWaitCleanUp(t *testing.T) {
 	// 2nd pass
 	rqst, err = hdr.deleteManifestworkWaitCleanUp(ctx, testHD)
 	assert.Nil(t, err, "is nil when deleteManifestWorkWaitCleanUp is successful")
+	c := meta.FindStatusCondition(testHD.Status.Conditions, string(hyd.WorkConfigured))
+	assert.True(t, strings.Contains(c.Message, "Removing HypershiftDeployment's manifestwork and related resources"),
+		"delete ManifestWork should set the HypershiftDeployment status condition")
 	assert.EqualValues(t, ctrl.Result{RequeueAfter: 20 * time.Second, Requeue: true}, rqst, "request requeue should be 20s")
 	err = client.Get(ctx, types.NamespacedName{Name: mw.Name, Namespace: mw.Namespace}, mw)
 	assert.True(t, apierrors.IsNotFound(err), "true when ManifestWork is removed")

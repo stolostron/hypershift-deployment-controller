@@ -196,6 +196,22 @@ func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context
 		Client: r.Client,
 	}
 
+	managedClusterSetName := hyd.Spec.HostedManagedClusterSet
+	if managedClusterSetName != "" {
+		var managedClusterSet clusterv1beta1.ManagedClusterSet
+		err := r.Get(ctx, types.NamespacedName{Name: managedClusterSetName}, &managedClusterSet)
+		switch {
+		case apierrors.IsNotFound(err):
+			r.Log.Error(err, "fail to find ManagedClusterSet: "+managedClusterSetName)
+			return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+				managedClusterSetName+" ManagedClusterSet is not found. Retrying after a minute", hypdeployment.MisConfiguredReason)
+		case err != nil:
+			r.Log.Error(err, "error while trying to find ManagedClusterSet: "+managedClusterSetName)
+			return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+				managedClusterSetName+" ManagedClusterSet is not available. Retrying after a minute", hypdeployment.MisConfiguredReason)
+		}
+	}
+
 	bindings, err := clusterv1beta1.GetBoundManagedClusterSetBindings(hyd.Namespace, cbg)
 	if err != nil {
 		r.Log.Error(err, hyd.Namespace+" namespace needs at least one bound ManagedClusterSetBinding")
@@ -215,6 +231,13 @@ func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context
 		clusterSets.Insert(binding.Name)
 	}
 
+	if managedClusterSetName != "" && !clusterSets.Has(managedClusterSetName) {
+		r.Log.Error(errors.New("missing a bound ManagedClusterSetBinding in namespace "+hyd.Namespace+"for ManagedClusterSet "+managedClusterSetName),
+			hyd.Namespace+" namespace needs a bound ManagedClusterSetBinding for ManagedClusterSet "+managedClusterSetName)
+		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
+			"a bound ManagedClusterSetBinding is required in namespace "+hyd.Namespace+" for ManagedClusterSet "+managedClusterSetName+" retrying again after a minute", hypdeployment.MisConfiguredReason)
+	}
+
 	// Check the managed cluster exists
 	var managedCluster clusterv1.ManagedCluster
 	err = r.Get(ctx, types.NamespacedName{Name: hyd.Spec.HostingCluster}, &managedCluster)
@@ -227,6 +250,10 @@ func (r *HypershiftDeploymentReconciler) validateSecurityConstraints(ctx context
 		r.Log.Error(err, "error while trying to find ManagedCluster: "+hyd.Spec.HostingCluster)
 		return false, r.updateStatusConditionsOnChange(hyd, hypdeployment.WorkConfigured, metav1.ConditionFalse,
 			hyd.Spec.HostingCluster+" ManagedCluster is required. Retrying after a minute", hypdeployment.MisConfiguredReason)
+	}
+
+	if managedClusterSetName != "" {
+		clusterSets = sets.NewString(managedClusterSetName)
 	}
 
 	foundClusterSet, err := helper.IsClusterInClusterSet(r.Client, &managedCluster, clusterSets.List())
@@ -298,7 +325,7 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 	}
 
 	passedSecurity, statusUpdateErr := r.validateSecurityConstraints(ctx, hyd)
-	if !passedSecurity {
+	if !passedSecurity || statusUpdateErr != nil {
 		return ctrl.Result{RequeueAfter: time.Minute * 1}, statusUpdateErr
 	}
 
