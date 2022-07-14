@@ -357,8 +357,13 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 	if len(hyd.Spec.NodePools) == 0 {
 		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{}
 
+		releaseImage := ""
+		if hyd.Spec.HostedClusterSpec != nil && &hyd.Spec.HostedClusterSpec.Release != nil {
+			releaseImage = hyd.Spec.HostedClusterSpec.Release.Image
+		}
+
 		if infraOut == nil {
-			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodePoolSpec(hyd.Name, hyd.Name))
+			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodePoolSpec(hyd.Name, hyd.Name, releaseImage))
 		} else {
 			for _, zone := range infraOut.Zones {
 				nodePoolSpecName := hyd.Name
@@ -368,7 +373,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 					nodePoolSpecName = hyd.Name + "-" + zone.Name
 				}
 
-				nodePoolSpec := getNodePoolSpec(nodePoolSpecName, hyd.Name)
+				nodePoolSpec := getNodePoolSpec(nodePoolSpecName, hyd.Name, releaseImage)
 
 				hyd.Spec.NodePools = append(hyd.Spec.NodePools, nodePoolSpec)
 			}
@@ -382,8 +387,12 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 	}
 }
 
-func getNodePoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePools {
+func getNodePoolSpec(name, clusterName, releaseImage string) *hypdeployment.HypershiftNodePools {
 	replicas := int32(2)
+
+	if releaseImage == "" {
+		releaseImage = getReleaseImagePullSpec()
+	}
 
 	return &hypdeployment.HypershiftNodePools{
 		Name: name,
@@ -405,7 +414,7 @@ func getNodePoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePool
 				Type: hyp.NonePlatform,
 			},
 			Release: hyp.Release{
-				Image: getReleaseImagePullSpec(), //.DownloadURL,,
+				Image: releaseImage, //.DownloadURL,,
 			},
 		},
 	}
