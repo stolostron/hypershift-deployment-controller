@@ -354,7 +354,7 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 }
 
 func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
-	if len(hyd.Spec.NodePools) == 0 {
+	if len(hyd.Spec.NodePools) == 0 { // If no nodepool, then we handle zones here. What about nodepools are provided in HD?
 		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{}
 
 		releaseImage := ""

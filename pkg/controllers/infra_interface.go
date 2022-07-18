@@ -176,31 +176,15 @@ func (h *FakeInfraHandlerFailure) AwsInfraDestroyer(awsKey, awsSecretKey, region
 func (h *FakeInfraHandler) AwsIAMCreator(awsKey, awsSecretKey, region, infraID, s3BucketName, s3Region, privateZoneID, publicZoneID, localZoneID string) AwsCreateIAM {
 	return func(ctx context.Context, client crclient.Client) (*aws.CreateIAMOutput, error) {
 		return &aws.CreateIAMOutput{
-			ControlPlaneOperatorRoleARN: "arn:aws:iam::012345678910:role/hypershift-test-abcde-control-plane-operator",
-			KubeCloudControllerRoleARN:  "arn:aws:iam::012345678910:role/hypershift-test-abcde-cloud-controller",
-			NodePoolManagementRoleARN:   "arn:aws:iam::012345678910:role/hypershift-test-abcde-node-pool",
-			IssuerURL:                   "https://bucket-hypershift.s3.us-east-1.amazonaws.com/hypershift-test-abcde",
-			Roles: []hyperv1.AWSRoleCredentials{
-				{
-					ARN:       "arn:aws:iam::012345678910:role/hypershift-test-abcde-openshift-ingress",
-					Name:      "cloud-credentials",
-					Namespace: "openshift-ingress-operator",
-				},
-				{
-					ARN:       "arn:aws:iam::012345678910:role/hypershift-test-abcde-openshift-image-registry",
-					Name:      "installer-cloud-credentials",
-					Namespace: "openshift-image-registry",
-				},
-				{
-					ARN:       "arn:aws:iam::012345678910:role/hypershift-test-abcde-aws-ebs-csi-driver-controller",
-					Name:      "ebs-cloud-credentials",
-					Namespace: "openshift-cluster-csi-drivers",
-				},
-				{
-					ARN:       "arn:aws:iam::012345678910:role/hypershift-test-abcde-cloud-network-config-controller",
-					Name:      "cloud-credentials",
-					Namespace: "openshift-cloud-network-config-controller",
-				},
+			IssuerURL: "https://bucket-hypershift.s3.us-east-1.amazonaws.com/hypershift-test-abcde",
+			Roles: hyperv1.AWSRolesRef{
+				ControlPlaneOperatorARN: "arn:aws:iam::012345678910:role/hypershift-test-abcde-control-plane-operator",
+				ImageRegistryARN:        "arn:aws:iam::012345678910:role/hypershift-test-abcde-openshift-image-registry",
+				IngressARN:              "arn:aws:iam::012345678910:role/hypershift-test-abcde-openshift-ingress",
+				KubeCloudControllerARN:  "arn:aws:iam::012345678910:role/hypershift-test-abcde-cloud-controller",
+				NetworkARN:              "arn:aws:iam::012345678910:role/hypershift-test-abcde-cloud-network-config-controller",
+				NodePoolManagementARN:   "arn:aws:iam::012345678910:role/hypershift-test-abcde-node-pool",
+				StorageARN:              "arn:aws:iam::012345678910:role/hypershift-test-abcde-aws-ebs-csi-driver-controller",
 			},
 		}, nil
 	}
