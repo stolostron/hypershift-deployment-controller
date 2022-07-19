@@ -1066,6 +1066,8 @@ github.com/openshift/hypershift v0.0.0-20220614212330-01bbfba6b681 h1:PJ43GLKNq/
 github.com/openshift/hypershift v0.0.0-20220614212330-01bbfba6b681/go.mod h1:yZU2irRqb0kFn+M3X4LHNnzCvY24fgeGzPyHqyWfY5o=
 github.com/openshift/hypershift v0.0.0-20220713175049-352e5478002f h1:Ab2tCFByUZ8VvUTT69r8FXpjSFQl+ZZWupVLEMtDsBo=
 github.com/openshift/hypershift v0.0.0-20220713175049-352e5478002f/go.mod h1:W+9s6C44aYqanes7Utws5czK311eBigrYpblkldZ7dA=
+github.com/openshift/hypershift v0.0.0-20220719064944-685115caee6b h1:NU4F6BFt/9CNXsLYmEYwG4Fb3Je6mW2d2zsOp9xeuGs=
+github.com/openshift/hypershift v0.0.0-20220719064944-685115caee6b/go.mod h1:W+9s6C44aYqanes7Utws5czK311eBigrYpblkldZ7dA=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/opentracing/opentracing-go v1.2.0 h1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=
 github.com/opentracing/opentracing-go v1.2.0/go.mod h1:GxEUsuufX4nBwe+T+Wl9TAgYrxe9dPLANfrWvHYVTgc=
