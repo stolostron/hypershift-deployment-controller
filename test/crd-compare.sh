@@ -7,9 +7,6 @@ tmpCrd=$(mktemp)
 COMMIT_SHA=`cat go.mod | grep github.com/openshift/hypershift | sed -En 's/.* v.*-//p'`
 echo Using SHA ${COMMIT_SHA}
 
-printf "*****\n  Skip checking HostedCluster CRD temporarily\n"
-exit 0
-
 printf "*****\n  Checking HostedCluster CRD\n"
 
 curl --silent https://raw.githubusercontent.com/openshift/hypershift/${COMMIT_SHA}/cmd/install/assets/hypershift-operator/hypershift.openshift.io_hostedclusters.yaml --output ${curCrd}
