@@ -126,6 +126,11 @@ type HypershiftDeploymentSpec struct {
 	// +optional
 	NodePools []*HypershiftNodePools `json:"nodePools,omitempty"`
 
+	// HostedManagedClusterSet is the ManagedClusterSet the hosted cluster should belong to.
+	// If omitted, the default is the hosting cluster's cluster set
+	// +optional
+	HostedManagedClusterSet string `json:"hostedManagedClusterSet,omitempty"`
+
 	// Reference to an array of NodePool resources on the HyperShift deployment namespace that will be applied
 	// to the ManagementCluster by ACM,
 	// required if InfraSpec.Configure is false

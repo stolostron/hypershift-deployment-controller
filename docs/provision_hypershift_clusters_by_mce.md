@@ -101,7 +101,9 @@ stringData:
   aws_access_key_id:      # Value, required
 ```
 
-You can create this secret using the multicluster console (embedded within the OpenShift console) or via the CLI, both options are shown below:
+The `ssh-publickey` and `ssh-privatekey`, if provided, are used to access the worker nodes of the hosted cluster. If the SSH Key is provided in the `hostedCluster.spec.sshKey` or `hypershiftDeployment.spec.hostedClusterSpec.sshKey`, it takes precedence over the SSH Key provided in the cloud provider secret.
+
+You can create the cloud provider secret using the multicluster console (embedded within the OpenShift console) or via the CLI, both options are shown below:
 
 - Multi-cluster console: `https://<mce-multicluster-console>/multicloud/credentials/create`
   

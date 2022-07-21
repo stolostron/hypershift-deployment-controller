@@ -7,7 +7,7 @@ const (
 
 	ManagedClusterCleanupFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"
 
-	ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.10.18-x86_64"
+	ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64"
 
 	// DestroyFinalizer makes sure infrastructure is cleaned up before it is removed
 	DestroyFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
@@ -32,4 +32,8 @@ const (
 
 	// HypershiftBucketSecretName is the secret name used to work with the AWS s3 credential
 	HypershiftBucketSecretName = "hypershift-operator-oidc-provider-s3-credentials"
+
+	// Provider secret fields
+	SSHPrivateKey = "ssh-privatekey"
+	SSHPublicKey  = "ssh-publickey"
 )

@@ -112,12 +112,15 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			}
 
 			hyd.Spec.HostedClusterSpec.IssuerURL = iamOut.IssuerURL
-			hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = iamOut.Roles
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.ImageRegistryARN = iamOut.Roles.ImageRegistryARN
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.IngressARN = iamOut.Roles.IngressARN
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NetworkARN = iamOut.Roles.NetworkARN
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.StorageARN = iamOut.Roles.StorageARN
 			hyd.Spec.Credentials = &hypdeployment.CredentialARNs{
 				AWS: &hypdeployment.AWSCredentials{
-					ControlPlaneOperatorARN: iamOut.ControlPlaneOperatorRoleARN,
-					KubeCloudControllerARN:  iamOut.KubeCloudControllerRoleARN,
-					NodePoolManagementARN:   iamOut.NodePoolManagementRoleARN,
+					ControlPlaneOperatorARN: iamOut.Roles.ControlPlaneOperatorARN,
+					KubeCloudControllerARN:  iamOut.Roles.KubeCloudControllerARN,
+					NodePoolManagementARN:   iamOut.Roles.NodePoolManagementARN,
 				}}
 			if err := r.patchHypershiftDeploymentResource(hyd); err != nil {
 				return ctrl.Result{},
