@@ -409,6 +409,48 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	assert.Contains(t, resultHD.Labels[constant.InfraLabelName], testHD.Name+"-", "The infra-id must contain the cluster name")
 }
 
+func TestHypershiftdeployment_roles_migration(t *testing.T) {
+
+	client := initClient()
+
+	namespacedName := types.NamespacedName{
+		Namespace: "default",
+		Name:      "test-migrate",
+	}
+
+	ctx := context.Background()
+	infraOut := getAWSInfrastructureOut()
+	testHD := getHypershiftDeployment("default", "test-migrate", false)
+	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
+	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
+
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = []hyp.AWSRoleCredentials{}
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-openshift-ingress", Namespace: "openshift-ingress-operator", Name: "cloud-credentials"})
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-openshift-image-registry", Namespace: "openshift-image-registry", Name: "installer-cloud-credentials"})
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-aws-ebs-csi-driver-controller", Namespace: "openshift-cluster-csi-drivers", Name: "ebs-cloud-credentials"})
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-cloud-network-config-controller", Namespace: "openshift-cloud-network-config-controller", Name: "cloud-credentials"})
+
+	client.Create(ctx, testHD)
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+	}
+	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: namespacedName})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	var updated hyd.HypershiftDeployment
+	err = client.Get(ctx, namespacedName, &updated)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	assert.Nil(t, updated.Spec.HostedClusterSpec.Platform.AWS.Roles, "roles should be nil")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.ImageRegistryARN, "arn:aws:iam::123456789123:role/test-openshift-image-registry")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.IngressARN, "arn:aws:iam::123456789123:role/test-openshift-ingress")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.StorageARN, "arn:aws:iam::123456789123:role/test-aws-ebs-csi-driver-controller")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NetworkARN, "arn:aws:iam::123456789123:role/test-cloud-network-config-controller")
+}
+
 func TestHypershiftdeployment_controllerWithObjectRef(t *testing.T) {
 
 	client := initClient()
