@@ -27,6 +27,7 @@ import (
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -217,19 +218,24 @@ func (r *HypershiftDeploymentReconciler) ensureConfiguration(ctx context.Context
 			// 1. Use user provided secret
 			k := genKey(se.secretRef, hyd)
 			secret, err := r.generateSecret(ctx, k, overrideNamespace(helper.GetHostingNamespace(hyd)))
-			if err != nil {
+			if err != nil && !apierrors.IsNotFound(err) {
 				r.Log.Info(fmt.Sprintf("did not find and copy secret %s: %s", k, err.Error()))
 			}
 
 			if secret == nil {
 				// 2. Use existing secret in manifestwork payload
 				secret, err = getManifestPayloadSecretByName(&manifestwork.Spec.Workload.Manifests, se.secretRef.Name)
-
+				if err != nil && !apierrors.IsNotFound(err) {
+					r.Log.Info(fmt.Sprintf("did not get secret %s from manifestwork: %s", se.secretRef.Name, err.Error()))
+				}
 				if secret == nil &&
 					hyd.Spec.Infrastructure.Configure &&
 					se.createSecretFunc != nil {
 					// 3. For configure=T - Generate secret
 					secret, err = se.createSecretFunc()
+					if err != nil && !apierrors.IsNotFound(err) {
+						r.Log.Info(fmt.Sprintf("failed to create secret %s: %s", se.secretRef.Name, err.Error()))
+					}
 				}
 			}
 

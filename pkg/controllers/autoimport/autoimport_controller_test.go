@@ -93,6 +93,11 @@ func setFinalizerHYD(hyd *hydapi.HypershiftDeployment, finalizer []string) *hyda
 	return hyd
 }
 
+func setClusterSetHYD(hyd *hydapi.HypershiftDeployment, clusterSet string) *hydapi.HypershiftDeployment {
+	hyd.Spec.HostedManagedClusterSet = clusterSet
+	return hyd
+}
+
 func setDeletionTimestamp(hyd *hydapi.HypershiftDeployment, deletionTimestamp time.Time) *hydapi.HypershiftDeployment {
 	hyd.SetDeletionTimestamp(&v1.Time{Time: deletionTimestamp})
 	return hyd
@@ -182,6 +187,21 @@ func TestReconcileCreate(t *testing.T) {
 					mc.Labels[mcv1beta1.ClusterSetLabel], "assert management cluster managed cluster set label")
 
 				assertAnnoNotContainCreateMC(t, ctx, client)
+			},
+		},
+		{
+			name:              "create managed cluster with clusterset",
+			kubesecret:        nil,
+			hyd:               setClusterSetHYD(hyd.DeepCopy(), "cs1"),
+			managementCluster: managementCluster.DeepCopy(),
+			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
+				var mc mcv1.ManagedCluster
+				mcName := helper.ManagedClusterName(hyd)
+				err := client.Get(ctx, getNamespaceName("", mcName), &mc)
+				assert.Nil(t, err, "when managedCluster resource is retrieved")
+
+				assert.Equal(t, "cs1",
+					mc.Labels[mcv1beta1.ClusterSetLabel], "assert managed cluster set label")
 			},
 		},
 		{

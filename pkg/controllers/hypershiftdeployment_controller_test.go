@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"strings"
 
 	"fmt"
 	"os"
@@ -174,14 +173,8 @@ func TestScaffoldHostedClusterSpec(t *testing.T) {
 		"if code above ran, this will be empty")
 	assert.NotEqual(t, testHD.Spec.HostedClusterSpec.Services, []hyp.ServicePublishingStrategyMapping{},
 		"services should not be an empty list")
-	if strings.Contains(testHD.Spec.HostedClusterSpec.Release.Image, "4.10.") {
-		assert.Equal(t, v1alpha1.NetworkType("OpenShiftSDN"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
-			"is OpenShiftSDN when release is 4.10")
-	} else {
-		assert.Equal(t, v1alpha1.NetworkType("OVNKubernetes"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
-			"is OVNKubernetes when release is > 4.10")
-	}
-
+	assert.Equal(t, v1alpha1.NetworkType("OVNKubernetes"), testHD.Spec.HostedClusterSpec.Networking.NetworkType,
+		"is OVNKubernetes when release is not 4.10")
 }
 
 func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
@@ -199,7 +192,7 @@ func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
 		// Defaults for all platforms
 		PullSecret: corev1.LocalObjectReference{Name: ""},
 		Release: hyp.Release{
-			Image: "quay.io/openshift-release-dev/ocp-release:4.10.18-x86_64",
+			Image: "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
 		},
 		Services: []hyp.ServicePublishingStrategyMapping{},
 	}
@@ -208,7 +201,7 @@ func TestScaffoldHostedClusterSpecOpenShiftSDN410(t *testing.T) {
 	assert.Equal(t, testHD.Spec.HostedClusterSpec.PullSecret.Name,
 		"test1-pull-secret", "Equal when pull secret name is populated")
 	assert.Equal(t, testHD.Spec.HostedClusterSpec.Release.Image,
-		"quay.io/openshift-release-dev/ocp-release:4.10.18-x86_64",
+		"quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64",
 		"The image we update at release time as stable")
 	assert.Equal(t, testHD.Spec.HostedClusterSpec.Networking.ServiceCIDR,
 		"172.31.0.0/16", "default serviceCIDR")
@@ -414,6 +407,48 @@ func TestHypershiftdeployment_controller(t *testing.T) {
 	t.Log("Check infraID label")
 	assert.NotEmpty(t, resultHD.Labels, "The infra-id should always be written to the label hypershift.openshift.io/infra-id")
 	assert.Contains(t, resultHD.Labels[constant.InfraLabelName], testHD.Name+"-", "The infra-id must contain the cluster name")
+}
+
+func TestHypershiftdeployment_roles_migration(t *testing.T) {
+
+	client := initClient()
+
+	namespacedName := types.NamespacedName{
+		Namespace: "default",
+		Name:      "test-migrate",
+	}
+
+	ctx := context.Background()
+	infraOut := getAWSInfrastructureOut()
+	testHD := getHypershiftDeployment("default", "test-migrate", false)
+	testHD.Spec.Infrastructure.Platform = &hyd.Platforms{AWS: &hyd.AWSPlatform{}}
+	testHD.Spec.Credentials = &hyd.CredentialARNs{AWS: &hyd.AWSCredentials{}}
+	ScaffoldAWSHostedClusterSpec(testHD, infraOut)
+	ScaffoldAWSNodePoolSpec(testHD, infraOut)
+
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = []hyp.AWSRoleCredentials{}
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-openshift-ingress", Namespace: "openshift-ingress-operator", Name: "cloud-credentials"})
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-openshift-image-registry", Namespace: "openshift-image-registry", Name: "installer-cloud-credentials"})
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-aws-ebs-csi-driver-controller", Namespace: "openshift-cluster-csi-drivers", Name: "ebs-cloud-credentials"})
+	testHD.Spec.HostedClusterSpec.Platform.AWS.Roles = append(testHD.Spec.HostedClusterSpec.Platform.AWS.Roles, hyp.AWSRoleCredentials{ARN: "arn:aws:iam::123456789123:role/test-cloud-network-config-controller", Namespace: "openshift-cloud-network-config-controller", Name: "cloud-credentials"})
+
+	client.Create(ctx, testHD)
+
+	hdr := &HypershiftDeploymentReconciler{
+		Client: client,
+	}
+	_, err := hdr.Reconcile(ctx, ctrl.Request{NamespacedName: namespacedName})
+	assert.Nil(t, err, "err nil when reconcile was successfull")
+
+	var updated hyd.HypershiftDeployment
+	err = client.Get(ctx, namespacedName, &updated)
+	assert.Nil(t, err, "is nil when HypershiftDeployment resource is found")
+
+	assert.Nil(t, updated.Spec.HostedClusterSpec.Platform.AWS.Roles, "roles should be nil")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.ImageRegistryARN, "arn:aws:iam::123456789123:role/test-openshift-image-registry")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.IngressARN, "arn:aws:iam::123456789123:role/test-openshift-ingress")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.StorageARN, "arn:aws:iam::123456789123:role/test-aws-ebs-csi-driver-controller")
+	assert.Equal(t, updated.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NetworkARN, "arn:aws:iam::123456789123:role/test-cloud-network-config-controller")
 }
 
 func TestHypershiftdeployment_controllerWithObjectRef(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 	hyp "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
 	"github.com/openshift/hypershift/cmd/infra/azure"
+	"github.com/openshift/hypershift/cmd/version"
 	hypdeployment "github.com/stolostron/hypershift-deployment-controller/api/v1alpha1"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/constant"
 	"github.com/stolostron/hypershift-deployment-controller/pkg/helper"
@@ -45,11 +46,11 @@ var resLog = ctrl.Log.WithName("resource-render")
 
 func getReleaseImagePullSpec() string {
 
-	//defaultVersion, err := version.LookupDefaultOCPVersion()
-	//if err != nil {
-	return constant.ReleaseImage
-	//}
-	//return defaultVersion.PullSpec
+	defaultVersion, err := version.LookupDefaultOCPVersion()
+	if err != nil {
+		return constant.ReleaseImage
+	}
+	return defaultVersion.PullSpec
 }
 
 func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) (*unstructured.Unstructured, error) {
@@ -353,11 +354,16 @@ func ScaffoldAWSNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *
 }
 
 func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws.CreateInfraOutput) {
-	if len(hyd.Spec.NodePools) == 0 {
+	if len(hyd.Spec.NodePools) == 0 { // If no nodepool, then we handle zones here. What about nodepools are provided in HD?
 		hyd.Spec.NodePools = []*hypdeployment.HypershiftNodePools{}
 
+		releaseImage := ""
+		if hyd.Spec.HostedClusterSpec != nil && &hyd.Spec.HostedClusterSpec.Release != nil {
+			releaseImage = hyd.Spec.HostedClusterSpec.Release.Image
+		}
+
 		if infraOut == nil {
-			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodePoolSpec(hyd.Name, hyd.Name))
+			hyd.Spec.NodePools = append(hyd.Spec.NodePools, getNodePoolSpec(hyd.Name, hyd.Name, releaseImage))
 		} else {
 			for _, zone := range infraOut.Zones {
 				nodePoolSpecName := hyd.Name
@@ -367,7 +373,7 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 					nodePoolSpecName = hyd.Name + "-" + zone.Name
 				}
 
-				nodePoolSpec := getNodePoolSpec(nodePoolSpecName, hyd.Name)
+				nodePoolSpec := getNodePoolSpec(nodePoolSpecName, hyd.Name, releaseImage)
 
 				hyd.Spec.NodePools = append(hyd.Spec.NodePools, nodePoolSpec)
 			}
@@ -381,8 +387,12 @@ func ScaffoldNodePoolSpec(hyd *hypdeployment.HypershiftDeployment, infraOut *aws
 	}
 }
 
-func getNodePoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePools {
+func getNodePoolSpec(name, clusterName, releaseImage string) *hypdeployment.HypershiftNodePools {
 	replicas := int32(2)
+
+	if releaseImage == "" {
+		releaseImage = getReleaseImagePullSpec()
+	}
 
 	return &hypdeployment.HypershiftNodePools{
 		Name: name,
@@ -404,7 +414,7 @@ func getNodePoolSpec(name, clusterName string) *hypdeployment.HypershiftNodePool
 				Type: hyp.NonePlatform,
 			},
 			Release: hyp.Release{
-				Image: getReleaseImagePullSpec(), //.DownloadURL,,
+				Image: releaseImage, //.DownloadURL,,
 			},
 		},
 	}
@@ -493,6 +503,23 @@ func ScaffoldAzureCloudCredential(hyd *hypdeployment.HypershiftDeployment, creds
 			"AZURE_TENANT_ID":       []byte(creds.TenantID),
 			"AZURE_CLIENT_ID":       []byte(creds.ClientID),
 			"AZURE_CLIENT_SECRET":   []byte(creds.ClientSecret),
+		},
+	}
+}
+
+func scaffoldSSHCredential(hyd *hypdeployment.HypershiftDeployment, sshPublicKey, sshPrivateKey []byte) *corev1.Secret {
+	return &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hyd.Name + "-ssh-key",
+			Namespace: helper.GetHostingNamespace(hyd),
+		},
+		Data: map[string][]byte{
+			"id_rsa.pub": sshPublicKey,
+			"id_rsa":     sshPrivateKey,
 		},
 	}
 }

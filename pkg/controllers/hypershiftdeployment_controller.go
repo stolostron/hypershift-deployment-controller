@@ -92,13 +92,20 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
+	if r.migrateAWSRoles(&hyd) {
+		if err := r.patchHypershiftDeploymentResource(&hyd); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to migrate AWS roles to rolesRef error: %w", err)
+		}
+	}
+
 	var providerSecret corev1.Secret
 	var err error
 
+	providerSecretName := hyd.Spec.Infrastructure.CloudProvider.Name
 	configureInfra := hyd.Spec.Infrastructure.Configure
 	if configureInfra ||
 		(hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.Azure != nil) {
-		if hyd.Spec.Infrastructure.CloudProvider.Name == "" {
+		if providerSecretName == "" {
 			log.Error(err, "spec.infrastructure.cloudProvider is required for configuring infrastructure")
 			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
 				r.updateStatusConditionsOnChange(&hyd,
@@ -108,19 +115,23 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 					hypdeployment.MisConfiguredReason)
 		}
 
-		secretName := hyd.Spec.Infrastructure.CloudProvider.Name
-		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: secretName}, &providerSecret)
+		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: providerSecretName}, &providerSecret)
 		if err != nil {
 			log.Error(err, "Could not retrieve the provider secret")
 			return ctrl.Result{RequeueAfter: 30 * time.Second, Requeue: true},
 				r.updateStatusConditionsOnChange(&hyd,
 					hypdeployment.ProviderSecretConfigured,
 					metav1.ConditionFalse,
-					"The secret "+secretName+" could not be retreived from namespace "+hyd.Namespace,
+					"The secret "+providerSecretName+" could not be retreived from namespace "+hyd.Namespace,
 					hypdeployment.MisConfiguredReason)
 		}
-		if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+secretName, string(hypdeployment.AsExpectedReason)); err != nil {
+		if err := r.updateStatusConditionsOnChange(&hyd, hypdeployment.ProviderSecretConfigured, metav1.ConditionTrue, "Retreived secret "+providerSecretName, string(hypdeployment.AsExpectedReason)); err != nil {
 			return ctrl.Result{}, err
+		}
+	} else if providerSecretName != "" {
+		err = r.Client.Get(r.ctx, types.NamespacedName{Namespace: hyd.Namespace, Name: providerSecretName}, &providerSecret)
+		if err != nil {
+			log.V(1).Info("Could not retrieve the provider secret")
 		}
 	}
 
@@ -194,6 +205,39 @@ func (r *HypershiftDeploymentReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.createOrUpdateMainfestwork(ctx, req, hyd.DeepCopy(), &providerSecret)
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *HypershiftDeploymentReconciler) migrateAWSRoles(hyd *hypdeployment.HypershiftDeployment) bool {
+	log := r.Log
+
+	migrated := false
+
+	if hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.AWS != nil && hyd.Spec.HostedClusterSpec.Platform.AWS.Roles != nil {
+		for _, role := range hyd.Spec.HostedClusterSpec.Platform.AWS.Roles {
+			switch role.Namespace {
+			case "openshift-image-registry":
+				log.Info("migrating openshift-image-registry ARN")
+				hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.ImageRegistryARN = role.ARN
+			case "openshift-ingress-operator":
+				log.Info("migrating openshift-ingress-operator ARN")
+				hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.IngressARN = role.ARN
+			case "openshift-cloud-network-config-controller":
+				log.Info("migrating openshift-cloud-network-config-controller ARN")
+				hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NetworkARN = role.ARN
+			case "openshift-cluster-csi-drivers":
+				log.Info("migrating openshift-cluster-csi-drivers ARN")
+				hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.StorageARN = role.ARN
+			default:
+				log.Info(fmt.Sprintf("Invalid namespace for deprecated role: %q", role.Namespace))
+			}
+		}
+
+		hyd.Spec.HostedClusterSpec.Platform.AWS.Roles = nil
+
+		migrated = true
+	}
+
+	return migrated
 }
 
 func (r *HypershiftDeploymentReconciler) setDefaultValueForHostedCluster(ctx context.Context, hyd *hypdeployment.HypershiftDeployment) error {
