@@ -15,13 +15,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-curl --silent https://raw.githubusercontent.com/openshift/hypershift/main/cmd/install/assets/hypershift-operator/hypershift.openshift.io_hostedclusters.yaml --output ${tmpCrd}
-if [ $? -ne 0 ]; then
-  echo Failed to retreive the hostedCluster CRD from openshift/hypershift@main
-  exit 1
-fi
-
-diff ${curCrd} ${tmpCrd}
+diff config/crd/hypershift.openshift.io_hostedclusters.yaml ${curCrd}
 if [ $? -ne 0 ]; then
   echo CRDs did not match, a change has occured and the hypershift-deployment-controller and hypershift-addon-operator
   echo repositories need a go.mod update
@@ -37,13 +31,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-curl --silent https://raw.githubusercontent.com/openshift/hypershift/main/cmd/install/assets/hypershift-operator/hypershift.openshift.io_nodepools.yaml --output ${tmpCrd}
-if [ $? -ne 0 ]; then
-  echo Failed to retreive the hostedCluster CRD from openshift/hypershift@main
-  exit 1
-fi
-
-diff ${curCrd} ${tmpCrd}
+diff config/crd/hypershift.openshift.io_nodepools.yaml ${curCrd}
 if [ $? -ne 0 ]; then
   echo CRDs did not match, a change has occured and the hypershift-deployment-controller and hypershift-addon-operator
   echo repositories need a go.mod update
