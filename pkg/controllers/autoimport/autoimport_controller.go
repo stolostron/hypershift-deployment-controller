@@ -195,11 +195,17 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 	err := r.Get(ctx, types.NamespacedName{Name: managementClusterName}, &managementCluster)
 	switch {
 	case k8serrors.IsNotFound(err):
-		log.V(ERROR).Info("Could not find ManagedCluster resource", "error", err)
+		log.V(ERROR).Info("Could not find ManagedCluster resource",
+			"error", err, "managementClusterName", managementClusterName)
 		return nil, err
 	case err != nil:
-		log.V(WARN).Info("Error when attempting to retreive the ManagedCluster resource", "error", err)
+		log.V(WARN).Info("Error when attempting to retrieve the ManagedCluster resource",
+			"error", err, "managementClusterName", managementClusterName)
 		return nil, err
+	}
+
+	if managedClusterSetName == "" {
+		managedClusterSetName = helper.GetClusterSetName(managementCluster)
 	}
 
 	var mc mcv1.ManagedCluster
@@ -208,28 +214,7 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 		log.V(INFO).Info("Create a new ManagedCluster resource")
 		mc.Name = managedClusterName
 		mc.Spec.HubAcceptsClient = true
-
-		if managedClusterSetName == "" {
-			managedClusterSetName = helper.GetClusterSetName(managementCluster)
-		}
-
-		mc.ObjectMeta.Labels = map[string]string{
-			mcv1beta1.ClusterSetLabel: managedClusterSetName,
-			"vendor":                  "OpenShift",   // This is always true
-			"cloud":                   "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
-		}
-
-		mc.ObjectMeta.Annotations = map[string]string{
-			klusterletDeployMode: "Hosted",
-			hostingClusterName:   managementClusterName,
-			constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
-				hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
-			// format is <name>.<namespace>.<kind>.<apiversion>
-			// klusterlet addon controller will use this annotation to create klusterletaddonconfig for the hypershift clusters.
-			provisionerAnnotation: fmt.Sprintf("%s.%s.HypershiftDeployment.cluster.open-cluster-management.io",
-				hydNamespaceName.Name, hydNamespaceName.Namespace),
-		}
-
+		ensureManagedClusterObjectMeta(&mc, hydNamespaceName, managedClusterSetName, managementClusterName)
 		if err = r.Create(ctx, &mc, &client.CreateOptions{}); err != nil {
 			log.V(ERROR).Info("Could not create ManagedCluster resource", "error", err)
 			return nil, err
@@ -237,13 +222,78 @@ func ensureManagedCluster(r *Reconciler, hydNamespaceName types.NamespacedName,
 
 		return &mc, nil
 	}
-
 	if err != nil {
-		log.V(WARN).Info("Error when attempting to retreive the ManagedCluster resource", "error", err)
+		log.V(WARN).Info("Error when attempting to retrieve the ManagedCluster resource", "error", err)
 		return nil, err
 	}
 
+	patch := client.MergeFrom(mc.DeepCopy())
+	if ensureManagedClusterObjectMeta(&mc, hydNamespaceName, managedClusterSetName, managementClusterName) {
+		if err := r.Patch(ctx, &mc, patch); err != nil {
+			return &mc, err
+		}
+	}
+
 	return &mc, nil
+}
+
+// ensureManagedClusterObjectMeta sets the default labels and annotations for the managed cluster and return if the
+// object is changed
+func ensureManagedClusterObjectMeta(mc *mcv1.ManagedCluster, hydNamespaceName types.NamespacedName,
+	managedClusterSetName, managementClusterName string) bool {
+
+	if mc.Labels == nil {
+		mc.Labels = make(map[string]string)
+	}
+	labelChanged := false
+	labels := map[string]string{
+		mcv1beta1.ClusterSetLabel: managedClusterSetName,
+		"vendor":                  "OpenShift",   // This is always true
+		"cloud":                   "auto-detect", // Work addon will use this to detect cloud provider, like: GCP,AWS
+	}
+	for k, v := range labels {
+		if setLabelIfNotPresent(mc, k, v) {
+			labelChanged = true
+		}
+	}
+
+	if mc.Annotations == nil {
+		mc.Annotations = make(map[string]string)
+	}
+	annoChanged := false
+	annotations := map[string]string{
+		klusterletDeployMode: "Hosted",
+		hostingClusterName:   managementClusterName,
+		constant.AnnoHypershiftDeployment: fmt.Sprintf("%s%s%s",
+			hydNamespaceName.Namespace, constant.NamespaceNameSeperator, hydNamespaceName.Name),
+		// format is <name>.<namespace>.<kind>.<apiversion>, klusterlet addon controller will use this annotation to
+		// create klusterletaddonconfig for the hypershift clusters.
+		provisionerAnnotation: fmt.Sprintf("%s.%s.HypershiftDeployment.cluster.open-cluster-management.io",
+			hydNamespaceName.Name, hydNamespaceName.Namespace),
+	}
+	for k, v := range annotations {
+		if setAnnotationIfNotPresent(mc, k, v) {
+			annoChanged = true
+		}
+	}
+
+	return labelChanged || annoChanged
+}
+
+func setLabelIfNotPresent(mc *mcv1.ManagedCluster, key, value string) bool {
+	if v, ok := mc.Labels[key]; !ok || len(v) == 0 {
+		mc.Labels[key] = value
+		return true
+	}
+	return false
+}
+
+func setAnnotationIfNotPresent(mc *mcv1.ManagedCluster, key, value string) bool {
+	if v, ok := mc.Annotations[key]; !ok || len(v) == 0 {
+		mc.Annotations[key] = value
+		return true
+	}
+	return false
 }
 
 func ensureCreateManagedClusterAnnotationFalse(r *Reconciler, hyd *hypdeployment.HypershiftDeployment) error {

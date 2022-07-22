@@ -83,6 +83,16 @@ func GetManagedCluster(name string) *mcv1.ManagedCluster {
 	}
 }
 
+func setAnnotationMC(mc *mcv1.ManagedCluster, annotations map[string]string) *mcv1.ManagedCluster {
+	mc.SetAnnotations(annotations)
+	return mc
+}
+
+func setLabelMC(mc *mcv1.ManagedCluster, labels map[string]string) *mcv1.ManagedCluster {
+	mc.SetLabels(labels)
+	return mc
+}
+
 func setAnnotationHYD(hyd *hydapi.HypershiftDeployment, annotations map[string]string) *hydapi.HypershiftDeployment {
 	hyd.SetAnnotations(annotations)
 	return hyd
@@ -141,6 +151,23 @@ func assertAnnoNotContainCreateMC(t *testing.T, ctx context.Context, client crcl
 	assert.NotContains(t, hyd.Annotations, createManagedClusterAnnotation, "annotation should not contain create cm")
 }
 
+func assertManagedClusterObjectMeta(t *testing.T, mc *mcv1.ManagedCluster, hyd *hydapi.HypershiftDeployment) {
+	assert.Equal(t, fmt.Sprintf("%s.%s.HypershiftDeployment.cluster.open-cluster-management.io",
+		hyd.Name, hyd.Namespace), mc.Annotations[provisionerAnnotation], "assert provisioner annotation value")
+	assert.Equal(t, fmt.Sprintf("%s%s%s", hyd.Namespace, constant.NamespaceNameSeperator, hyd.Name),
+		mc.Annotations[constant.AnnoHypershiftDeployment], "assert hypershift deployment annotation value")
+	assert.Equal(t, "Hosted",
+		mc.Annotations[klusterletDeployMode], "assert hosted mode annotation value")
+	assert.Equal(t, helper.GetHostingCluster(hyd),
+		mc.Annotations[hostingClusterName], "assert management cluster annotation value")
+	assert.Equal(t, "OpenShift",
+		mc.Labels["vendor"], "assert management cluster vendor label")
+	assert.Equal(t, "auto-detect",
+		mc.Labels["cloud"], "assert management cluster cloud label")
+	assert.Equal(t, "default",
+		mc.Labels[mcv1beta1.ClusterSetLabel], "assert management cluster managed cluster set label")
+}
+
 func assertContainFinalizer(t *testing.T, ctx context.Context, client crclient.Client) {
 	var hyd hydapi.HypershiftDeployment
 	err := client.Get(ctx, getNamespaceName(HYD_NAMESPACE, HYD_NAME), &hyd)
@@ -151,12 +178,14 @@ func assertContainFinalizer(t *testing.T, ctx context.Context, client crclient.C
 func TestReconcileCreate(t *testing.T) {
 	hyd := GetHypershiftDeployment(HYD_NAMESPACE, HYD_NAME, "id1", HYD_NAMESPACE)
 	managementCluster := GetManagedCluster(HYD_NAMESPACE)
+	managedCluster := GetManagedCluster(helper.ManagedClusterName(hyd))
 
 	cases := []struct {
 		name              string
 		kubesecret        *corev1.Secret
 		hyd               *hydapi.HypershiftDeployment
 		managementCluster *mcv1.ManagedCluster
+		managedCluster    *mcv1.ManagedCluster
 		validateActions   func(t *testing.T, ctx context.Context, client crclient.Client)
 		expectedErr       string
 	}{
@@ -171,20 +200,7 @@ func TestReconcileCreate(t *testing.T) {
 				err := client.Get(ctx, getNamespaceName("", mcName), &mc)
 				assert.Nil(t, err, "when managedCluster resource is retrieved")
 
-				assert.Equal(t, fmt.Sprintf("%s.%s.HypershiftDeployment.cluster.open-cluster-management.io",
-					hyd.Name, hyd.Namespace), mc.Annotations[provisionerAnnotation], "assert provisioner annotation value")
-				assert.Equal(t, fmt.Sprintf("%s%s%s", hyd.Namespace, constant.NamespaceNameSeperator, hyd.Name),
-					mc.Annotations[constant.AnnoHypershiftDeployment], "assert hypershift deployment annotation value")
-				assert.Equal(t, "Hosted",
-					mc.Annotations[klusterletDeployMode], "assert hosted mode annotation value")
-				assert.Equal(t, helper.GetHostingCluster(hyd),
-					mc.Annotations[hostingClusterName], "assert management cluster annotation value")
-				assert.Equal(t, "OpenShift",
-					mc.Labels["vendor"], "assert management cluster vendor label")
-				assert.Equal(t, "auto-detect",
-					mc.Labels["cloud"], "assert management cluster cloud label")
-				assert.Equal(t, "default",
-					mc.Labels[mcv1beta1.ClusterSetLabel], "assert management cluster managed cluster set label")
+				assertManagedClusterObjectMeta(t, &mc, hyd)
 
 				assertAnnoNotContainCreateMC(t, ctx, client)
 			},
@@ -229,6 +245,39 @@ func TestReconcileCreate(t *testing.T) {
 				assertAnnoNotContainCreateMC(t, ctx, client)
 			},
 		},
+		{
+			name:              "patch existed managed cluster, old object annotations labels nil",
+			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
+			hyd:               setFinalizerHYD(hyd.DeepCopy(), []string{}),
+			managementCluster: managementCluster.DeepCopy(),
+			managedCluster:    managedCluster.DeepCopy(),
+			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
+				var mc mcv1.ManagedCluster
+				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
+				assert.Nil(t, err, "managedCluster resource is retrieved")
+				assertManagedClusterObjectMeta(t, &mc, hyd)
+				assertContainFinalizer(t, ctx, client)
+				assertAnnoNotContainCreateMC(t, ctx, client)
+			},
+		},
+		{
+			name:              "patch existed managed cluster, old object annotations labels not nil",
+			kubesecret:        GetHostedClusterKubeconfig(HYD_NAMESPACE, helper.HostedKubeconfigName(hyd)),
+			hyd:               setFinalizerHYD(hyd.DeepCopy(), []string{}),
+			managementCluster: managementCluster.DeepCopy(),
+			managedCluster: setLabelMC(setAnnotationMC(
+				managedCluster.DeepCopy(), map[string]string{"foo": "bar"}), map[string]string{"foo": "bar"}),
+			validateActions: func(t *testing.T, ctx context.Context, client crclient.Client) {
+				var mc mcv1.ManagedCluster
+				err := client.Get(ctx, getNamespaceName("", helper.ManagedClusterName(hyd)), &mc)
+				assert.Nil(t, err, "managedCluster resource is retrieved")
+				assert.Equal(t, "bar", mc.Annotations["foo"], "assert hosted mode annotation value")
+				assert.Equal(t, "bar", mc.Labels["foo"], "assert hosted mode label value")
+				assertManagedClusterObjectMeta(t, &mc, hyd)
+				assertContainFinalizer(t, ctx, client)
+				assertAnnoNotContainCreateMC(t, ctx, client)
+			},
+		},
 	}
 
 	for _, c := range cases {
@@ -244,6 +293,9 @@ func TestReconcileCreate(t *testing.T) {
 			}
 			if c.managementCluster != nil {
 				assert.Nil(t, air.Client.Create(ctx, c.managementCluster, &crclient.CreateOptions{}), "")
+			}
+			if c.managedCluster != nil {
+				assert.Nil(t, air.Client.Create(ctx, c.managedCluster, &crclient.CreateOptions{}), "")
 			}
 
 			_, err := air.Reconcile(ctx, getRequest())
