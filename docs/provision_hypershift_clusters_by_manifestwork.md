@@ -337,7 +337,7 @@ The `resourceIdentifier` specifies which resource you want feedback from and `js
       resourceMeta:
         group: hypershift.openshift.io
         kind: HostedCluster
-        name: rj-0726b
+        name: my-hosted-cluster
         namespace: clusters
         ordinal: 1
         resource: hostedclusters
@@ -366,7 +366,7 @@ The `resourceIdentifier` specifies which resource you want feedback from and `js
       resourceMeta:
         group: hypershift.openshift.io
         kind: NodePool
-        name: rj-0726b
+        name: my-hosted-cluster
         namespace: clusters
         ordinal: 2
         resource: nodepools
