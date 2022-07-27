@@ -272,7 +272,7 @@ The name of the managed cluster is the `infra ID` of the hosted cluster. `hubAcc
 
 In the manifestwork YAML sample above, there is this annotation in the HostedCluster payload.
 
-```
+```YAML
         annotations:
           cluster.open-cluster-management.io/hypershiftdeployment: default/my-hosted-cluster
 ```
@@ -287,7 +287,7 @@ The ACM hypershift addon agent on the hosting cluster uses this annotation to kn
 
 3. Create a manifestwork CR in the hypershift management cluster's (ACM managed cluster's) namespace on the ACM hub cluster. Do not forget to add the following annotation to the HostedCluster resource. The value can be anything.
 
-```
+```YAML
         annotations:
           cluster.open-cluster-management.io/hypershiftdeployment: default/my-hosted-cluster
 ```
@@ -298,7 +298,7 @@ The ACM hypershift addon agent on the hosting cluster uses this annotation to kn
 
 Under the manifestwork's `spec.manifestConfigs`, you can specify feedback rules like this.
 
-```
+```YAML
   - feedbackRules:
     - jsonPaths:
       - name: reason
@@ -333,7 +333,7 @@ Under the manifestwork's `spec.manifestConfigs`, you can specify feedback rules 
 
 The `resourceIdentifier` specifies which resource you want feedback from and `jsonPaths` specifies the resource's fields you are interested in. Above feedback rules, you can see the status of hosted cluster and node pool in the status section of the manifestwork on ACM hub cluster. You can also specify more rules to collect other data about the resources from the hosting cluster.
 
-```
+```YAML
       resourceMeta:
         group: hypershift.openshift.io
         kind: HostedCluster
@@ -362,7 +362,7 @@ The `resourceIdentifier` specifies which resource you want feedback from and `js
           name: progress
 ```
 
-```
+```YAML
       resourceMeta:
         group: hypershift.openshift.io
         kind: NodePool
