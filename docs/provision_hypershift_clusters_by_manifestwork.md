@@ -12,7 +12,7 @@ When you create a HypershiftDeployment CR, the HypershiftDeployment operator cre
 - Cloud control credential secret
 - Node management credential secret
 - SSH key secret
-- ETCD encryption secret
+- etcd encryption secret
 
 The work agent running on the target managed (hypershift hosting) cluster reconciles with this manifestwork to create the payload resources on the cluster. You can find more detaila on the manifestwork CR here https://open-cluster-management.io/concepts/manifestwork.
 
