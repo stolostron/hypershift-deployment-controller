@@ -8,9 +8,6 @@ When you create a HypershiftDeployment CR, the HypershiftDeployment operator cre
 - HostedCluster CR
 - NodePool CRs
 - Pull secret
-- Control plane operator credential secret
-- Cloud control credential secret
-- Node management credential secret
 - SSH key secret
 - etcd encryption secret
 
