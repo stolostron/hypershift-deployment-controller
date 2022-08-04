@@ -15,7 +15,7 @@ https://open-cluster-management.io/getting-started/quick-start/
     cd hypershift
     make build
     ```
-  4. Using the `hypershift` binary, setup the second cluster a the Management Cluster
+  4. Using the `hypershift` binary, setup the second cluster as the Management Cluster
   5. Run the following command:
     ```shell
     REGION=us-east-1                    # Define in step 1
@@ -46,7 +46,7 @@ https://open-cluster-management.io/getting-started/quick-start/
         aws_secret_access_key:  # Value
         aws_access_key_id:      # Value
   ```
-* The HypershiftDeployment resource is used by Multicluster Engine to deploy Hosted Control Plane clusters.  This resource has the option to configure infrastructre for you or you can provide the infrastructure details.  It will also automatically generate the HostedClusterSpec and/or NodePool.Spec if you do not provide one, allowing you to customize your cluster. The simplest HypsershiftDeployment is as follows:
+* The HypershiftDeployment resource is used by Multicluster Engine to deploy Hosted Control Plane clusters.  This resource has the option to configure infrastructre for you or you can provide the infrastructure details.  It will also automatically generate the HostedClusterSpec and/or NodePool.Spec if you do not provide one, allowing you to customize your cluster. The simplest HypershiftDeployment is as follows:
 
     ```yaml
         apiVersion: cluster.open-cluster-management.io/v1alpha1
@@ -66,7 +66,7 @@ https://open-cluster-management.io/getting-started/quick-start/
 * Monitoring the deployment:
    1. Watch the HypershiftDeployment resource, make sure all columns are AsExpected
         ```shell
-        oc get hc
+        oc get hd
         ```
     2. Watch the NodePool resource, wait until the `UPDATINGVERSION` and `UPDATING CONFIG` are no longer `True`
         ```shell
