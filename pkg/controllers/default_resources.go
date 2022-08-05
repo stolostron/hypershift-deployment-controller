@@ -61,6 +61,7 @@ func (r *HypershiftDeploymentReconciler) scaffoldHostedCluster(ctx context.Conte
 	hostedCluster.SetNamespace(helper.GetHostingNamespace(hyd))
 	hostedCluster.SetAnnotations(map[string]string{
 		constant.AnnoHypershiftDeployment: fmt.Sprintf("%s/%s", hyd.Namespace, hyd.Name),
+		constant.ManagedClusterAnnoKey:    hyd.Name,
 	})
 
 	if !hyd.Spec.Infrastructure.Configure && len(hyd.Spec.HostedClusterRef.Name) != 0 {
@@ -178,15 +179,6 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	aws := hyd.Spec.HostedClusterSpec.Platform.AWS.DeepCopy()
 	if aws.Region == "" {
 		aws.Region = hyd.Spec.Infrastructure.Platform.AWS.Region
-	}
-	if aws.ControlPlaneOperatorCreds.Name == "" {
-		aws.ControlPlaneOperatorCreds.Name = hyd.Name + "-cpo-creds"
-	}
-	if aws.KubeCloudControllerCreds.Name == "" {
-		aws.KubeCloudControllerCreds.Name = hyd.Name + "-cloud-ctrl-creds"
-	}
-	if aws.NodePoolManagementCreds.Name == "" {
-		aws.NodePoolManagementCreds.Name = hyd.Name + "-node-mgmt-creds"
 	}
 	if aws.ResourceTags == nil {
 		aws.ResourceTags = []hyp.AWSResourceTag{}
@@ -475,7 +467,7 @@ func ScaffoldAWSSecrets(hyd *hypdeployment.HypershiftDeployment, hc *hyp.HostedC
 	if hyd.Spec.Credentials != nil && hyd.Spec.Credentials.AWS != nil {
 		secrets = append(
 			secrets,
-			//These ObjectRef.Name's will always be set by this point.
+			//This is being deprecated
 			buildAWSCreds(hc.Spec.Platform.AWS.ControlPlaneOperatorCreds.Name, hyd.Spec.Credentials.AWS.ControlPlaneOperatorARN),
 			buildAWSCreds(hc.Spec.Platform.AWS.KubeCloudControllerCreds.Name, hyd.Spec.Credentials.AWS.KubeCloudControllerARN),
 			buildAWSCreds(hc.Spec.Platform.AWS.NodePoolManagementCreds.Name, hyd.Spec.Credentials.AWS.NodePoolManagementARN),

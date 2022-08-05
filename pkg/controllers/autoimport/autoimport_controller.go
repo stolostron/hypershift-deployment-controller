@@ -84,12 +84,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	if len(hyd.Spec.InfraID) == 0 {
-		log.V(INFO).Info("Resource hypershift spec infraID is empty")
-		return ctrl.Result{}, nil
-	}
-
-	log.V(INFO).Info("Hypershift Deployment info", "InfraID", hyd.Spec.InfraID,
+	log.V(INFO).Info("Hypershift Deployment info", "Name", hyd.Name,
 		"hostingNamespace", hyd.Spec.HostingNamespace, "hostingCluster", hyd.Spec.HostingCluster)
 
 	managedClusterName := helper.ManagedClusterName(&hyd)

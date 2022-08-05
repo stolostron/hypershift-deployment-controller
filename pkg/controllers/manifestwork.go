@@ -336,14 +336,6 @@ func (r *HypershiftDeploymentReconciler) createOrUpdateMainfestwork(ctx context.
 
 	mwCfg := enableManifestStatusFeedback(m, hyd)
 
-	// This is a special check to make sure these values are provided as they are Not part of the standard
-	// HostedClusterSpec
-	if hyd.Spec.HostedClusterSpec != nil && hyd.Spec.HostedClusterSpec.Platform.AWS != nil &&
-		(hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
-		r.Log.Error(errors.New("hyd.Spec.Credentials.AWS == nil"), "missing IAM configuration")
-		return ctrl.Result{}, r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured, metav1.ConditionFalse, "Missing Spec.Crednetials.AWS.* platform IAM", hypdeployment.MisConfiguredReason)
-	}
-
 	inHyd := hyd.DeepCopy()
 	// if the manifestwork is created, then move the status to hypershiftDeployment
 	if err := r.Get(ctx, getManifestWorkKey(hyd), m); err == nil {

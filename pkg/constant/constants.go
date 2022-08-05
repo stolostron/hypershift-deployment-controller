@@ -3,6 +3,8 @@ package constant
 const (
 	AnnoHypershiftDeployment = "cluster.open-cluster-management.io/hypershiftdeployment"
 
+	ManagedClusterAnnoKey = "cluster.open-cluster-management.io/managedcluster-name"
+
 	NamespaceNameSeperator = "/"
 
 	ManagedClusterCleanupFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"

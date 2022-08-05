@@ -27,7 +27,7 @@ func GetHostingNamespace(hyd *hypdeployment.HypershiftDeployment) string {
 }
 
 func ManagedClusterName(hyd *hypdeployment.HypershiftDeployment) string {
-	return hyd.Spec.InfraID
+	return hyd.Name
 }
 
 // TODO(zhujian7) get this from hyd.Status.Kubeconfig

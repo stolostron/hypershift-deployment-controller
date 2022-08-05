@@ -240,24 +240,6 @@ func TestManifestWorkFlowBaseCase(t *testing.T) {
 			GroupVersionKind: schema.GroupVersionKind{
 				Group: "", Version: "v1", Kind: "Secret"},
 			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
-
-		{
-			GroupVersionKind: schema.GroupVersionKind{
-				Group: "", Version: "v1", Kind: "Secret"},
-			NamespacedName: types.NamespacedName{
-				Name: "test1-cpo-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
-
-		{
-			GroupVersionKind: schema.GroupVersionKind{
-				Group: "", Version: "v1", Kind: "Secret"},
-			NamespacedName: types.NamespacedName{
-				Name: "test1-node-mgmt-creds", Namespace: helper.GetHostingNamespace(testHD)}}: true,
-
-		{
-			GroupVersionKind: schema.GroupVersionKind{
-				Group: "", Version: "v1", Kind: "Secret"},
-			NamespacedName: types.NamespacedName{
 				Name: "test1-pull-secret", Namespace: helper.GetHostingNamespace(testHD)}}: true,
 	}
 

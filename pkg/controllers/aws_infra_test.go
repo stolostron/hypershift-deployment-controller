@@ -289,7 +289,13 @@ func TestCreateAwsInfraIAMMisConfigured(t *testing.T) {
 
 	c := meta.FindStatusCondition(hyd.Status.Conditions, string(hypdeployment.PlatformIAMConfigured))
 	assert.NotNil(t, c, "not nil, when condition is found")
-	assert.Equal(t, metav1.ConditionFalse, c.Status, "false, when removing iam infrastructure")
-	assert.Equal(t, hypdeployment.MisConfiguredReason, c.Reason, "reason is Removing")
-	assert.Equal(t, "Missing Spec.Credentials.AWS", c.Message)
+	assert.Equal(t, metav1.ConditionTrue, c.Status, "true, when removing iam infrastructure")
+	assert.Equal(t, hypdeployment.ConfiguredAsExpectedReason, c.Reason, "reason is all is good")
+	assert.Equal(t, "arn:aws:iam::012345678910:role/hypershift-test-abcde-control-plane-operator",
+		hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.ControlPlaneOperatorARN)
+	assert.Equal(t, "arn:aws:iam::012345678910:role/hypershift-test-abcde-cloud-controller",
+		hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.KubeCloudControllerARN)
+	assert.Equal(t, "arn:aws:iam::012345678910:role/hypershift-test-abcde-node-pool",
+		hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NodePoolManagementARN)
+
 }
