@@ -360,9 +360,9 @@ var _ = ginkgo.Describe("Manifest Work", func() {
 					return false
 				}
 
-				// Namespace + HostedCluster + NodePool + pullSecret + 3 awsArnSecrets + etcd encryption secret
-				// Changed from 8 to 9 because the fake infraCreator returns 2 zones for AWS. This creates 2 nodepools
-				if len(manifestwork.Spec.Workload.Manifests) != 9 {
+				// Namespace + HostedCluster + NodePool + pullSecret + 3 awsArnSecrets(removed) + etcd encryption secret
+				// Changed from 9 to 6 because the fake infraCreator no longer creates awsArnSecrets
+				if len(manifestwork.Spec.Workload.Manifests) != 6 {
 					return false
 				}
 

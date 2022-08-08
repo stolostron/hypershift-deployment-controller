@@ -116,12 +116,9 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.IngressARN = iamOut.Roles.IngressARN
 			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NetworkARN = iamOut.Roles.NetworkARN
 			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.StorageARN = iamOut.Roles.StorageARN
-			hyd.Spec.Credentials = &hypdeployment.CredentialARNs{
-				AWS: &hypdeployment.AWSCredentials{
-					ControlPlaneOperatorARN: iamOut.Roles.ControlPlaneOperatorARN,
-					KubeCloudControllerARN:  iamOut.Roles.KubeCloudControllerARN,
-					NodePoolManagementARN:   iamOut.Roles.NodePoolManagementARN,
-				}}
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.ControlPlaneOperatorARN = iamOut.Roles.ControlPlaneOperatorARN
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.KubeCloudControllerARN = iamOut.Roles.KubeCloudControllerARN
+			hyd.Spec.HostedClusterSpec.Platform.AWS.RolesRef.NodePoolManagementARN = iamOut.Roles.NodePoolManagementARN
 			if err := r.patchHypershiftDeploymentResource(hyd); err != nil {
 				return ctrl.Result{},
 					r.updateStatusConditionsOnChange(hyd, hypdeployment.PlatformIAMConfigured,
@@ -144,14 +141,6 @@ func (r *HypershiftDeploymentReconciler) createAWSInfra(hyd *hypdeployment.Hyper
 		}
 	}
 
-	if hyd.Spec.HostedClusterSpec.Platform.Type == "AWS" && (hyd.Spec.Credentials == nil || hyd.Spec.Credentials.AWS == nil) {
-		return ctrl.Result{},
-			r.updateStatusConditionsOnChange(hyd,
-				hypdeployment.PlatformIAMConfigured,
-				metav1.ConditionFalse,
-				"Missing Spec.Credentials.AWS",
-				hypdeployment.MisConfiguredReason)
-	}
 	return ctrl.Result{}, nil
 }
 
