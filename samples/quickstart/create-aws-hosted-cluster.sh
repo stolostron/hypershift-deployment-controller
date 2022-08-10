@@ -14,7 +14,7 @@
 # limitations under the License.
 
 if [ "${CLOUD_PROVIDER_SECRET_NAMESPACE}" == "" ]; then
-  printf "\n**WARNING** No CLOUD_PROVIDER_SECRET_NAMESPACE found, export it and try again\n"
+  printf "\n**WARNING** No CLOUD_PROVIDER_SECRET_NAMESPACE found, export it to avoid manual entry\n"
   printf "Enter the cloud provider secret namespace\n"
   read -r CLOUD_PROVIDER_SECRET_NAMESPACE
   if [ "${CLOUD_PROVIDER_SECRET_NAMESPACE}" == "" ]; then
@@ -24,7 +24,7 @@ if [ "${CLOUD_PROVIDER_SECRET_NAMESPACE}" == "" ]; then
 fi
 
 if [ "${CLOUD_PROVIDER_SECRET_NAME}" == "" ]; then
-  printf "\n**WARNING** No CLOUD_PROVIDER_SECRET_NAME found, export it and try again\n"
+  printf "\n**WARNING** No CLOUD_PROVIDER_SECRET_NAME found, export it to avoid manual entry\n"
   printf "Enter the cloud provider secret name\n"
   read -r CLOUD_PROVIDER_SECRET_NAME
   if [ "${CLOUD_PROVIDER_SECRET_NAME}" == "" ]; then
@@ -34,7 +34,7 @@ if [ "${CLOUD_PROVIDER_SECRET_NAME}" == "" ]; then
 fi
 
 if [ "${INFRA_REGION}" == "" ]; then
-  printf "\n**WARNING** No INFRA_REGION found, export it and try again\n"
+  printf "\n**WARNING** No INFRA_REGION found, export it to avoid manual entry\n"
   printf "Enter the infrastructure region\n"
   read -r INFRA_REGION
   if [ "${INFRA_REGION}" == "" ]; then

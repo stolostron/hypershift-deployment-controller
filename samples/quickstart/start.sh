@@ -15,7 +15,7 @@
 
 
 if [ "${S3_CREDS}" == "" ]; then
-  printf "**WARNING** No S3_CREDS found, export it and try again\\n"
+  printf "**WARNING** No S3_CREDS found, export it to avoid manual entry\n"
   printf "Enter the path and file name for the S3 AWS credential\n"
   read S3_CREDS
 
@@ -26,7 +26,7 @@ if [ "${S3_CREDS}" == "" ]; then
 fi
 
 if [ "${BUCKET_NAME}" == "" ]; then
-  printf "\n**WARNING** No BUCKET_NAME found, export it and try again\n"
+  printf "\n**WARNING** No BUCKET_NAME found, export it to avoid manual entry\n"
   printf "Enter the S3 bucket name\n"
   read BUCKET_NAME
   if [ ${BUCKET_NAME} == "" ]; then
@@ -36,7 +36,7 @@ if [ "${BUCKET_NAME}" == "" ]; then
 fi
 
 if [ "${BUCKET_REGION}" == "" ]; then
-  printf "\n**WARNING** No BUCKET_REGION found, export it and try again\n"
+  printf "\n**WARNING** No BUCKET_REGION found, export it to avoid manual entry\n"
   printf "Enter the region that constains the S3 bucket\n"
   read BUCKET_REGION
   if [ ${BUCKET_REGION} == "" ]; then
@@ -120,7 +120,7 @@ spec:
   installNamespace: open-cluster-management-agent-addon
 EOF
 
-oc -n local-cluster create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=${S3_CREDS} --from-literal=bucket=${BUCKET_NAME} --from-literal=region=${BUCKET_REGION} -n local-cluster
+oc create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=${S3_CREDS} --from-literal=bucket=${BUCKET_NAME} --from-literal=region=${BUCKET_REGION} -n local-cluster
 
 echo "wait for managed cluster addon hypershift addon to be available ..."
 oc wait --for=condition=Available managedclusteraddon/hypershift-addon -n local-cluster --timeout=600s
