@@ -171,7 +171,7 @@ func ScaffoldAWSHostedClusterSpec(hyd *hypdeployment.HypershiftDeployment, infra
 	scaffoldHostedClusterSpec(hyd)
 	hyd.Spec.HostedClusterSpec.DNS = *scaffoldDnsSpec(infraOut.BaseDomain, infraOut.PrivateZoneID, infraOut.PublicZoneID)
 	hyd.Spec.HostedClusterSpec.InfraID = hyd.Spec.InfraID
-	hyd.Spec.HostedClusterSpec.Networking.MachineCIDR = infraOut.ComputeCIDR
+	hyd.Spec.HostedClusterSpec.Networking.MachineCIDR = infraOut.MachineCIDR
 
 	if hyd.Spec.HostedClusterSpec.Platform.AWS == nil {
 		hyd.Spec.HostedClusterSpec.Platform.AWS = &hyp.AWSPlatformSpec{}
