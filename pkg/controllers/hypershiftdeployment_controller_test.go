@@ -61,7 +61,7 @@ func getAWSInfrastructureOut() *aws.CreateInfraOutput {
 		Region:          "us-east-1",
 		Zone:            "us-east-1a",
 		InfraID:         "test1-abcde",
-		ComputeCIDR:     "cidr",
+		MachineCIDR:     "cidr",
 		VPCID:           "vpc-id",
 		Zones:           []*aws.CreateInfraOutputZone{&aws.CreateInfraOutputZone{SubnetID: "subnet-12345"}},
 		SecurityGroupID: "sg-123456789",
@@ -230,7 +230,7 @@ func TestScaffoldAWSHostedClusterSpec(t *testing.T) {
 	assert.Equal(t, oAWS.Region, testHD.Spec.HostedClusterSpec.Platform.AWS.Region, "Region should be "+oAWS.Region)
 	assert.Equal(t, oAWS.VPCID, testHD.Spec.HostedClusterSpec.Platform.AWS.CloudProviderConfig.VPC, "VPCID should be "+oAWS.VPCID)
 	//Skipped Zones
-	assert.Equal(t, oAWS.ComputeCIDR, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "ComputeCIDR should be "+oAWS.ComputeCIDR)
+	assert.Equal(t, oAWS.MachineCIDR, testHD.Spec.HostedClusterSpec.Networking.MachineCIDR, "ComputeCIDR should be "+oAWS.MachineCIDR)
 	assert.Equal(t, oAWS.BaseDomain, testHD.Spec.HostedClusterSpec.DNS.BaseDomain, "BaseDomain should be "+oAWS.BaseDomain)
 	assert.Equal(t, oAWS.PrivateZoneID, testHD.Spec.HostedClusterSpec.DNS.PrivateZoneID, "PrivateZoneID should be "+oAWS.PrivateZoneID)
 	assert.Equal(t, oAWS.PublicZoneID, testHD.Spec.HostedClusterSpec.DNS.PublicZoneID, "PublicZoneID should be "+oAWS.PublicZoneID)

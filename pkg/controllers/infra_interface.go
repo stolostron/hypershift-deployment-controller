@@ -22,6 +22,7 @@ import (
 
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-logr/logr"
 	"github.com/openshift/hypershift/api/fixtures"
 	hyperv1 "github.com/openshift/hypershift/api/v1alpha1"
 	"github.com/openshift/hypershift/cmd/infra/aws"
@@ -38,12 +39,12 @@ type InfraHandler interface {
 	AzureInfraCreator(name, baseDomain, location, infraID string, credentials *fixtures.AzureCreds) AzureCreateInfra
 }
 
-type AwsCreateInfra func(ctx context.Context) (*aws.CreateInfraOutput, error)
+type AwsCreateInfra func(ctx context.Context, l logr.Logger) (*aws.CreateInfraOutput, error)
 type AwsDestroyInfra func(ctx context.Context) error
 type AwsCreateIAM func(ctx context.Context, client crclient.Client) (*aws.CreateIAMOutput, error)
 type AwsDestroyIAM func(ctx context.Context) error
 type AzureDestroyInfra func(ctx context.Context) error
-type AzureCreateInfra func(ctx context.Context) (*azure.CreateInfraOutput, error)
+type AzureCreateInfra func(ctx context.Context, l logr.Logger) (*azure.CreateInfraOutput, error)
 
 var _ InfraHandler = &DefaultInfraHandler{}
 
@@ -132,7 +133,7 @@ type FakeInfraHandler struct{}
 type FakeInfraHandlerFailure struct{}
 
 func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string, zones []string) AwsCreateInfra {
-	return func(ctx context.Context) (*aws.CreateInfraOutput, error) {
+	return func(ctx context.Context, l logr.Logger) (*aws.CreateInfraOutput, error) {
 		return &aws.CreateInfraOutput{
 			Zones: []*aws.CreateInfraOutputZone{
 				{
@@ -148,7 +149,7 @@ func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID
 			PrivateZoneID:   "ABCDEFGHIJKLMNOPQRSTU",
 			PublicZoneID:    "ABCDEFGHIJKLMN",
 			BaseDomain:      "a.b.c",
-			ComputeCIDR:     "127.0.0.0/16",
+			MachineCIDR:     "127.0.0.0/16",
 			SecurityGroupID: "sg-a1b2c3d4e5f6g7hig",
 			LocalZoneID:     "ABCDEFGHIJKLMN123456",
 		}, nil
@@ -156,7 +157,7 @@ func (h *FakeInfraHandler) AwsInfraCreator(awsKey, awsSecretKey, region, infraID
 }
 
 func (h *FakeInfraHandlerFailure) AwsInfraCreator(awsKey, awsSecretKey, region, infraID, name, baseDomain string, zones []string) AwsCreateInfra {
-	return func(ctx context.Context) (*aws.CreateInfraOutput, error) {
+	return func(ctx context.Context, l logr.Logger) (*aws.CreateInfraOutput, error) {
 		return nil, errors.New("failed to create aws infrastructure")
 	}
 }
@@ -221,7 +222,7 @@ func (h *FakeInfraHandlerFailure) AzureInfraDestroyer(name, location, infraID st
 }
 
 func (h *FakeInfraHandler) AzureInfraCreator(name, baseDomain, location, infraID string, credentials *fixtures.AzureCreds) AzureCreateInfra {
-	return func(ctx context.Context) (*azure.CreateInfraOutput, error) {
+	return func(ctx context.Context, l logr.Logger) (*azure.CreateInfraOutput, error) {
 		return &azure.CreateInfraOutput{
 			Location:          "centralus",
 			MachineIdentityID: "/subscriptions/abcd1234-5678-123a-ab1c-asdfgh098765/resourcegroups/hypershift-test-hypershift-test-abcde/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hypershift-test-hypershift-test-abcde",
@@ -239,7 +240,7 @@ func (h *FakeInfraHandler) AzureInfraCreator(name, baseDomain, location, infraID
 }
 
 func (h *FakeInfraHandlerFailure) AzureInfraCreator(name, baseDomain, location, infraID string, credentials *fixtures.AzureCreds) AzureCreateInfra {
-	return func(ctx context.Context) (*azure.CreateInfraOutput, error) {
+	return func(ctx context.Context, l logr.Logger) (*azure.CreateInfraOutput, error) {
 		return nil, errors.New("failed to create azure infrastructure")
 	}
 }

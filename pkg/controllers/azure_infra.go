@@ -58,7 +58,7 @@ func (r *HypershiftDeploymentReconciler) createAzureInfra(hyd *hypdeployment.Hyp
 			hyd.Spec.Infrastructure.Platform.Azure.Location,
 			hyd.Spec.InfraID,
 			credentials,
-		)(r.ctx)
+		)(r.ctx, r.Log)
 		if err != nil {
 			log.Error(err, "Could not create infrastructure")
 

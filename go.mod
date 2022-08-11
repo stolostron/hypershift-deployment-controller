@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.19.0
-	github.com/openshift/hypershift v0.0.0-20220719064944-685115caee6b
+	github.com/openshift/hypershift v0.0.0-20220810221813-2b7ac5268ac7
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.19.1
@@ -99,7 +99,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pborman/uuid v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.51.1 // indirect
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.57.0 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
@@ -139,7 +139,7 @@ require (
 	sigs.k8s.io/cluster-api v1.1.4 // indirect
 	sigs.k8s.io/cluster-api-provider-aws v1.1.0 // indirect
 	sigs.k8s.io/cluster-api-provider-azure v1.1.2 // indirect
-	sigs.k8s.io/cluster-api-provider-ibmcloud v0.2.3 // indirect
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.2.4 // indirect
 	sigs.k8s.io/cluster-api-provider-kubevirt v0.0.0-00010101000000-000000000000 // indirect
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
