@@ -28,7 +28,7 @@ true
 If the value is `false`, make sure to set it true, and don't forget to change `mce-instance-name` to the name of your multicluster-engine instance:
 
 ```bash
-$ oc patch mce <mce-instance-name> -n open-cluster-management --type=json -p='[{"op": "add", "path": "/spec/overrides/components/-","value":{"name":"hypershift-preview","enabled":true}}]'
+$ oc patch mce <mce-instance-name> --type=json -p='[{"op": "add", "path": "/spec/overrides/components/-","value":{"name":"hypershift-preview","enabled":true}}]'
 ```
 
 ## Turn one of the managed clusters into the HyperShift management cluster
