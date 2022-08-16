@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
 	"github.com/openshift/hypershift/api/fixtures"
@@ -71,6 +72,7 @@ func (h *DefaultInfraHandler) AwsInfraDestroyer(awsKey, awsSecretKey, region, in
 		InfraID:      infraID,
 		Name:         name,
 		BaseDomain:   baseDomain,
+		Log:          log.FromContext(context.Background()),
 	}
 	return o.DestroyInfra
 }
@@ -99,6 +101,7 @@ func (h *DefaultInfraHandler) AwsIAMDestroyer(awsKey, awsSecretKey, region, infr
 		AWSKey:       awsKey,
 		AWSSecretKey: awsSecretKey,
 		InfraID:      infraID,
+		Log:          log.FromContext(context.Background()),
 	}
 
 	return iamOpt.DestroyIAM
