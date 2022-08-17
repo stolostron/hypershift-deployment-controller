@@ -12,15 +12,21 @@ This document describes how to quickly get started with Hosting Control Planes a
       aws_access_key_id = MY_ACCESS_KEY_ID
       aws_secret_access_key = MY SECRET_ACCESS_KEY
       ```
-   * S3 Bucket name (user creates a bucket)
+   * S3 Bucket name (user comes with an existing bucket or can use `create-s3-bucket.sh` script)
       
-        Bucket setting:
-      * Object Ownership `ACLs disabled`
+        Bucket settings:
+      * `ACLs enabled`, Object Ownership `Object writer`
+      * For the Access control list (ACL)
+         * Bucket owner:
+            ```
+            Object: List, Write
+            Bucket ACL: Read, Write
+            ```
       * Uncheck `Block all public access`
       * Disable `Bucket Versioning`
       * Disable `Default encryption`
       
-   * Bucket region (this is related to where the bucket was created)
+   * S3 Bucket region (this is related to where the bucket was created)
 
 ## Quickstart
 * Make sure you are connected to the OpenShift cluster
@@ -34,7 +40,7 @@ This document describes how to quickly get started with Hosting Control Planes a
 4. Applies the Hosting Service Cluster addon (Hypershift) to the `local-cluster` (Hub)
 
 ## Provision a Hosted Control Plane Cluster
-1. Create an Cloud Provider Credential in a project (AWS or Azure)
+1. Create a Cloud Provider Credential in a project (AWS or Azure)
 2. Create a HypershiftDeployment resource in the same project
    ```shell
    ./create-aws-hosted-cluster.sh
