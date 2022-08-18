@@ -64,9 +64,9 @@ Before creating the add-on, we need to make sure to provide the details of the s
 
     Instructions result in the following AWS resources:
 
-    * IAM policy in AWS
-    * Hypershift operator IAM user
-    * Attach the policy to the user
+    * Create an IAM policy in AWS
+    * Create an IAM user for the Hypershift operator to use
+    * Attach the IAM policy to the IAM user
     * Create an IAM access key for the user, use the access key and secret in the next section
 
     The secret must contain 3 fields:
