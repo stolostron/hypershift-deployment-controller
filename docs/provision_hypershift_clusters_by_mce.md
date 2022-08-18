@@ -37,7 +37,7 @@ We call the cluster with the HyperShift operator installed as the hosting servic
 
 Before creating the add-on, we need to make sure to provide the details of the s3 bucket where HyperShift will be storing OIDC discovery information. The s3 bucket is a pre-req for the installation
 
-1. If you plan to provision hosted clusters on the AWS platform, create an OIDC s3 credential secret for the HyperShift operator, and name it `hypershift-operator-oidc-provider-s3-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
+1. If you plan to provision hosted clusters on the AWS platform, create an OIDC s3 credential secret for the HyperShift operator, and name it `hypershift-operator-oidc-provider-s3-credentials`. It should reside in the managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
 
     The secret must contain 3 fields:
 
@@ -58,7 +58,7 @@ Before creating the add-on, we need to make sure to provide the details of the s
     ```
 
     ### AWS Private Link
-    If you plan to provision hosted clusters on the AWS platform with Private Link, create an AWS credential secret for the HyperShift operator, and name it `hypershift-operator-private-link-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
+    If you plan to provision hosted clusters on the AWS platform with Private Link, create an AWS credential secret for the HyperShift operator, and name it `hypershift-operator-private-link-credentials`. It should reside in the managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
 
     Follow the instructions here (steps 1-5): [Deploy AWS private clusters](https://hypershift-docs.netlify.app/how-to/aws/deploy-aws-private-clusters/)
 
@@ -73,7 +73,7 @@ Before creating the add-on, we need to make sure to provide the details of the s
 
     - `aws-access-key-id`: AWS credential access key id
     - `aws-secret-access-key`: AWS credential access key secret
-    - `region`: Region for use with Private Linke
+    - `region`: Region for use with Private Link
 
     For details, please check: [HyperShift Project Documentation](https://hypershift-docs.netlify.app/how-to/aws/deploy-aws-private-clusters/). For convenience, you can create this secret using the CLI by:
 
@@ -99,7 +99,7 @@ Before creating the add-on, we need to make sure to provide the details of the s
     ```
 
     ### External DNS
-    If you plan to use service-level DNS for Control Plane Service, create an external DNS credential secret for the HyperShift operator, and name it `hypershift-operator-external-dns-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
+    If you plan to use service-level DNS for Control Plane Service, create an external DNS credential secret for the HyperShift operator, and name it `hypershift-operator-external-dns-credentials`. It should reside in the managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
 
     The secret must contain 3 fields:
 
