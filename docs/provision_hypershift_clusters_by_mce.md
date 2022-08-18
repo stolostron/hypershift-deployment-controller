@@ -37,47 +37,141 @@ We call the cluster with the HyperShift operator installed as the hosting servic
 
 Before creating the add-on, we need to make sure to provide the details of the s3 bucket where HyperShift will be storing OIDC discovery information. The s3 bucket is a pre-req for the installation
 
-1. If you plan to provision hosted clusters on the AWS platform, create an OIDC s3 credentials secret for the HyperShift operator, and name it `hypershift-operator-oidc-provider-s3-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
+1. If you plan to provision hosted clusters on the AWS platform, create an OIDC s3 credential secret for the HyperShift operator, and name it `hypershift-operator-oidc-provider-s3-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
 
-The secret must contain 3 fields:
+    The secret must contain 3 fields:
 
-- `bucket`: An S3 bucket with public access to host OIDC discovery documents for your HyperShift clusters
-- `credentials`: Credentials to access the bucket
-- `region`: Region of the S3 bucket
+    - `bucket`: An S3 bucket with public access to host OIDC discovery documents for your HyperShift clusters
+    - `credentials`: Credentials to access the bucket
+    - `region`: Region of the S3 bucket
 
-For details, please check: [HyperShift Project Documentation](https://hypershift-docs.netlify.app/getting-started). For convenience, you can create this secret using the CLI by:
+    For details, please check: [HyperShift Project Documentation](https://hypershift-docs.netlify.app/getting-started). For convenience, you can create this secret using the CLI by:
 
-```bash
-$ oc create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=$HOME/.aws/credentials --from-literal=bucket=<s3-bucket-for-hypershift> --from-literal=region=<region> -n <managed-cluster-used-as-hosting-service-cluster>
-```
+    ```bash
+    $ oc create secret generic hypershift-operator-oidc-provider-s3-credentials --from-file=credentials=$HOME/.aws/credentials --from-literal=bucket=<s3-bucket-for-hypershift> --from-literal=region=<region> -n <managed-cluster-used-as-hosting-service-cluster>
+    ```
 
-Add the special label to the `hypershift-operator-oidc-provider-s3-credentials` secret so that the secret is backed up for disaster recovery.
+    Add the special label to the `hypershift-operator-oidc-provider-s3-credentials` secret so that the secret is backed up for disaster recovery.
 
-```bash
-$ oc label secret hypershift-operator-oidc-provider-s3-credentials -n <managed-cluster-used-as-hosting-service-cluster> cluster.open-cluster-management.io/backup=true
-```
+    ```bash
+    $ oc label secret hypershift-operator-oidc-provider-s3-credentials -n <managed-cluster-used-as-hosting-service-cluster> cluster.open-cluster-management.io/backup=true
+    ```
 
+    ### AWS Private Link
+    If you plan to provision hosted clusters on the AWS platform with Private Link, create an AWS credential secret for the HyperShift operator, and name it `hypershift-operator-private-link-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
+
+    Follow the instructions here (steps 1-5): [Deploy AWS private clusters](https://hypershift-docs.netlify.app/how-to/aws/deploy-aws-private-clusters/)
+
+    Instructions result in the following AWS resources:
+
+    * IAM policy in AWS
+    * Hypershift operator IAM user
+    * Attach the policy to the user
+    * Create an IAM access key for the user, use the access key and secret in the next section
+
+    The secret must contain 3 fields:
+
+    - `aws-access-key-id`: AWS credential access key id
+    - `aws-secret-access-key`: AWS credential access key secret
+    - `region`: Region for use with Private Linke
+
+    For details, please check: [HyperShift Project Documentation](https://hypershift-docs.netlify.app/how-to/aws/deploy-aws-private-clusters/). For convenience, you can create this secret using the CLI by:
+
+    ```bash
+    $ oc create secret generic hypershift-operator-private-link-credentials --from-literal=aws-access-key-id=<aws-access-key-id> --from-literal=aws-secret-access-key=<aws-secret-access-key> --from-literal=region=<region> -n <managed-cluster-used-as-hosting-service-cluster>
+    ```
+
+    Add the special label to the `hypershift-operator-private-link-credentials` secret so that the secret is backed up for disaster recovery.
+
+    ```bash
+    $ oc label secret hypershift-operator-private-link-credentials -n <managed-cluster-used-as-hosting-service-cluster> cluster.open-cluster-management.io/backup=true
+    ```
+    **Enable on a HostedCluster**
+
+    Set the following parameter in HypershiftDeployment, when creating a cluster:
+    ```
+    spec:
+      hostedClusterSpec:
+        platform:
+          type: AWS
+          aws:
+            endpointAccess: Private
+    ```
+
+    ### External DNS
+    If you plan to use service-level DNS for Control Plane Service, create an external DNS credential secret for the HyperShift operator, and name it `hypershift-operator-external-dns-credentials`. It should reside in managed cluster namespace (i.e., the namespace of the managed cluster that will be used as the hosting service cluster). If you used `local-cluster`, then create the secret in the `local-cluster` namespace
+
+    The secret must contain 3 fields:
+
+    - `provider`: DNS provider that manages the service-level DNS zone (example: aws)
+    - `domain-filter`: The service-level domain
+    - `credentials`: *(Optional, only when using aws keys) - For all external DNS types, a credential file is supported
+    - `aws-access-key-id`: *OPTIONAL* - When using AWS DNS service, credential access key id
+    - `aws-secret-access-key`: *OPTIONAL* - When using AWS DNS service, credential access key secret
+    For details, please check: [HyperShift Project Documentation](https://hypershift-docs.netlify.app/how-to/external-dns/). For convenience, you can create this secret using the CLI by:
+
+    ```bash
+    $ oc create secret generic hypershift-operator-external-dns-credentials --from-literal=provider=aws --from-literal=domain-filter=service.my.domain.com --from-file=credentials=<credentials-file> -n <managed-cluster-used-as-hosting-service-cluster>
+    ```
+
+    Add the special label to the `hypershift-operator-external-dns-credentials` secret so that the secret is backed up for disaster recovery.
+
+    ```bash
+    $ oc label secret hypershift-operator-external-dns-credentials -n <managed-cluster-used-as-hosting-service-cluster> cluster.open-cluster-management.io/backup=true
+    ```
+    
+    **Enable on a HostedCluster**
+    
+    Set the following parameter in HypershiftDeployment, when creating a cluster:
+    ```
+    spec:
+      hostedClusterSpec:
+        platform:
+          type: AWS
+          aws:
+            endpointAccess: PublicAndPrivate
+    ...
+        services:
+        - service: APIServer
+          servicePublishingStrategy:
+            loadBalancer:
+              hostname: api-example.service.my.domain.com
+            type: LoadBalancer
+        - service: OAuthServer
+          servicePublishingStrategy:
+            route:
+              hostname: oauth-example.service.my.domain.com
+            type: Route
+        - service: Konnectivity
+          servicePublishingStrategy:
+            type: Route
+        - service: Ignition
+          servicePublishingStrategy:
+            type: Route        
+    
+    ```
+        
 2. Create `ManagedClusterAddon` hypershift-addon
   
-```bash
-$ oc apply -f - <<EOF
-apiVersion: addon.open-cluster-management.io/v1alpha1
-kind: ManagedClusterAddOn
-metadata:
-  name: hypershift-addon
-  namespace: <managed-cluster-used-as-hosting-service-cluster> # the managed OCP cluster you want to install hypershift operator
-spec:
-  installNamespace: open-cluster-management-agent-addon
-EOF
-```
+    ```bash
+    $ oc apply -f - <<EOF
+    apiVersion: addon.open-cluster-management.io/v1alpha1
+    kind: ManagedClusterAddOn
+    metadata:
+      name: hypershift-addon
+      namespace: <managed-cluster-used-as-hosting-service-cluster> # the managed OCP cluster you want to install hypershift operator
+    spec:
+      installNamespace: open-cluster-management-agent-addon
+    EOF
+    ```
 
 3. Check the `hypershift-addon` is installed
-  
-```bash
-$ oc get managedclusteraddons -n local-cluster hypershift-addon
-NAME               AVAILABLE   DEGRADED   PROGRESSING
-hypershift-addon   True
-```
+      
+    ```bash
+    $ oc get managedclusteraddons -n local-cluster hypershift-addon
+    NAME               AVAILABLE   DEGRADED   PROGRESSING
+    hypershift-addon   True
+    ```
 
 ## Provision a HyperShift hosted cluster on AWS
 
@@ -85,81 +179,81 @@ After the HyperShift operator is installed, we can provision a hypershift hosted
 
 1. Create a cloud provider secret, it has the following format for AWS:
 
-```yaml
-apiVersion: v1
-metadata:
-  name: my-aws-cred
-  namespace: <hypershift-deployment-ns>      # Where you will create HypershiftDeployment resources
-type: Opaque
-kind: Secret
-stringData:
-  ssh-publickey:          # Value
-  ssh-privatekey:         # Value
-  pullSecret:             # Value, required
-  baseDomain:             # Value, required
-  aws_secret_access_key:  # Value, required
-  aws_access_key_id:      # Value, required
-```
+    ```yaml
+    apiVersion: v1
+    metadata:
+      name: my-aws-cred
+      namespace: <hypershift-deployment-ns>      # Where you will create HypershiftDeployment resources
+    type: Opaque
+    kind: Secret
+    stringData:
+      ssh-publickey:          # Value
+      ssh-privatekey:         # Value
+      pullSecret:             # Value, required
+      baseDomain:             # Value, required
+      aws_secret_access_key:  # Value, required
+      aws_access_key_id:      # Value, required
+    ```
 
-The `ssh-publickey` and `ssh-privatekey`, if provided, are used to access the worker nodes of the hosted cluster. If the SSH Key is provided in the `hostedCluster.spec.sshKey` or `hypershiftDeployment.spec.hostedClusterSpec.sshKey`, it takes precedence over the SSH Key provided in the cloud provider secret.
+    The `ssh-publickey` and `ssh-privatekey`, if provided, are used to access the worker nodes of the hosted cluster. If the SSH Key is provided in the `hostedCluster.spec.sshKey` or `hypershiftDeployment.spec.hostedClusterSpec.sshKey`, it takes precedence over the SSH Key provided in the cloud provider secret.
 
-You can create the cloud provider secret using the multicluster console (embedded within the OpenShift console) or via the CLI, both options are shown below:
+    You can create the cloud provider secret using the multicluster console (embedded within the OpenShift console) or via the CLI, both options are shown below:
 
-- Multi-cluster console: `https://<mce-multicluster-console>/multicloud/credentials/create`
-  
-![mce-console](./images/mce-console.png)  
+    - Multi-cluster console: `https://<mce-multicluster-console>/multicloud/credentials/create`
+      
+    ![mce-console](./images/mce-console.png)  
 
-- Using the CLI:
+    - Using the CLI:
 
-> The secret should be created where the HyperShift deployment controller is deployed. By default, it is deployed in the  `multicluster-engine` namespace.
+    > The secret should be created where the HyperShift deployment controller is deployed. By default, it is deployed in the  `multicluster-engine` namespace.
 
-```bash
-$ oc create secret generic <my-secret> -n <hypershift-deployment-namespace> --from-literal=baseDomain='your.domain.com' --from-literal=aws_access_key_id='your-aws-access-key' --from-literal=aws_secret_access_key='your-aws-secret-key' --from-literal=pullSecret='{"auths":{"cloud.openshift.com":{"auth":"auth-info", "email":"xx@redhat.com"}, "quay.io":{"auth":"auth-info", "email":"xx@redhat.com"} } }' --from-literal=ssh-publickey='your-ssh-publickey' --from-literal=ssh-privatekey='your-ssh-privatekey'
+    ```bash
+    $ oc create secret generic <my-secret> -n <hypershift-deployment-namespace> --from-literal=baseDomain='your.domain.com' --from-literal=aws_access_key_id='your-aws-access-key' --from-literal=aws_secret_access_key='your-aws-secret-key' --from-literal=pullSecret='{"auths":{"cloud.openshift.com":{"auth":"auth-info", "email":"xx@redhat.com"}, "quay.io":{"auth":"auth-info", "email":"xx@redhat.com"} } }' --from-literal=ssh-publickey='your-ssh-publickey' --from-literal=ssh-privatekey='your-ssh-privatekey'
 
-# label the secret for backup
-$ oc label secret <my-secret> -n <hypershift-deployment-namespace> cluster.open-cluster-management.io/backup=true
-```
+    # label the secret for backup
+    $ oc label secret <my-secret> -n <hypershift-deployment-namespace> cluster.open-cluster-management.io/backup=true
+    ```
 
-Note: `cluster.open-cluster-management.io/backup=true` is added to the secret so that the secret is backed up for disaster recovery.
+    Note: `cluster.open-cluster-management.io/backup=true` is added to the secret so that the secret is backed up for disaster recovery.
 
 1. Create a `HypershiftDeployment` in the cloud provider secret namespace
 
-```bash
-$ oc apply -f - <<EOF
-apiVersion: cluster.open-cluster-management.io/v1alpha1
-kind: HypershiftDeployment
-metadata:
-  name: hypershift-demo
-  namespace: default
-spec:
-  hostingCluster: hypershift-management-cluster     # the hypershift management cluster name.
-  hostingNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
-  infrastructure:
-    cloudProvider:
-      name: <my-secret>
-    configure: True
-    platform:
-      aws:
-        region: <region>
-        zones:
-        - <availability-zone-1>
-        - <availability-zone-2>
-EOF
-```
+    ```bash
+    $ oc apply -f - <<EOF
+    apiVersion: cluster.open-cluster-management.io/v1alpha1
+    kind: HypershiftDeployment
+    metadata:
+      name: hypershift-demo
+      namespace: default
+    spec:
+      hostingCluster: hypershift-management-cluster     # the hypershift management cluster name.
+      hostingNamespace: clusters     # specify the namespace to which hostedcluster and noodpools belong on the hypershift management cluster.
+      infrastructure:
+        cloudProvider:
+          name: <my-secret>
+        configure: True
+        platform:
+          aws:
+            region: <region>
+            zones:
+            - <availability-zone-1>
+            - <availability-zone-2>
+    EOF
+    ```
 
-Check each field [definition](./../api/v1alpha1/hypershiftdeployment_types.go)
+    Check each field [definition](./../api/v1alpha1/hypershiftdeployment_types.go)
 
 1. Check the `HypershiftDeployment` status:
 
-```bash
-$ oc get hypershiftdeployment -n <hypershift-deployment-namespace> -w
-```
+    ```bash
+    $ oc get hypershiftdeployment -n <hypershift-deployment-namespace> -w
+    ```
 
-1. After the hosted cluster is created, it will be imported to the hub automatically, you can check it with:
-  
-```bash
-$ oc get managedcluster <hypershiftDeployment.Spec.infraID>
-```
+    1. After the hosted cluster is created, it will be imported to the hub automatically, you can check it with:
+      
+    ```bash
+    $ oc get managedcluster <hypershiftDeployment.Spec.infraID>
+    ```
 
 ## Provision a hypershift hosted cluster on bare-metal
 

@@ -19,15 +19,15 @@ Benefits of Hosted Control Plane Clusters:
 | Provider          | Support Status     |
 |-------------------|--------------------|
 | AWS               | Technology Preview |
+| Baremetal (Agent) | Technology Preview  |
 | Azure             | Developer Preview  |
-| Baremetal (Agent) | Developer Preview  |
 | KubeVirt          | Developer Preview  |
 
 ## Key terms (API)
 
 [API reference link](https://hypershift-docs.netlify.app/reference/api/)
 
-### HypershiftDeployment
+### HypershiftDeployment (deprecated December 2022)
 
     The HypershiftDeployment kind is the entry point to Hosted Control Plane clusters. It offers both turn key and custom provisioning of OpenShift clusters. This resource contains details about the infrastructure, hosted control plane and node pools. Its status reflects the health and availability of the system.
 
@@ -59,7 +59,31 @@ Benefits of Hosted Control Plane Clusters:
 
 # Execution flow
 
+USER ACTION:
 1. Create a `HypershiftDeployment` kind custom resource
+
+Sample hypershftDeployment.yaml:
+
+```yaml
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: sample-hd-1
+  namespace: default #${hostClusterNamespace}
+spec:
+  hostingCluster: cluster1
+  hostingNamespace: clusters
+  infrastructure:
+    cloudProvider:
+      name: aws
+    configure: True
+    platform:
+      aws:
+        region: us-east-1
+```
+
+RESULTING ACTION:
+
 2. In processing the HypershiftDeployment, the infrastructre specified may be configured
    * VPC's, resource groups, are created and configured
    * These operations can be skipped and the details of the infrastructure resources are instead provided in the HypershiftDeployment resource
