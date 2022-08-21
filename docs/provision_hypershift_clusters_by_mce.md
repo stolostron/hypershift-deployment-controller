@@ -291,6 +291,26 @@ spec:
 EOF
 ```
 
+**NOTE**: If you wish to use `Agents` from a namespace that isn't the ${hypershift-management-cluster} namespace, you must create a role for capi-provider-agent in that namespace (this is the same namespace as specified in the HypershiftDeployment Spec `spec.platform.agent.agentNamespace`).
+~~~sh
+envsubst <<"EOF" | oc apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: capi-provider-role
+  namespace: ${AGENT_NS}
+rules:
+- apiGroups:
+  - agent-install.openshift.io
+  resources:
+  - agents
+  verbs:
+  - '*'
+EOF
+~~~
+
+
 ## Access the hosted cluster
 
 The access secrets are stored in the {hypershift-management-cluster} namespace.
