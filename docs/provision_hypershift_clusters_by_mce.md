@@ -288,6 +288,74 @@ Delete the hypershift-addon
 $ oc delete managedclusteraddon -n <hypershift-management-cluster> hypershift-addon
 ```
 
+## Customizing hostedcluster and nodepool specs in HypershiftDeployment custom resource
+
+In a `HypershiftDeployment` custom resource, you can change `hostedcluster` and `nodepool` specifications. For example, you can change the OCP release image of the hosted cluster control plane and/or the nodepool, the management spec of the nodepool or the number of nodes in the nodepool.
+
+```yaml
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: HypershiftDeployment
+metadata:
+  name: <cluster>
+  namespace: default
+spec:
+  hostingCluster: <hosting-service-cluster>
+  hostingNamespace: clusters
+  hostedClusterSpec:
+    networking:
+      machineCIDR: 10.0.0.0/16    # Default
+      networkType: OpenShiftSDN
+      podCIDR: 10.132.0.0/14      # Default
+      serviceCIDR: 172.31.0.0/16  # Default
+    platform:
+      type: AWS
+    pullSecret:
+      name: <cluster>-pull-secret    # This secret is created by the controller
+    release:
+      image: quay.io/openshift-release-dev/ocp-release:4.11.2-x86_64  # Default
+    services:
+    - service: APIServer
+      servicePublishingStrategy:
+        type: LoadBalancer
+    - service: OAuthServer
+      servicePublishingStrategy:
+        type: Route
+    - service: Konnectivity
+      servicePublishingStrategy:
+        type: Route
+    - service: Ignition
+      servicePublishingStrategy:
+        type: Route
+    sshKey: {}
+  nodePools:
+  - name: <cluster>
+    spec:
+      clusterName: <cluster>
+      management:
+        autoRepair: false
+        replace:
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+          strategy: RollingUpdate
+        upgradeType: Replace
+      platform:
+        aws:
+          instanceType: m5.large
+        type: AWS
+      release:
+        image: quay.io/openshift-release-dev/ocp-release:4.11.2-x86_64 # Default
+      replicas: 2
+  infrastructure:
+    cloudProvider:
+      name: <my-secret>
+    configure: True
+    platform:
+      aws:
+        region: <region>
+```
+
+
 ## Provision a hypershift hosted cluster on bare-metal
 
 Use the 'Agent' platform for HostedClusters with bare-metal worker nodes. The Agent platform uses the [Infrastructure Operator](https://github.com/openshift/assisted-service) (AKA Assisted Installer) to add worker nodes to a hosted cluster. For a primer on the Infrastructure Operator, see [here](https://github.com/openshift/assisted-service/blob/master/docs/hive-integration/kube-api-getting-started.md). In short, each bare-metal host should be booted with a Discovery Image that is provided by the Infrastructure Operator. The hosts can be booted manually or via user-provided automation, or by utilizing the [Cluster-Baremetal-Operator](https://github.com/openshift/cluster-baremetal-operator/blob/master/README.md) (CBO). Once booted, each host will run an agent process to facilitate discovering the host details and its installation. Each is represented by an Agent custom resource.
