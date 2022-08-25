@@ -90,7 +90,7 @@ $ oc create secret generic hypershift-operator-private-link-credentials --from-l
 ```bash
 $ oc label secret hypershift-operator-private-link-credentials -n <managed-cluster-used-as-hosting-service-cluster> cluster.open-cluster-management.io/backup=true
 ```
-**Enable on a HostedCluster**
+##### Enable on a HostedCluster
 
 Set the following parameter in HypershiftDeployment, when creating a cluster:
 ```
@@ -124,7 +124,7 @@ Add the special label to the `hypershift-operator-external-dns-credentials` secr
 $ oc label secret hypershift-operator-external-dns-credentials -n <managed-cluster-used-as-hosting-service-cluster> cluster.open-cluster-management.io/backup=true
 ```
 
-**Enable on a HostedCluster**
+##### Enable on a HostedCluster
 
 Set the following parameter in HypershiftDeployment, when creating a cluster:
 ```
