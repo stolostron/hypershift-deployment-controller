@@ -9,7 +9,7 @@ const (
 
 	ManagedClusterCleanupFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/managedcluster-cleanup"
 
-	ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.10.15-x86_64"
+	ReleaseImage = "quay.io/openshift-release-dev/ocp-release:4.11.2-x86_64"
 
 	// DestroyFinalizer makes sure infrastructure is cleaned up before it is removed
 	DestroyFinalizer = "hypershiftdeployment.cluster.open-cluster-management.io/finalizer"
