@@ -23,7 +23,13 @@ metadata:
   namespace: my-hosting-cluster
 spec:
   deleteOption:
-    propagationPolicy: Orphan
+    propagationPolicy: SelectivelyOrphan
+    selectivelyOrphans:
+      orphaningRules:
+      - group: ""
+        name: clusters
+        namespace: ""
+        resource: namespaces
   manifestConfigs:
   - feedbackRules:
     - jsonPaths:
