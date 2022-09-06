@@ -1,6 +1,6 @@
 # Hosted Control Plane Clusters
 
-Advanced Cluster Management for Kubernetes can deploy OpenShift clusters with two different control plane paradigms.  Standalone, uses a virtual machine or physical machine to host the OpenShift control plane.  Starting with ACM 2.5, support for provisioning Hosted Control Planes is supported.  What this form of provisioning does, is provision the OpenShift control plane as pods on a Hosting Service Cluster.  The Hosting Service Cluster, can be the ACM Hub or one of the OpenShift clusters under Hub management.
+Advanced Cluster Management for Kubernetes can deploy OpenShift clusters with two different control plane paradigms.  Standalone, uses a virtual machine or physical machine to host the OpenShift control plane.  Starting with ACM 2.5, support for provisioning Hosted Control Planes is supported.  What this form of provisioning does is provision the OpenShift control plane as pods on a Hosting Service Cluster.  The Hosting Service Cluster can be the ACM Hub or one of the OpenShift clusters under Hub management.
 
 The Control Plane is run as pods, contained in a single namespace associated to the Hosted Control Plane Cluster.  This hosted cluster type of OpenShift, then provisions its worker node independent of the control plane, with support for AWS, Azure, Kubevirt and Bare Metal.
 
@@ -29,7 +29,7 @@ Benefits of Hosted Control Plane Clusters:
 
 ### HypershiftDeployment (deprecated December 2022)
 
-    The HypershiftDeployment kind is the entry point to Hosted Control Plane clusters. It offers both turn key and custom provisioning of OpenShift clusters. This resource contains details about the infrastructure, hosted control plane and node pools. Its status reflects the health and availability of the system.
+    The HypershiftDeployment kind is the entry point to Hosted Control Plane clusters. It offers both turnkey and custom provisioning of OpenShift clusters. This resource contains details about the infrastructure, hosted control plane and node pools. Its status reflects the health and availability of the system.
 
 ### HostedCluster
 
@@ -37,19 +37,19 @@ Benefits of Hosted Control Plane Clusters:
 
 ### NodePools
 
-    The NodePool kind is the custom resource that represents the pool of worker nodes in an OpenShift cluster. You can have zero or more node pools, each with different worker node variables (configurations). This `Spec` for this resource is continually populated from the HypershiftDeployment resource.
+    The NodePool kind is the custom resource that represents the pool of worker nodes in an OpenShift cluster. You can have zero or more node pools, each with different worker node variables (configurations). The `Spec` for this resource is continually populated from the HypershiftDeployment resource.
 
 ### Hosting Service Cluster
 
-    A cluster designated to host control planes. Any cluster managed by ACM, and is a supported platform, can be activated as a Hosting Service Cluster (including the Hub)
+    A cluster designated to host control planes. Any cluster that is managed by ACM, and is on a supported platform, can be activated as a Hosting Service Cluster (including the Hub).
 
 ### Hypershift-operator
 
-    This is a controller that runs on the Hosting Service Cluster and facilitates the lifecycle of a HostedCluster's control plane
+    This is a controller that runs on the Hosting Service Cluster and facilitates the lifecycle of a HostedCluster's control plane.
 
 ### Hypershift-addon-controller
 
-    This is responsible for lifecycling the Hypershift-operator on the Hosting Service Clusters
+    This is responsible for lifecycling the Hypershift-operator on the Hosting Service Clusters.
 
 ### ManifestWork
 
@@ -84,7 +84,7 @@ spec:
 
 RESULTING ACTION:
 
-2. In processing the HypershiftDeployment, the infrastructre specified may be configured
+2. In processing the HypershiftDeployment, the infrastructure specified may be configured
    * VPC's, resource groups, are created and configured
    * These operations can be skipped and the details of the infrastructure resources are instead provided in the HypershiftDeployment resource
 3. A ManifestWork kind custom resource is created, in its payload you find:
@@ -104,18 +104,18 @@ RESULTING ACTION:
 
 ## Infrastructure Configuration turn key
 
-When deploying to AWS or Azure, it is possible to have the ACM Hub to create the needed Cloud Provider infrastructure for the OpenShift deployment. The following parameters are available in the HypershiftDeployment.Spec
+When deploying to AWS or Azure, it is possible to have the ACM Hub create the needed Cloud Provider infrastructure for the OpenShift deployment. The following parameters are available in the HypershiftDeployment.Spec
 | Parameter path     | Descritpion                                       | Default | Required |
 | ---------------- | ----------------------------------------------- | ----- | ------ |
 | `hostingNamespace` | This is the namespace on the Hosting Service Cluster where the ManifestWork will create the HostedCluster, NodePools, configMaps and Secrets | If not provided, the namespace of the HypershiftDeployment custom resource is used | X |
 | `hostingCluster`   | The name of the Hosting Service Cluster where an instance of OpenShift will be deployed | None | X|
 | `override`         | This allows for special cases:<br>`ORPHAN` the ManifestWork items are left behind.<br><br>`INFRA-ONLY` configures infrastructure, but does not create a ManifestWork<br><br>`DELETE-HOSTING-NAMESPACE` deletes the hostingNamespace on the hostingCluster when deleting the HypershiftDeployment resource | None | |
 |`infrastructure.cloudProvider.name` | This is the ACM Cloud Provider secret name, this is used when `configure: True` is chosen. It is a credential composed by ACM for AWS or Azure | None | X * |
-| `infrastructure.configure` | When `True` ACM will configure the AWS or Azure infrastructure to prepare for an OpenShift provisioning. When `False` the user must provide the infrastructure details to ACM via the `HosteClusterSpec` and `NodePoolSpec`. When `False` the `infrastructure.cloudProvider.name` is not required unless using Azure | None | x |
+| `infrastructure.configure` | When `True` ACM will configure the AWS or Azure infrastructure to prepare for an OpenShift provisioning. When `False` the user must provide the infrastructure details to ACM via the `HosteClusterSpec` and `NodePoolSpec`. When `False` the `infrastructure.cloudProvider.name` is not required unless using Azure | None | X |
 | `platform.aws.region` | When using AWS, this is the region where the infrastructure for the control plane exists or will be created | None | X |
 | `platform.azure.location` | When using Azure, this is the location where the infrastructure for the control plane exists or will be created | None | X |
 
-* Not required when `configure: False`, Link to ACM Cloud Provider credentials
+\* Not required when `configure: False`, Link to ACM Cloud Provider credentials
 
 ## Monitoring deployment status
 
@@ -132,7 +132,7 @@ It provides status during a get for:
 oc -n PROJECT_NAME get hypershiftDeployment NAME
 ```
 
-There is further details available, including node pool status via the describe command
+There are further details available, including node pool status via the describe command
 
 ```bash
 oc -n PROJECT_NAME describe hypershiftDeployment NAME
@@ -142,7 +142,7 @@ oc -n PROJECT_NAME describe hypershiftDeployment NAME
 
 The HypershiftDeployment custom resource supports object references to the HostedCluster and NodePool custom resources. Instead of embedding the specs for the HostedCluster and NodePools within the HypershiftDeployment custom resource, references to the HostedCluster and NodePool custom resources could be used. These are local object references to the resources, so they must be created in the same namespace as the HypershiftDeployment custom resource. In addition, object reference is supported for manual infrastruture configuration only, `infrastructure.configure=False`. If the object reference for HostedCluster and NodePools are specified, the embedded specs for the HostedCluster and NodePool in the HypershiftDeployment custom resource are ignored.
 
-One of the benefits for using object references for HostedCluster and NodePool is that it decouples the HypershiftDeployment controller from the version of HyperShift CRDs installed on the ACM Hub. In other words, the HyperShift CRDs could be updated independent of the HypershiftDeployment controller. This works well if there are minor changes to the HyperShift CRD, like the addition of new fields. However, any major changes to the hyperShift CRD, such as changes to required attributes, especially those used by the hyperShiftDeployment controller, will require the version of the HypershiftDeployment controller to be updated.
+One of the benefits for using object references for HostedCluster and NodePool is that it decouples the HypershiftDeployment controller from the version of HyperShift CRDs installed on the ACM Hub. In other words, the HyperShift CRDs could be updated independent of the HypershiftDeployment controller. This works well if there are minor changes to the HyperShift CRD, like the addition of new fields. However, any major changes to the HyperShift CRD, such as changes to required attributes, especially those used by the HyperShiftDeployment controller, will require the version of the HypershiftDeployment controller to be updated.
 
 **Note: If you are provisioning this hosted cluster on `local-cluster` hosting cluster, do not create `HostedCluster` and `NodePool` resources and reference them because the hypershift operator on MCE cluster for `local-cluster` hosting cluster will reconcile them to create a hosted cluster. Instead, use HypershiftDeployment `spec.hostedClusterSpec` and `spec.nodePools`.
 
