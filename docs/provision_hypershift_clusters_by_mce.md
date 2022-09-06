@@ -292,6 +292,8 @@ $ oc delete managedclusteraddon -n <hypershift-management-cluster> hypershift-ad
 ## Customizing hostedcluster and nodepool specs in HypershiftDeployment custom resource
 
 In a `HypershiftDeployment` custom resource, you can change `hostedcluster` and `nodepool` specifications. For example, you can change the OCP release image of the hosted cluster control plane and/or the nodepool, the management spec of the nodepool or the number of nodes in the nodepool.
+<details open>
+<summary>yaml</summary>
 
 ```yaml
 apiVersion: cluster.open-cluster-management.io/v1alpha1
@@ -355,7 +357,7 @@ spec:
       aws:
         region: <region>
 ```
-
+</details>
 
 ## Provision a hypershift hosted cluster on bare-metal
 
