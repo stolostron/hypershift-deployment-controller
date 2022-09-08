@@ -11,7 +11,7 @@ When you create a HypershiftDeployment CR, the HypershiftDeployment operator cre
 - SSH key secret
 - etcd encryption secret
 
-The work agent running on the target managed (hypershift hosting) cluster reconciles with this manifestwork to create the payload resources on the cluster. You can find more detaila on the manifestwork CR here https://open-cluster-management.io/concepts/manifestwork.
+The work agent running on the target managed (hypershift hosting) cluster reconciles with this manifestwork to create the payload resources on the cluster. You can find more details on the manifestwork CR here https://open-cluster-management.io/concepts/manifestwork.
 
 This is a sample manifestwork YAML.
 
@@ -461,7 +461,7 @@ spec:
       type: Opaque
 ```
 
-The payload resources are under `spec.workload.manifests`. Once these resources are created on the hosting cluster, then the hypershift operator reconciles with these resources to create the specified hosted cluster. This manifestwork CR is the delivery or placement mechanism for a hosted cluster.
+The payload resources are under `spec.workload.manifests`. Once these resources are created on the hosting cluster, the hypershift operator reconciles with these resources to create the specified hosted cluster. This manifestwork CR is the delivery or placement mechanism for a hosted cluster.
 
 ## How a hosted cluster is automatically imported into ACM hub cluster as a managed cluster
 
@@ -785,7 +785,7 @@ Under the manifestwork's `spec.manifestConfigs`, you can specify feedback rules 
       resource: nodepools
 ```
 
-The `resourceIdentifier` specifies which resource you want feedback from and `jsonPaths` specifies the resource's fields you are interested in. Above feedback rules, you can see the entire status of hosted cluster and node pools in the status section of the manifestwork on ACM hub cluster. You can also specify more rules to collect other data about the resources from the hosting cluster. In this example, there are two nodepools `my-hosted-cluster-nodepool-1` and `my-hosted-cluster-nodepool-2` associated with the hosted cluster so the feedbackRules are specified for each nodepool to collect the status information from both nodepools.
+The `resourceIdentifier` specifies which resource you want feedback from and `jsonPaths` specifies the resources fields you are interested in. Above feedback rules, you can see the entire status of hosted cluster and node pools in the status section of the manifestwork on ACM hub cluster. You can also specify more rules to collect other data about the resources from the hosting cluster. In this example, there are two nodepools `my-hosted-cluster-nodepool-1` and `my-hosted-cluster-nodepool-2` associated with the hosted cluster so the feedbackRules are specified for each nodepool to collect the status information from both nodepools.
 
 ```YAML
       resourceMeta:

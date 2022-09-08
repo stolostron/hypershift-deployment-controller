@@ -127,7 +127,7 @@ $ oc label secret hypershift-operator-external-dns-credentials -n <managed-clust
 
 ##### Enable on a HostedCluster
 
-Set the following parameter in HypershiftDeployment, when creating a cluster:
+Set the following parameters in HypershiftDeployment, when creating a cluster:
 ```
 spec:
   hostedClusterSpec:
@@ -369,7 +369,7 @@ Upon scaling down a NodePool, Agents will be unbound from the corresponding clus
 
 To use the Agent platform, the Infrastructure Operator must first be installed. Please see [here](https://hypershift-docs.netlify.app/how-to/agent/create-agent-cluster/) for details.
 
-When creating the HostedCluster resource, set spec.platform.type to "Agent" and spec.platform.agent.agentNamespace to the namespace containing the Agent CRs you would like to use. For NodePools, set spec.platform.type to "Agent", and optionally specify a label selector for selecting the Agent CRs to in spec.platform.agent.agentLabelSelector.
+When creating the HostedCluster resource, set `spec.platform.type` to "Agent" and `spec.platform.agent.agentNamespace` to the namespace containing the Agent CRs you would like to use. For NodePools, set `spec.platform.type` to "Agent", and optionally specify a label selector for selecting the Agent CRs to in `spec.platform.agent.agentLabelSelector`.
 
 The HypershiftDeployment would look like:
 
