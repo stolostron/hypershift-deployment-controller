@@ -1,6 +1,6 @@
 # Running MCE addons in hosted mode along with hosted control plane
 
-When a hypershift hosted cluster is imported as a MCE managed cluster, MCE addons are installed on the hosted cluster on its worker nodes by default (default mode). There is an option to install the MCE addons along with the hosted control plane on the hosting cluster (hosted mode) for cases where the hosted cluster has no worker node or ofor other logistic reasons. Running the addons in hosted mode requires some extra configurations in `ManagedCluster`, creating kubeconfig secrets for the addons, and manually installing the addons in hosted mode.
+When a hypershift hosted cluster is imported as a MCE managed cluster, MCE addons are installed on the hosted cluster on its worker nodes by default (default mode). There is an option to install the MCE addons along with the hosted control plane on the hosting cluster (hosted mode) for cases where the hosted cluster has no worker node or for other logistic reasons. Running the addons in hosted mode requires some extra configurations in `ManagedCluster`, creating kubeconfig secrets for the addons, and manually installing the addons in hosted mode.
 
 `hosting cluster` : is the MCE managed cluster where hypershift hosted clusters are created.
 `hosted cluster`: is the hypershift hosted clusters you create.
@@ -114,4 +114,4 @@ $ oc get managedcluster HOSTED-CLUSTER-NAME
 
     ```bash
     $ oc get managedclusteraddon config-policy-controller -n HOSTED-CLUSTER-NAME
-    ``
+    ```
