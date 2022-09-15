@@ -4072,6 +4072,24 @@ spec:
                   - type
                   type: object
                 type: array
+              kubeadminPassword:
+                description: KubeadminPassword is a reference to the secret that contains
+                  the initial kubeadmin user password for the hosted cluster.
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
+              kubeconfig:
+                description: KubeConfig is a reference to the secret containing the
+                  default kubeconfig for the hosted cluster.
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
               phase:
                 description: Show which phase of curation is currently being processed
                 type: string
