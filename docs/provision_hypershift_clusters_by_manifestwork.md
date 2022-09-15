@@ -13,7 +13,9 @@ When you create a HypershiftDeployment CR, the HypershiftDeployment operator cre
 
 The work agent running on the target managed (hypershift hosting) cluster reconciles with this manifestwork to create the payload resources on the cluster. You can find more details on the manifestwork CR here https://open-cluster-management.io/concepts/manifestwork.
 
-This is a sample manifestwork YAML.
+
+<details open>
+<summary>A sample manifestwork YAML</summary>
 
 ```YAML
 apiVersion: work.open-cluster-management.io/v1
@@ -460,6 +462,7 @@ spec:
         namespace: clusters
       type: Opaque
 ```
+</details>
 
 The payload resources are under `spec.workload.manifests`. Once these resources are created on the hosting cluster, the hypershift operator reconciles with these resources to create the specified hosted cluster. This manifestwork CR is the delivery or placement mechanism for a hosted cluster.
 
@@ -515,6 +518,9 @@ The ACM hypershift addon agent on the hosting cluster uses this annotation to kn
 ## How HostedCluster and NodePools status are reported back to the manifestwork from the hosting cluster
 
 Under the manifestwork's `spec.manifestConfigs`, you can specify feedback rules to periodically get the latest states of the resources. This example configures manifestwork to collect the entire status of the hosted cluster and both nodepools from the hosting cluster.
+
+<details open>
+<summary>Example</summary>
 
 ```YAML
   - feedbackRules:
@@ -784,8 +790,12 @@ Under the manifestwork's `spec.manifestConfigs`, you can specify feedback rules 
       namespace: clusters
       resource: nodepools
 ```
+</details>
 
 The `resourceIdentifier` specifies which resource you want feedback from and `jsonPaths` specifies the resources fields you are interested in. Above feedback rules, you can see the entire status of hosted cluster and node pools in the status section of the manifestwork on ACM hub cluster. You can also specify more rules to collect other data about the resources from the hosting cluster. In this example, there are two nodepools `my-hosted-cluster-nodepool-1` and `my-hosted-cluster-nodepool-2` associated with the hosted cluster so the feedbackRules are specified for each nodepool to collect the status information from both nodepools.
+
+<details open>
+<summary>Example</summary>
 
 ```YAML
       resourceMeta:
@@ -1307,3 +1317,5 @@ The `resourceIdentifier` specifies which resource you want feedback from and `js
             type: String
           name: Ready-observedGeneration
 ```
+</details>
+
