@@ -29,6 +29,8 @@ kind: ManagedCluster
 metadata:
   labels:
     local-cluster: "true"
+    cloud: auto-detect
+    vendor: auto-detect
   name: local-cluster
 spec:
   hubAcceptsClient: true
